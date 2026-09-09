@@ -46,7 +46,10 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
 .filts button.on{color:var(--tab);border-color:var(--tab);background:var(--card)}
 .pinwrap{overflow-x:auto}
 .pinout{display:grid;grid-template-columns:minmax(0,1fr) 14px 108px 14px minmax(0,1fr);grid-template-rows:repeat(var(--n,19),minmax(36px,auto));column-gap:8px;row-gap:3px;align-items:stretch;min-width:720px;--n:19}
-.pinout .dev{grid-column:2/5;grid-row:1/-1;width:100%;height:100%;pointer-events:none;z-index:0}
+.pcb{grid-column:2/5;grid-row:1/-1;background:#152018;border:1.4px solid #3dcec0;border-radius:10px;z-index:0;pointer-events:none}
+.mod{grid-column:3;grid-row:1/span 3;z-index:1;pointer-events:none;background:#1c2430;border:1px solid #8b97a8;border-radius:4px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;font-size:10px;color:var(--muted);text-align:center;padding:4px}
+.mod strong{color:var(--fg);font-size:12px}
+.usb{grid-column:3;grid-row:-3/-1;z-index:1;pointer-events:none;background:#c5ccd6;color:#0b1016;border-radius:3px;align-self:end;justify-self:center;width:42px;padding:3px 0;margin-bottom:4px;text-align:center;font-size:10px;font-weight:700}
 .pad{display:flex;flex-direction:column;justify-content:center;align-items:flex-end;gap:1px;padding:4px 8px;background:var(--in);border:1px solid var(--line);border-radius:6px;color:var(--fg);cursor:pointer;text-align:right;min-height:0;font:inherit;grid-column:1;grid-row:var(--row);z-index:1}
 .pad.r{align-items:flex-start;text-align:left;grid-column:5}
 .hole{grid-column:2;grid-row:var(--row);z-index:1;width:9px;height:9px;border-radius:50%;background:#0b1016;border:1px solid #8b97a8;align-self:center;justify-self:center}
@@ -98,7 +101,7 @@ pre{white-space:pre-wrap;max-height:320px;overflow:auto;background:var(--in);pad
 .bar>span{display:block;height:100%;background:var(--acc);width:0}
 .wait{color:var(--muted);padding:20px 8px}
 @media(max-width:640px){.row{grid-template-columns:1fr}#pills{max-width:100%;justify-content:flex-start}}
-@media(max-width:720px){.pinout{grid-template-columns:1fr 1fr;grid-template-rows:none;min-width:0}.pinout .dev{grid-column:1/-1;grid-row:1;min-height:140px;max-height:180px}.hole{display:none}.pad,.pad.r{grid-row:auto}.pad{grid-column:1}.pad.r{grid-column:2}}
+@media(max-width:720px){.pinout{grid-template-columns:1fr 1fr;grid-template-rows:none;min-width:0}.pcb,.mod,.usb{grid-column:1/-1;grid-row:1}.pcb{min-height:120px}.mod{max-width:120px;justify-self:center;align-self:center}.usb{align-self:end;margin-bottom:8px}.hole{display:none}.pad,.pad.r{grid-row:auto}.pad{grid-column:1}.pad.r{grid-column:2}}
 </style>
 </head>
 <body>
@@ -344,17 +347,11 @@ function paintPinUses(){
   }
   applyPinFilter();
 }
-function boardSvg(){
+function boardChrome(){
   const info=(hw&&hw.chip_info)||{};
-  return `<svg class="dev" viewBox="0 0 138 190" preserveAspectRatio="none" aria-hidden="true">
-    <rect x="1" y="1" width="136" height="188" rx="8" fill="#152018" stroke="#3dcec0" stroke-width="1.4"/>
-    <rect x="28" y="8" width="82" height="36" rx="3" fill="#1c2430" stroke="#8b97a8"/>
-    <rect x="32" y="8" width="74" height="7" fill="#2a3544"/>
-    <text x="69" y="28" text-anchor="middle" fill="#e7edf4" font-size="8" font-family="system-ui">${esc(info.model||"ESP32")}</text>
-    <text x="69" y="38" text-anchor="middle" fill="#8b97a8" font-size="6" font-family="system-ui">rev ${esc(info.revision??"?")} · ${esc(info.cores??"?")}c</text>
-    <rect x="51" y="176" width="36" height="10" rx="1.5" fill="#c5ccd6"/>
-    <text x="69" y="184" text-anchor="middle" fill="#0b1016" font-size="6" font-family="system-ui">USB</text>
-  </svg>`;
+  return `<div class="pcb" aria-hidden="true"></div>
+    <div class="mod"><strong>${esc(info.model||"ESP32")}</strong><span>rev ${esc(info.revision??"?")} · ${esc(info.cores??"?")}c</span></div>
+    <div class="usb">USB</div>`;
 }
 function padBtn(p, side, row){
   const g=p.gpio;
@@ -468,7 +465,7 @@ function render(){
     const feats=(info.features||[]).join(", ")||"—";
     const filts=[["all","All"],["io","I/O"],["adc","ADC"],["pwm","PWM"],["touch","Touch"],["spi","SPI"],["i2c","I2C"],["uart","UART"],["strap","Strap"],["flash","Flash"],["on","On"]]
       .concat((hw.buses||[]).map(b=>[b.id,b.label]));
-    const pads=left.map((p,i)=>padBtn(p,"left",i)).join("")+boardSvg()+right.map((p,i)=>padBtn(p,"right",i)).join("");
+    const pads=left.map((p,i)=>padBtn(p,"left",i)).join("")+boardChrome()+right.map((p,i)=>padBtn(p,"right",i)).join("");
     main.innerHTML=`<div class="card">
       ${h2("Pinout","hw")}
       <p>${esc(hw.board_name)} · ${esc(hw.chip)} · ${esc(feats)}</p>

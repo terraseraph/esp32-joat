@@ -45,14 +45,17 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
 .filts button{padding:6px 10px;min-height:36px;border:1px solid var(--line);background:var(--in);color:var(--muted);border-radius:99px;cursor:pointer;font-size:12px}
 .filts button.on{color:var(--tab);border-color:var(--tab);background:var(--card)}
 .pinwrap{overflow-x:auto}
-.pinout{display:grid;grid-template-columns:minmax(0,1fr) 132px minmax(0,1fr);gap:4px 8px;align-items:stretch;min-width:720px}
-.pinout .dev{grid-column:2;grid-row:1/-1;width:100%;height:100%}
-.pad{display:flex;flex-direction:column;align-items:flex-end;gap:1px;padding:4px 8px;background:var(--in);border:1px solid var(--line);border-radius:6px;color:var(--fg);cursor:pointer;text-align:right;min-height:44px;font:inherit;grid-column:1;grid-row:var(--row)}
-.pad.r{align-items:flex-start;text-align:left;grid-column:3}
+.pinout{display:grid;grid-template-columns:minmax(0,1fr) 14px 108px 14px minmax(0,1fr);grid-template-rows:repeat(var(--n,19),minmax(36px,auto));column-gap:8px;row-gap:3px;align-items:stretch;min-width:720px;--n:19}
+.pinout .dev{grid-column:2/5;grid-row:1/-1;width:100%;height:100%;pointer-events:none;z-index:0}
+.pad{display:flex;flex-direction:column;justify-content:center;align-items:flex-end;gap:1px;padding:4px 8px;background:var(--in);border:1px solid var(--line);border-radius:6px;color:var(--fg);cursor:pointer;text-align:right;min-height:0;font:inherit;grid-column:1;grid-row:var(--row);z-index:1}
+.pad.r{align-items:flex-start;text-align:left;grid-column:5}
+.hole{grid-column:2;grid-row:var(--row);z-index:1;width:9px;height:9px;border-radius:50%;background:#0b1016;border:1px solid #8b97a8;align-self:center;justify-self:center}
+.hole.r{grid-column:4}
 .pad .silk{font-weight:700;font-size:13px;line-height:1.2}
 .pad .caps{display:flex;flex-wrap:wrap;gap:3px;justify-content:flex-end}
 .pad.r .caps{justify-content:flex-start}
-.pad .use{font-size:11px;color:var(--ok);min-height:14px}
+.pad .use{font-size:11px;color:var(--ok)}
+.pad .use:empty{display:none}
 .pad.dim{opacity:.28}
 .pad.sel{border-color:var(--tab);box-shadow:0 0 0 1px var(--tab)}
 .pad.on .silk{color:var(--ok)}
@@ -95,7 +98,7 @@ pre{white-space:pre-wrap;max-height:320px;overflow:auto;background:var(--in);pad
 .bar>span{display:block;height:100%;background:var(--acc);width:0}
 .wait{color:var(--muted);padding:20px 8px}
 @media(max-width:640px){.row{grid-template-columns:1fr}#pills{max-width:100%;justify-content:flex-start}}
-@media(max-width:720px){.pinout{grid-template-columns:1fr 1fr;min-width:0}.pinout .dev{grid-column:1/-1;grid-row:1;min-height:160px;max-height:200px}.pad,.pad.r{grid-row:auto}.pad.r{grid-column:2}}
+@media(max-width:720px){.pinout{grid-template-columns:1fr 1fr;grid-template-rows:none;min-width:0}.pinout .dev{grid-column:1/-1;grid-row:1;min-height:140px;max-height:180px}.hole{display:none}.pad,.pad.r{grid-row:auto}.pad{grid-column:1}.pad.r{grid-column:2}}
 </style>
 </head>
 <body>
@@ -341,23 +344,16 @@ function paintPinUses(){
   }
   applyPinFilter();
 }
-function boardSvg(n){
-  const rh=32, top=10, h=top*2+n*rh, w=132;
-  let holes="";
-  for(let i=0;i<n;i++){
-    const y=top+rh/2+i*rh;
-    holes+=`<circle cx="14" cy="${y}" r="3.2" fill="#0b1016" stroke="#8b97a8"/><circle cx="${w-14}" cy="${y}" r="3.2" fill="#0b1016" stroke="#8b97a8"/>`;
-  }
+function boardSvg(){
   const info=(hw&&hw.chip_info)||{};
-  return `<svg class="dev" viewBox="0 0 ${w} ${h}" preserveAspectRatio="xMidYMid meet" aria-hidden="true">
-    <rect x="4" y="2" width="${w-8}" height="${h-4}" rx="10" fill="#152018" stroke="#3dcec0" stroke-width="1.4"/>
-    <rect x="28" y="16" width="${w-56}" height="86" rx="4" fill="#1c2430" stroke="#8b97a8"/>
-    <rect x="32" y="16" width="${w-64}" height="14" fill="#2a3544"/>
-    <text x="${w/2}" y="64" text-anchor="middle" fill="#e7edf4" font-size="11" font-family="system-ui">${esc(info.model||"ESP32")}</text>
-    <text x="${w/2}" y="80" text-anchor="middle" fill="#8b97a8" font-size="8" font-family="system-ui">rev ${esc(info.revision??"?")} · ${esc(info.cores??"?")}c</text>
-    ${holes}
-    <rect x="${w/2-18}" y="${h-28}" width="36" height="14" rx="2" fill="#c5ccd6"/>
-    <text x="${w/2}" y="${h-18}" text-anchor="middle" fill="#0b1016" font-size="8" font-family="system-ui">USB</text>
+  return `<svg class="dev" viewBox="0 0 138 190" preserveAspectRatio="none" aria-hidden="true">
+    <rect x="1" y="1" width="136" height="188" rx="8" fill="#152018" stroke="#3dcec0" stroke-width="1.4"/>
+    <rect x="28" y="8" width="82" height="36" rx="3" fill="#1c2430" stroke="#8b97a8"/>
+    <rect x="32" y="8" width="74" height="7" fill="#2a3544"/>
+    <text x="69" y="28" text-anchor="middle" fill="#e7edf4" font-size="8" font-family="system-ui">${esc(info.model||"ESP32")}</text>
+    <text x="69" y="38" text-anchor="middle" fill="#8b97a8" font-size="6" font-family="system-ui">rev ${esc(info.revision??"?")} · ${esc(info.cores??"?")}c</text>
+    <rect x="51" y="176" width="36" height="10" rx="1.5" fill="#c5ccd6"/>
+    <text x="69" y="184" text-anchor="middle" fill="#0b1016" font-size="6" font-family="system-ui">USB</text>
   </svg>`;
 }
 function padBtn(p, side, row){
@@ -366,11 +362,12 @@ function padBtn(p, side, row){
   const info=has?pinByGpio(g):null;
   const cls="pad"+(side==="right"?" r":"")+(p.kind!=="gpio"?" pwr":"");
   const label=has?(String(g)===p.silk?`GPIO ${g}`:`GPIO ${g} · ${p.silk}`):p.silk;
-  return `<button type="button" class="${cls}" style="--row:${row+1}" data-gpio="${has?g:""}" data-kind="${esc(p.kind)}" data-silk="${esc(p.silk)}">
+  const hole=`<span class="hole${side==="right"?" r":""}" style="--row:${row+1}"></span>`;
+  return `${side==="left"?"":hole}<button type="button" class="${cls}" style="--row:${row+1}" data-gpio="${has?g:""}" data-kind="${esc(p.kind)}" data-silk="${esc(p.silk)}">
     <span class="silk">${esc(label)}</span>
     <span class="caps">${has?capBadges(info):`<span class="b mute">${esc(p.kind)}</span>`}</span>
     <span class="use"></span>
-  </button>`;
+  </button>${side==="left"?hole:""}`;
 }
 function selectPad(gpio, kind, silk){
   selGpio=gpio;
@@ -471,13 +468,13 @@ function render(){
     const feats=(info.features||[]).join(", ")||"—";
     const filts=[["all","All"],["io","I/O"],["adc","ADC"],["pwm","PWM"],["touch","Touch"],["spi","SPI"],["i2c","I2C"],["uart","UART"],["strap","Strap"],["flash","Flash"],["on","On"]]
       .concat((hw.buses||[]).map(b=>[b.id,b.label]));
-    const pads=left.map((p,i)=>padBtn(p,"left",i)).join("")+boardSvg(n)+right.map((p,i)=>padBtn(p,"right",i)).join("");
+    const pads=left.map((p,i)=>padBtn(p,"left",i)).join("")+boardSvg()+right.map((p,i)=>padBtn(p,"right",i)).join("");
     main.innerHTML=`<div class="card">
       ${h2("Pinout","hw")}
       <p>${esc(hw.board_name)} · ${esc(hw.chip)} · ${esc(feats)}</p>
       <p>Status LED GPIO ${hw.status_led_gpio} · BOOT GPIO ${hw.boot_gpio} (hold after boot, not during reset)</p>
-      <div class="filts" id="pfilts">${filts.map(([id,n])=>`<button type="button" data-f="${esc(id)}">${esc(n)}</button>`).join("")}</div>
-      <div class="pinwrap"><div class="pinout">${pads}</div></div>
+      <div class="filts" id="pfilts">${filts.map(([id,lab])=>`<button type="button" data-f="${esc(id)}">${esc(lab)}</button>`).join("")}</div>
+      <div class="pinwrap"><div class="pinout" style="--n:${n}">${pads}</div></div>
     </div>
     <div class="card">
       ${h2("Configure","pin")}

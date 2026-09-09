@@ -1,0 +1,27 @@
+menu "Managed device runtime"
+
+    config RUNTIME_BOOT_RECOVERY_MS
+        int "BOOT hold ms to enable recovery AP"
+        default 5000
+
+    config RUNTIME_BOOT_PROVISION_MS
+        int "BOOT hold ms to clear Wi-Fi and provision"
+        default 10000
+
+    config RUNTIME_BOOT_FACTORY_MS
+        int "BOOT hold ms to factory-reset user config"
+        default 20000
+
+    config RUNTIME_CRASH_LOOP_THRESHOLD
+        int "Consecutive crash boots before safe mode"
+        default 5
+
+    config RUNTIME_WIFI_FAIL_AP_MS
+        int "ms without STA IP before recovery SoftAP"
+        default 60000
+
+    config RUNTIME_HEALTHY_CLEAR_MS
+        int "ms of healthy runtime before clearing crash counter"
+        default 30000
+
+endmenu

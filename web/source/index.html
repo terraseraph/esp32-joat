@@ -1,0 +1,707 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0f1419">
+<title>de-esp32</title>
+<style>
+:root{
+  --bg:#0f1419;--fg:#e7edf4;--muted:#8b97a8;--card:#171e27;--line:#2a3544;
+  --acc:#6aa4ff;--ok:#3dba6e;--bad:#e05a5a;--warn:#e0a84a;--in:#0b1016;
+  --tab:var(--acc);--r:8px;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--fg)}
+body{font:16px/1.45 system-ui,sans-serif;-webkit-text-size-adjust:100%}
+code{font-size:.85em;background:var(--in);padding:1px 6px;border-radius:4px}
+.i{width:20px;height:20px;flex:0 0 auto}
+header{padding:12px 16px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:flex-start;gap:12px;background:var(--bg)}
+.brand{display:flex;gap:10px;align-items:flex-start;min-width:0}
+.brand>.i{width:28px;height:28px;color:var(--acc);margin-top:2px}
+header strong{color:var(--fg);font-size:17px}
+.sub{color:var(--muted);font-size:13px;margin-top:2px;word-break:break-all}
+#pills{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:6px;max-width:58%}
+nav{display:flex;flex-wrap:nowrap;gap:6px;padding:8px 10px;border-bottom:1px solid var(--line);overflow-x:auto;-webkit-overflow-scrolling:touch;position:sticky;top:0;z-index:2;background:var(--bg)}
+nav button{display:flex;flex-direction:column;align-items:center;gap:3px;background:transparent;border:1px solid var(--line);color:var(--muted);padding:8px 10px;min-height:52px;min-width:64px;cursor:pointer;flex:0 0 auto;font-size:11px;border-radius:var(--r);--tc:var(--acc)}
+nav button .i{color:inherit}
+nav button.on{border-color:var(--tc);color:var(--tc);background:var(--in)}
+main{padding:12px;max-width:1080px;margin:0 auto}
+.card{background:var(--card);border:1px solid var(--line);border-top:3px solid var(--tab);padding:14px;margin:0 0 12px;border-radius:var(--r)}
+.card.hot{border-top-color:var(--bad)}
+.card h2{display:flex;align-items:center;gap:8px;margin:0 0 12px;font-size:15px;font-weight:650;color:var(--tab)}
+.card h2 .i{width:18px;height:18px}
+label{display:block;margin:10px 0 4px;color:var(--muted);font-size:13px}
+input,select,textarea{width:100%;padding:10px;background:var(--in);border:1px solid var(--line);color:var(--fg);font-size:16px;border-radius:var(--r)}
+input[type=checkbox]{width:auto;margin-right:8px;accent-color:var(--acc)}
+button.act{margin:8px 8px 0 0;padding:12px 14px;min-height:44px;background:var(--acc);border:0;color:#000;cursor:pointer;font-size:15px;border-radius:var(--r);font-weight:600}
+button.act.sec{background:transparent;border:1px solid var(--line);color:var(--fg);font-weight:500}
+button.danger{background:var(--bad);color:#fff}
+button:disabled{opacity:.4;pointer-events:none}
+button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
+.row{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.filts{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 10px}
+.filts button{padding:6px 10px;min-height:36px;border:1px solid var(--line);background:var(--in);color:var(--muted);border-radius:99px;cursor:pointer;font-size:12px}
+.filts button.on{color:var(--tab);border-color:var(--tab);background:var(--card)}
+.pinwrap{overflow-x:auto}
+.pinout{display:grid;grid-template-columns:minmax(0,1fr) 132px minmax(0,1fr);gap:4px 8px;align-items:stretch;min-width:720px}
+.pinout .dev{grid-column:2;grid-row:1/-1;width:100%;height:100%}
+.pad{display:flex;flex-direction:column;align-items:flex-end;gap:1px;padding:4px 8px;background:var(--in);border:1px solid var(--line);border-radius:6px;color:var(--fg);cursor:pointer;text-align:right;min-height:44px;font:inherit;grid-column:1;grid-row:var(--row)}
+.pad.r{align-items:flex-start;text-align:left;grid-column:3}
+.pad .silk{font-weight:700;font-size:13px;line-height:1.2}
+.pad .caps{display:flex;flex-wrap:wrap;gap:3px;justify-content:flex-end}
+.pad.r .caps{justify-content:flex-start}
+.pad .use{font-size:11px;color:var(--ok);min-height:14px}
+.pad.dim{opacity:.28}
+.pad.sel{border-color:var(--tab);box-shadow:0 0 0 1px var(--tab)}
+.pad.on .silk{color:var(--ok)}
+.pad.pwr{cursor:default}
+.b.pwm{color:#f0abfc;border-color:rgba(240,171,252,.33)}
+.b.touch{color:#67e8f9;border-color:rgba(103,232,249,.33)}
+.b.dac{color:#fdba74;border-color:rgba(253,186,116,.33)}
+.b.role{color:#a5b4fc;border-color:rgba(165,180,252,.33)}
+.hint{color:var(--muted);font-size:13px;margin:8px 0 0}
+table{width:100%;border-collapse:collapse;font-size:13px}
+td,th{border-bottom:1px solid var(--line);padding:8px 6px;text-align:left}
+th{color:var(--muted);font-weight:600;font-size:12px;text-transform:uppercase;letter-spacing:.03em}
+.cmdrow{cursor:pointer}.cmdrow:hover td{color:var(--acc)}
+pre{white-space:pre-wrap;max-height:320px;overflow:auto;background:var(--in);padding:10px;font-size:12px;border-radius:var(--r);border:1px solid var(--line)}
+.pill{display:inline-flex;align-items:center;gap:6px;padding:3px 10px;border:1px solid var(--line);border-radius:999px;font-size:12px;color:var(--muted)}
+.pill::before{content:"";width:7px;height:7px;border-radius:50%;background:currentColor;flex:0 0 auto}
+.pill.ok{color:var(--ok);border-color:rgba(61,186,110,.33)}
+.pill.warn{color:var(--warn);border-color:rgba(224,168,74,.33)}
+.pill.bad{color:var(--bad);border-color:rgba(224,90,90,.33)}
+.ok{color:var(--ok)}.bad{color:var(--bad)}.warn{color:var(--warn)}
+.banner{display:flex;gap:10px;align-items:flex-start;background:#2a2208;border:1px solid #8a7030;color:#f0d9a0;padding:10px 12px;margin:8px 12px 0;border-radius:var(--r)}
+.banner .i{width:18px;height:18px;flex:0 0 auto;margin-top:1px}
+.msg{margin:8px 12px 0;padding:10px 12px;border:1px solid var(--line);background:var(--card);border-radius:var(--r)}
+.msg.ok{border-color:rgba(61,186,110,.4);color:var(--ok)}
+.msg.bad{border-color:var(--bad);color:var(--bad)}
+.ssidpick{display:flex;justify-content:space-between;align-items:center;gap:8px;width:100%;margin:6px 0 0;padding:12px;background:var(--in);border:1px solid var(--line);color:var(--fg);font-size:16px;text-align:left;cursor:pointer;min-height:44px;border-radius:var(--r)}
+.ssidpick:hover,.ssidpick:focus{border-color:var(--acc)}
+.rssi{display:flex;align-items:center;gap:8px;color:var(--muted);font-size:13px;white-space:nowrap}
+.bars{display:inline-flex;align-items:flex-end;gap:2px;height:14px}
+.bars i{display:block;width:3px;background:var(--line);border-radius:1px;font-style:normal}
+.bars i:nth-child(1){height:4px}.bars i:nth-child(2){height:7px}.bars i:nth-child(3){height:10px}.bars i:nth-child(4){height:14px}
+.bars i.on{background:var(--ok)}.bars.weak i.on{background:var(--warn)}
+.check{display:flex;align-items:center;margin:10px 0;color:var(--muted)}
+.kv{display:grid;grid-template-columns:minmax(88px,28%) 1fr;gap:7px 14px;margin:0;font-size:14px}
+.kv dt{color:var(--muted);margin:0}.kv dd{margin:0;word-break:break-all}
+.b{display:inline-block;padding:1px 7px;border-radius:999px;font-size:11px;border:1px solid var(--line);white-space:nowrap}
+.b.io{color:#3dcec0;border-color:rgba(61,206,192,.33)}.b.in{color:var(--acc);border-color:rgba(106,164,255,.33)}
+.b.mute{color:var(--muted)}.b.warn{color:var(--warn);border-color:rgba(224,168,74,.33)}.b.adc{color:#c084fc;border-color:rgba(192,132,252,.33)}
+.bar{height:8px;background:var(--in);border-radius:99px;overflow:hidden;margin-top:10px;border:1px solid var(--line)}
+.bar>span{display:block;height:100%;background:var(--acc);width:0}
+.wait{color:var(--muted);padding:20px 8px}
+@media(max-width:640px){.row{grid-template-columns:1fr}#pills{max-width:100%;justify-content:flex-start}}
+@media(max-width:720px){.pinout{grid-template-columns:1fr 1fr;min-width:0}.pinout .dev{grid-column:1/-1;grid-row:1;min-height:160px;max-height:200px}.pad,.pad.r{grid-row:auto}.pad.r{grid-column:2}}
+</style>
+</head>
+<body>
+<header>
+  <div class="brand">
+    <svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="7" y="7" width="10" height="10" rx="1"/><path d="M12 7V4m0 16v-3M7 12H4m16 0h-3"/></svg>
+    <div><strong id="title">de-esp32</strong><div class="sub" id="sub">connecting…</div></div>
+  </div>
+  <div id="pills"></div>
+</header>
+<div class="banner" id="prov" hidden>
+  <svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 9v4m0 4h.01"/><path d="M10.3 4.3 2.8 18a2 2 0 001.7 3h15a2 2 0 001.7-3L13.7 4.3a2 2 0 00-3.4 0z"/></svg>
+  <span>Join this recovery Wi-Fi, then set your home network below. After it works, copy the STA IP before switching phones back.</span>
+</div>
+<div class="msg" id="msg" hidden></div>
+<nav id="nav"></nav>
+<main id="main"></main>
+<script>
+const IC={
+ov:'<path d="M4 12l8-8 8 8"/><path d="M6 10v10h12V10"/>',
+hw:'<rect x="8" y="8" width="8" height="8" rx="1"/><path d="M12 8V5m0 14v-3M8 12H5m14 0h-3"/>',
+pin:'<path d="M12 21s7-6.2 7-11a7 7 0 10-14 0c0 4.8 7 11 7 11z"/><circle cx="12" cy="10" r="2.2"/>',
+net:'<path d="M5 12.5a9.5 9.5 0 0114 0M8.5 16a5 5 0 017 0"/><circle cx="12" cy="20" r="1" fill="currentColor"/>',
+mq:'<path d="M12 20v-9"/><circle cx="12" cy="8" r="2"/><path d="M7 13a7 7 0 0110 0M4 10a11 11 0 0116 0"/>',
+log:'<path d="M8 6h13M8 12h13M8 18h13M4 6h.01M4 12h.01M4 18h.01"/>',
+sys:'<path d="M4 8h16M4 16h16"/><circle cx="9" cy="8" r="2"/><circle cx="15" cy="16" r="2"/>',
+api:'<path d="M9 8l-5 4 5 4M15 8l5 4-5 4"/>'
+};
+const TABS=[
+  {n:"Overview",c:"#6aa4ff",k:"ov"},
+  {n:"Hardware",c:"#e0a84a",k:"hw"},
+  {n:"Network",c:"#4ade80",k:"net"},
+  {n:"MQTT",c:"#b794f6",k:"mq"},
+  {n:"Logs",c:"#94a3b8",k:"log"},
+  {n:"System",c:"#f08060",k:"sys"},
+  {n:"API",c:"#7dd3fc",k:"api"}
+];
+let tab="Overview", st=null, hw=null, spec=null, ws, drawn=null, picked=false, pinFilter="all", selGpio=null;
+const nav=document.getElementById("nav");
+function ico(k){return `<svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${IC[k]||""}</svg>`;}
+function h2(title,k){return `<h2>${ico(k)}${title}</h2>`;}
+function kv(rows){return `<dl class="kv">${rows.map(([k,v])=>`<dt>${k}</dt><dd>${v}</dd>`).join("")}</dl>`;}
+TABS.forEach(t=>{
+  const b=document.createElement("button");
+  b.type="button";
+  b.style.setProperty("--tc",t.c);
+  b.innerHTML=ico(t.k)+"<span>"+t.n+"</span>";
+  b.onclick=()=>{picked=true;tab=t.n;drawn=null;render()};
+  nav.appendChild(b);
+});
+function j(path,opt){return fetch(path,opt).then(r=>r.json());}
+function cmd(body){return j("/api/v1/command",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});}
+function esc(s){return String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]));}
+function net(){return (st&&st.network)||{};}
+function netTone(s){
+  if(s==="sta_connected") return "ok";
+  if(s==="sta_connecting"||s==="apsta_recovery"||s==="ap_only") return "warn";
+  return s?"bad":"";
+}
+function heap(n){
+  if(n==null||n==="?") return "?";
+  n=+n; return n>=1048576?(n/1048576).toFixed(1)+" MB":Math.round(n/1024)+" KB";
+}
+function rssiBars(rssi){
+  if(rssi==null||rssi==="—") return "";
+  const n=rssi>=-55?4:rssi>=-65?3:rssi>=-75?2:1;
+  return `<span class="bars${rssi<-70?" weak":""}">${[1,2,3,4].map(i=>`<i class="${i<=n?"on":""}"></i>`).join("")}</span>`;
+}
+function showMsg(text,bad){
+  const m=document.getElementById("msg");
+  m.hidden=!text;
+  m.className="msg"+(text?(bad?" bad":" ok"):"");
+  m.textContent=text||"";
+}
+function paintChrome(){
+  document.getElementById("title").textContent=(st&&(st.name||st.id))||"de-esp32";
+  document.getElementById("sub").textContent=((st&&st.hostname)||"")+".local  "+(net().sta_ip||"no STA IP");
+  const n=net();
+  document.getElementById("prov").hidden=!(n.state==="ap_only"||n.state==="apsta_recovery"||!n.provisioned);
+  const mq=st&&st.mqtt&&st.mqtt.connected;
+  document.getElementById("pills").innerHTML=
+    `<span class="pill ${netTone(n.state)}">${esc(n.state||"?")}</span>`+
+    `<span class="pill ${mq?"ok":"bad"}">mqtt ${mq?"up":"down"}</span>`+
+    `<span class="pill">heap ${heap(st&&st.heap_free)}</span>`+
+    (st&&st.safe_mode?`<span class="pill bad">SAFE MODE</span>`:"");
+}
+function setLive(id, html){
+  const n=document.getElementById(id);
+  if(n) n.innerHTML=html;
+}
+function setText(id, text){
+  const n=document.getElementById(id);
+  if(n) n.textContent=text;
+}
+function overviewBody(){
+  const prefix=(st&&st.mqtt&&st.mqtt.prefix)||((st&&st.mqtt&&st.mqtt.root||"devices")+"/"+(st&&st.topic_id||st&&st.id||"{id}"));
+  const n=net();
+  return kv([
+    ["Name", `<code>${esc(st&&st.name)}</code>`],
+    ["Id", `<code>${esc(st&&st.id)}</code>`],
+    ["MQTT", `<code>${esc(prefix)}</code>`],
+    ["Firmware", esc(st&&st.fw)],
+    ["Chip", esc(st&&st.chip)],
+    ["Uptime", (st&&st.uptime_s||0)+"s"],
+    ["Reset", esc(st&&st.reset_reason)],
+    ["Boot", `<code>${esc(st&&st.boot_state)}</code>`],
+    ["Schema", `${st&&st.schema} · gen ${st&&st.generation}`],
+    ["STA", `<code>${esc(n.sta_ip||"—")}</code>`],
+    ["AP", `<code>${esc(n.ap_ip||"—")}</code>`],
+    ["mDNS", `<code>${esc(st&&st.hostname)}.local</code>`],
+    ["RSSI", `${rssiBars(n.rssi)} ${n.rssi??"—"} dBm`],
+    ["AP SSID", `<code>${esc(st&&st.ap_ssid)}</code> · ${n.ap_open!==false?"open":"WPA2"}`]
+  ])+(st&&st.safe_mode?`<p class="bad">Safe mode: ${esc(st.safe_reason)} — I/O config not applied.</p>`:"");
+}
+function paintLive(){
+  if(tab==="Overview") setLive("ov", overviewBody());
+  else if(tab==="Hardware") paintPinUses();
+  else if(tab==="Network"){
+    const n=net();
+    setLive("nmeta", kv([
+      ["State", `<code>${esc(n.state)}</code>`],
+      ["Provisioned", n.provisioned?"yes":"no"],
+      ["STA IP", `<code>${esc(n.sta_ip||"—")}</code>`],
+      ["mDNS", `<code>${esc(st&&st.hostname)}.local</code>`]
+    ]));
+    setLive("apmeta", `<p>Recovery AP <code>${esc(st&&st.ap_ssid||n.ap_ssid)}</code> is ${n.ap_open!==false?"open":"WPA2"}.</p>`);
+  }else if(tab==="MQTT") setLive("mmeta", mqttMeta());
+  else if(tab==="System") setLive("otameta", otaBody());
+}
+function mqttMeta(){
+  const m=(st&&st.mqtt)||{};
+  const prefix=m.prefix||("devices/"+(st&&st.id||"{id}"));
+  const chips=a=>(a||[]).map(s=>`<code>${esc(prefix)}/${esc(s)}</code>`).join(" ");
+  return kv([
+    ["Connected", m.connected?`<span class="ok">yes</span>`:`<span class="bad">no</span>`],
+    ["URI", `<code>${esc(m.uri)}</code>`],
+    ["Traffic", `rx ${m.received||0} · tx ${m.published||0} · fail ${m.publish_fail||0}`],
+    ["Root", `<code>${esc(m.root||"devices")}</code>`],
+    ["Prefix", `<code>${esc(prefix)}</code>`],
+    ["Sub", chips(m.sub)||"—"],
+    ["Pub", chips(m.pub)||"—"]
+  ]);
+}
+function otaBody(){
+  const o=(st&&st.ota)||{};
+  const busy=!!o.busy;
+  const pct=o.percent||0;
+  return kv([
+    ["Running", `<code>${esc(o.running_partition||"?")}</code> (${esc(o.image_state||"?")})`],
+    ["Next", `<code>${esc(o.next_partition||"?")}</code> · ${o.next_size?Math.round(o.next_size/1024)+" KB":"?"}`],
+    ["Status", (busy?`writing ${pct}% (${o.bytes||0}/${o.total||0})`:"idle")+(o.last_error?` · <span class="bad">${esc(o.last_error)}</span>`:"")],
+    ["Rollback", o.rollback_possible?"available":"not available"]
+  ])+(busy?`<div class="bar"><span style="width:${pct}%"></span></div>`:"");
+}
+async function refresh(){
+  try{
+    st=await j("/api/v1/status");
+    paintChrome();
+    if(!picked && (net().state==="ap_only"||net().state==="apsta_recovery"||!net().provisioned)){
+      tab="Network";
+    }
+  }catch(e){}
+  render();
+}
+function pinByGpio(g){return (hw&&hw.pins||[]).find(p=>p.gpio===g);}
+function ioOf(g){
+  const io=(st&&st.io)||{};
+  return io["gpio_"+g]||io["pwm_"+g]||io["adc_"+g]||null;
+}
+function useLabel(u){
+  if(!u) return "";
+  if(u.mode==="adc") return "adc "+(u.mv??"?")+" mV";
+  if(u.mode==="pwm") return "pwm "+(u.duty??0);
+  return (u.mode||"")+" "+(u.level??"");
+}
+function busGpios(kind){
+  const s={};
+  (hw&&hw.buses||[]).forEach(b=>{
+    if(kind && b.kind!==kind && b.id!==kind) return;
+    Object.values(b.pins||{}).forEach(g=>{s[+g]=1;});
+  });
+  return s;
+}
+function busesFor(g){return (hw&&hw.buses||[]).filter(b=>Object.values(b.pins||{}).some(x=>+x===g));}
+function capBadges(p){
+  if(!p) return "";
+  const a=[];
+  if(p.flash) a.push(["mute","flash"]);
+  else if(p.input_only) a.push(["in","in-only"]);
+  else if(p.output) a.push(["io","io"]);
+  if(p.adc1) a.push(["adc","A1"]);
+  else if(p.adc2) a.push(["adc","A2"]);
+  if(p.pwm&&!p.flash) a.push(["pwm","PWM"]);
+  if(p.touch) a.push(["touch","T"+(p.touch_channel>=0?p.touch_channel:"")]);
+  if(p.dac) a.push(["dac","DAC"]);
+  if(p.strap) a.push(["warn","strap"]);
+  if(p.role) a.push(["role",p.role]);
+  return a.map(([c,t])=>`<span class="b ${c}">${esc(t)}</span>`).join("");
+}
+function allowedModes(p){
+  if(!p||p.flash) return ["disabled"];
+  const m=["disabled"];
+  if(p.input) m.push("in");
+  if(p.output&&!p.input_only){m.push("out"); if(p.pwm) m.push("pwm");}
+  if(p.adc1) m.push("adc");
+  return m;
+}
+function applyPinFilter(){
+  const filts=document.getElementById("pfilts");
+  if(filts) [...filts.querySelectorAll("button")].forEach(b=>b.classList.toggle("on", b.dataset.f===pinFilter));
+  document.querySelectorAll(".pad").forEach(el=>{
+    const raw=el.dataset.gpio;
+    const g=raw===""?null:+raw;
+    const p=g==null?null:pinByGpio(g);
+    const f=pinFilter;
+    let ok=true;
+    if(f==="all") ok=true;
+    else if(f==="io") ok=!!(p&&(p.input||p.output)&&!p.flash);
+    else if(f==="adc") ok=!!(p&&(p.adc1||p.adc2));
+    else if(f==="pwm") ok=!!(p&&p.pwm&&!p.flash);
+    else if(f==="touch") ok=!!(p&&p.touch);
+    else if(f==="strap") ok=!!(p&&p.strap);
+    else if(f==="flash") ok=!!(p&&p.flash);
+    else if(f==="on") ok=g!=null&&!!ioOf(g);
+    else ok=g!=null&&!!busGpios(f)[g];
+    el.classList.toggle("dim", !ok);
+  });
+}
+function paintPinUses(){
+  document.querySelectorAll(".pad[data-gpio]").forEach(el=>{
+    if(el.dataset.gpio==="") return;
+    const g=+el.dataset.gpio;
+    const u=ioOf(g);
+    const span=el.querySelector(".use");
+    if(span) span.textContent=useLabel(u);
+    el.classList.toggle("on", !!u);
+    el.classList.toggle("sel", selGpio===g);
+  });
+  const live=document.getElementById("plive");
+  if(live && selGpio!=null){
+    const u=ioOf(selGpio);
+    live.textContent=u?useLabel(u):"not configured";
+  }
+  applyPinFilter();
+}
+function boardSvg(n){
+  const rh=32, top=10, h=top*2+n*rh, w=132;
+  let holes="";
+  for(let i=0;i<n;i++){
+    const y=top+rh/2+i*rh;
+    holes+=`<circle cx="14" cy="${y}" r="3.2" fill="#0b1016" stroke="#8b97a8"/><circle cx="${w-14}" cy="${y}" r="3.2" fill="#0b1016" stroke="#8b97a8"/>`;
+  }
+  const info=(hw&&hw.chip_info)||{};
+  return `<svg class="dev" viewBox="0 0 ${w} ${h}" preserveAspectRatio="xMidYMid meet" aria-hidden="true">
+    <rect x="4" y="2" width="${w-8}" height="${h-4}" rx="10" fill="#152018" stroke="#3dcec0" stroke-width="1.4"/>
+    <rect x="28" y="16" width="${w-56}" height="86" rx="4" fill="#1c2430" stroke="#8b97a8"/>
+    <rect x="32" y="16" width="${w-64}" height="14" fill="#2a3544"/>
+    <text x="${w/2}" y="64" text-anchor="middle" fill="#e7edf4" font-size="11" font-family="system-ui">${esc(info.model||"ESP32")}</text>
+    <text x="${w/2}" y="80" text-anchor="middle" fill="#8b97a8" font-size="8" font-family="system-ui">rev ${esc(info.revision??"?")} · ${esc(info.cores??"?")}c</text>
+    ${holes}
+    <rect x="${w/2-18}" y="${h-28}" width="36" height="14" rx="2" fill="#c5ccd6"/>
+    <text x="${w/2}" y="${h-18}" text-anchor="middle" fill="#0b1016" font-size="8" font-family="system-ui">USB</text>
+  </svg>`;
+}
+function padBtn(p, side, row){
+  const g=p.gpio;
+  const has=g!=null;
+  const info=has?pinByGpio(g):null;
+  const cls="pad"+(side==="right"?" r":"")+(p.kind!=="gpio"?" pwr":"");
+  const label=has?(String(g)===p.silk?`GPIO ${g}`:`GPIO ${g} · ${p.silk}`):p.silk;
+  return `<button type="button" class="${cls}" style="--row:${row+1}" data-gpio="${has?g:""}" data-kind="${esc(p.kind)}" data-silk="${esc(p.silk)}">
+    <span class="silk">${esc(label)}</span>
+    <span class="caps">${has?capBadges(info):`<span class="b mute">${esc(p.kind)}</span>`}</span>
+    <span class="use"></span>
+  </button>`;
+}
+function selectPad(gpio, kind, silk){
+  selGpio=gpio;
+  document.querySelectorAll(".pad").forEach(el=>el.classList.toggle("sel", gpio!=null && el.dataset.gpio!=="" && +el.dataset.gpio===gpio));
+  const p=gpio!=null?pinByGpio(gpio):null;
+  const meta=document.getElementById("pmeta");
+  const gEl=document.getElementById("pgpio");
+  const name=document.getElementById("pname");
+  const mode=document.getElementById("pmode");
+  const cfg=document.getElementById("pcfg");
+  const on=document.getElementById("pon");
+  const off=document.getElementById("poff");
+  const live=document.getElementById("plive");
+  if(!meta) return;
+  if(gpio==null){
+    meta.innerHTML=`<p><strong>${esc(silk)}</strong> · ${esc(kind)}</p><p class="hint">Not a GPIO — power, ground, or EN.</p>`;
+    if(gEl) gEl.value="";
+    if(cfg) cfg.disabled=true;
+    if(on) on.disabled=true;
+    if(off) off.disabled=true;
+    if(live) live.textContent="";
+    return;
+  }
+  const modes=allowedModes(p);
+  if(mode){
+    const cur=ioOf(gpio);
+    mode.innerHTML=modes.map(m=>`<option>${m}</option>`).join("");
+    mode.value=(cur&&modes.includes(cur.mode))?cur.mode:(modes[1]||modes[0]);
+  }
+  if(gEl) gEl.value=gpio;
+  if(name && document.activeElement!==name) name.value="gpio_"+gpio;
+  const buses=busesFor(gpio);
+  const busTxt=buses.map(b=>{
+    const role=Object.entries(b.pins||{}).find(([,n])=>+n===gpio);
+    return `${esc(b.label)} ${esc(role?role[0].toUpperCase():"")} — ${esc(b.hint)}`;
+  }).join("<br>");
+  meta.innerHTML=`<p><strong>GPIO ${gpio}</strong> ${p&&p.role?`<span class="b role">${esc(p.role)}</span>`:""}</p>
+    <p class="hint">${esc(p&&p.notes||"")}${p&&p.adc_channel>=0?` · ADC ch ${p.adc_channel}`:""}${p&&p.touch?` · touch T${p.touch_channel}`:""}</p>
+    ${busTxt?`<p class="hint">${busTxt}</p>`:""}`;
+  const locked=!!(p&&p.flash);
+  if(cfg) cfg.disabled=locked;
+  if(on) on.disabled=locked;
+  if(off) off.disabled=locked;
+  if(live) live.textContent=useLabel(ioOf(gpio))||"not configured";
+}
+function bindPinEditor(){
+  const cfg=document.getElementById("pcfg");
+  if(!cfg || cfg.dataset.bound) return;
+  cfg.dataset.bound="1";
+  const gpioOrMsg=()=>{
+    const raw=document.getElementById("pgpio").value;
+    if(raw===""){showMsg("Pick a GPIO", true);return null;}
+    return +raw;
+  };
+  cfg.onclick=async()=>{
+    const gpio=gpioOrMsg();
+    if(gpio==null) return;
+    const mode=document.getElementById("pmode").value;
+    const r=await cmd({cmd:"pin.configure",pin:{gpio,mode,name:document.getElementById("pname").value,
+      pull_up:document.getElementById("ppull").checked,invert:document.getElementById("pinvert").checked,
+      boot:+document.getElementById("pboot").value,duty:+document.getElementById("pboot").value,hz:1000,irq:mode==="in"}});
+    showMsg(r.ok?"Pin applied":(r.error||"failed"), !r.ok); refresh();
+  };
+  document.getElementById("pon").onclick=()=>{const g=gpioOrMsg(); if(g==null) return; return cmd({cmd:"pin.set",gpio:g,value:1000,mode:document.getElementById("pmode").value}).then(refresh);};
+  document.getElementById("poff").onclick=()=>{const g=gpioOrMsg(); if(g==null) return; return cmd({cmd:"pin.set",gpio:g,value:0,mode:document.getElementById("pmode").value}).then(refresh);};
+}
+function tabMeta(){return TABS.find(t=>t.n===tab)||TABS[0];}
+function render(){
+  const tm=tabMeta();
+  document.documentElement.style.setProperty("--tab", tm.c);
+  [...nav.children].forEach((b,i)=>b.className=TABS[i].n===tab?"on":"");
+  if(drawn===tab){ paintLive(); return; }
+  drawn=tab;
+  const main=document.getElementById("main");
+  if(tab==="Overview"){
+    main.innerHTML=`<div class="card">${h2("Status","ov")}<div id="ov">${overviewBody()}</div></div>
+    <div class="card">
+      ${h2("Identity","ov")}
+      <label for="dname">Name</label>
+      <input id="dname" maxlength="31" autocomplete="off" value="${esc(st&&st.name||"")}">
+      <button class="act" type="button" id="dsave">Save name</button>
+      <p>MAC id stays <code>${esc(st&&st.id)}</code>. MQTT topics become <code>devices/&lt;name&gt;/…</code> (letters, numbers, _ and -). Duplicate names collide.</p>
+    </div>`;
+    document.getElementById("dsave").onclick=async()=>{
+      const name=document.getElementById("dname").value.trim();
+      if(!name){showMsg("Enter a name", true);return;}
+      const r=await cmd({cmd:"identity.set_name",name});
+      showMsg(r.ok?"MQTT topics now "+(((r.result&&r.result.topic_id)||name)):(r.error||"failed"), !r.ok);
+      spec=null;
+      refresh();
+    };
+  }else if(tab==="Hardware"){
+    if(!hw){j("/api/v1/hardware").then(x=>{hw=x;drawn=null;render()});main.innerHTML=`<div class="card"><p class="wait">loading pin map…</p></div>`;return;}
+    const left=(hw.header&&hw.header.left)||[];
+    const right=(hw.header&&hw.header.right)||[];
+    const n=Math.max(left.length, right.length, 1);
+    const info=hw.chip_info||{};
+    const feats=(info.features||[]).join(", ")||"—";
+    const filts=[["all","All"],["io","I/O"],["adc","ADC"],["pwm","PWM"],["touch","Touch"],["spi","SPI"],["i2c","I2C"],["uart","UART"],["strap","Strap"],["flash","Flash"],["on","On"]]
+      .concat((hw.buses||[]).map(b=>[b.id,b.label]));
+    const pads=left.map((p,i)=>padBtn(p,"left",i)).join("")+boardSvg(n)+right.map((p,i)=>padBtn(p,"right",i)).join("");
+    main.innerHTML=`<div class="card">
+      ${h2("Pinout","hw")}
+      <p>${esc(hw.board_name)} · ${esc(hw.chip)} · ${esc(feats)}</p>
+      <p>Status LED GPIO ${hw.status_led_gpio} · BOOT GPIO ${hw.boot_gpio} (hold after boot, not during reset)</p>
+      <div class="filts" id="pfilts">${filts.map(([id,n])=>`<button type="button" data-f="${esc(id)}">${esc(n)}</button>`).join("")}</div>
+      <div class="pinwrap"><div class="pinout">${pads}</div></div>
+    </div>
+    <div class="card">
+      ${h2("Configure","pin")}
+      <div id="pmeta"><p class="hint">Click a pin. Modes come from the chip table; apply uses <code>pin.configure</code>.</p></div>
+      <p>Live: <code id="plive">—</code></p>
+      <div class="row">
+        <div><label for="pgpio">GPIO</label><input id="pgpio" type="number" inputmode="numeric"></div>
+        <div><label for="pmode">Mode</label><select id="pmode"><option>out</option><option>in</option><option>pwm</option><option>adc</option><option>disabled</option></select></div>
+      </div>
+      <div class="row">
+        <div><label for="pname">Name</label><input id="pname" value="gpio_4" autocomplete="off"></div>
+        <div><label for="pboot">Boot level / PWM duty 0-1000</label><input id="pboot" type="number" inputmode="numeric" value="0"></div>
+      </div>
+      <label class="check"><input type="checkbox" id="ppull"> pull-up</label>
+      <label class="check"><input type="checkbox" id="pinvert"> invert output</label>
+      <button class="act" type="button" id="pcfg">Validate and apply</button>
+      <button class="act sec" type="button" id="pon">Set 1</button>
+      <button class="act sec" type="button" id="poff">Set 0</button>
+    </div>`;
+    document.getElementById("pfilts").onclick=e=>{
+      const b=e.target.closest("button[data-f]");
+      if(!b) return;
+      pinFilter=b.dataset.f;
+      applyPinFilter();
+    };
+    main.querySelectorAll(".pad").forEach(el=>{
+      el.onclick=()=>{
+        const g=el.dataset.gpio===""?null:+el.dataset.gpio;
+        selectPad(g, el.dataset.kind, el.dataset.silk);
+      };
+    });
+    bindPinEditor();
+    paintPinUses();
+    if(selGpio!=null) selectPad(selGpio, "gpio", String(selGpio));
+  }else if(tab==="Network"){
+    const n=net();
+    main.innerHTML=`<div class="card">
+      ${h2("Station Wi-Fi","net")}
+      <div id="nmeta">
+        ${kv([
+          ["State", `<code>${esc(n.state)}</code>`],
+          ["Provisioned", n.provisioned?"yes":"no"],
+          ["STA IP", `<code>${esc(n.sta_ip||"—")}</code>`],
+          ["mDNS", `<code>${esc(st&&st.hostname)}.local</code>`]
+        ])}
+      </div>
+      <p>After a successful test this page keeps the recovery AP up so you can copy the STA IP.</p>
+      <label for="ssid">SSID</label>
+      <input id="ssid" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" enterkeyhint="next">
+      <label for="psk">Password</label>
+      <input id="psk" type="password" autocomplete="off" enterkeyhint="go">
+      <button class="act sec" type="button" id="scan">Scan networks</button>
+      <button class="act" type="button" id="save">Test then save</button>
+      <div id="scanout"></div>
+    </div>
+    <div class="card">
+      ${h2("Recovery AP","net")}
+      <div id="apmeta"><p>Recovery AP <code>${esc(st&&st.ap_ssid||n.ap_ssid)}</code> is ${n.ap_open!==false?"open":"WPA2"}.</p></div>
+      <p>Blank password = open. Saving a password disconnects you; reconnect with it. Factory reset makes the AP open again.</p>
+      <label for="appass">AP password</label>
+      <input id="appass" type="password" autocomplete="new-password" placeholder="leave blank for open">
+      <button class="act" type="button" id="apsave">Save AP password</button>
+    </div>`;
+    document.getElementById("scan").onclick=async()=>{
+      const out=document.getElementById("scanout");
+      out.textContent="scanning…";
+      try{
+        const s=await j("/api/v1/network/scan");
+        const list=Array.isArray(s)?s:[];
+        if(!list.length){out.textContent="no networks found";return;}
+        out.innerHTML=list.map(a=>`<button type="button" class="ssidpick" data-ssid="${esc(a.ssid)}"><span>${esc(a.ssid)||"(hidden)"}</span><span class="rssi">${rssiBars(a.rssi)}${a.rssi} dBm</span></button>`).join("");
+        out.querySelectorAll(".ssidpick").forEach(b=>{
+          b.onclick=()=>{document.getElementById("ssid").value=b.dataset.ssid;document.getElementById("psk").focus();};
+        });
+      }catch(e){out.textContent="scan failed";}
+    };
+    document.getElementById("save").onclick=async()=>{
+      const ssid=document.getElementById("ssid").value.trim();
+      if(!ssid){showMsg("Enter an SSID", true);return;}
+      showMsg("Testing Wi-Fi…");
+      const r=await j("/api/v1/network/wifi",{method:"POST",headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({ssid,password:document.getElementById("psk").value})});
+      showMsg(r.ok?"Saved. STA IP "+((r.result&&r.result.sta_ip)||"")+"  mDNS "+((st&&st.hostname)||"")+".local": (r.error||"failed"), !r.ok);
+      refresh();
+    };
+    document.getElementById("apsave").onclick=async()=>{
+      const r=await cmd({cmd:"network.ap.set_password",password:document.getElementById("appass").value});
+      showMsg(r.ok?(r.result&&r.result.ap_open?"AP is open":"AP password saved. Rejoin with WPA2."):(r.error||"failed"), !r.ok);
+      refresh();
+    };
+  }else if(tab==="MQTT"){
+    const m=(st&&st.mqtt)||{};
+    main.innerHTML=`<div class="card">
+      ${h2("Broker","mq")}
+      <div id="mmeta">${mqttMeta()}</div>
+      <label for="muri">Broker URI</label><input id="muri" placeholder="mqtt://192.168.1.10:1883" value="${esc(m.uri)}" autocapitalize="none" autocomplete="off">
+      <label for="mroot">Topic root</label><input id="mroot" placeholder="devices" value="${esc(m.root||"devices")}" autocapitalize="none" autocomplete="off">
+      <label for="muser">Username (optional)</label><input id="muser" autocomplete="off">
+      <label for="mpass">Password</label><input id="mpass" type="password" autocomplete="off">
+      <button class="act" type="button" id="msave">Save (reconnects)</button>
+      <p>Topics are <code>{root}/{name}/…</code>. Leave root blank for <code>devices</code>. Nested roots like <code>site/line1</code> are allowed.</p>
+    </div>`;
+    document.getElementById("msave").onclick=async()=>{
+      const r=await j("/api/v1/mqtt",{method:"POST",headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({uri:document.getElementById("muri").value,root:document.getElementById("mroot").value.trim()||"devices",user:document.getElementById("muser").value,password:document.getElementById("mpass").value})});
+      showMsg(r.ok?"MQTT saved":(r.error||JSON.stringify(r)), !r.ok); refresh();
+    };
+  }else if(tab==="Logs"){
+    main.innerHTML=`<div class="card">${h2("Ring buffer","log")}<button class="act sec" type="button" id="rlog">Reload</button><pre id="logpre">…</pre></div>`;
+    const load=()=>j("/api/v1/logs").then(x=>document.getElementById("logpre").textContent=(x.lines||[]).join(""));
+    document.getElementById("rlog").onclick=load; load();
+  }else if(tab==="System"){
+    const o=(st&&st.ota)||{};
+    main.innerHTML=`<div class="card">
+      ${h2("Firmware","sys")}
+      <div id="otameta">${otaBody()}</div>
+      <label for="otaf">Firmware image (.bin)</label>
+      <input id="otaf" type="file" accept=".bin,application/octet-stream">
+      <button class="act" type="button" id="otaup">Upload and reboot</button>
+      <label for="otaurl">HTTP(S) URL</label>
+      <input id="otaurl" placeholder="http://192.168.1.10/de_esp32_runtime.bin" autocapitalize="none" autocomplete="off">
+      <button class="act" type="button" id="otaurlgo">Pull URL and reboot</button>
+      <button class="act danger" type="button" id="otaroll" ${o.rollback_possible?"":"disabled"}>Rollback to previous slot</button>
+      <p>Upload writes the inactive A/B slot. First boot is pending; a crash before healthy rolls back. Signed images are later. HTTPS uses the public CA bundle — LAN pulls should use <code>http://</code>.</p>
+    </div>
+    <div class="card hot">
+      ${h2("Device","sys")}
+      <button class="act sec" type="button" id="reb">Reboot</button>
+      <button class="act danger" type="button" id="fac">Factory reset (keeps MAC identity)</button>
+      <p>Factory reset clears Wi-Fi, pins, MQTT, and the AP password (recovery AP is open again).</p>
+      <p>Physical recovery (press BOOT <em>after</em> the app is running, not while resetting): 5s recovery AP, 10s clear Wi-Fi, 20s factory reset.</p>
+    </div>`;
+    document.getElementById("otaup").onclick=async()=>{
+      const f=document.getElementById("otaf").files[0];
+      if(!f){showMsg("Choose a .bin first", true);return;}
+      if(!confirm("Flash "+f.name+" ("+f.size+" bytes) and reboot?"))return;
+      showMsg("Uploading "+f.size+" bytes…");
+      try{
+        const r=await fetch("/api/v1/ota",{method:"POST",headers:{"Content-Type":"application/octet-stream"},body:f}).then(x=>x.json());
+        showMsg(r.ok?"Written. Rebooting into the new slot…":(r.error||"failed"), !r.ok);
+      }catch(e){showMsg("Upload finished or the device rebooted.", false);}
+    };
+    document.getElementById("otaurlgo").onclick=async()=>{
+      const url=document.getElementById("otaurl").value.trim();
+      if(!url){showMsg("Enter an http:// or https:// URL", true);return;}
+      if(!confirm("Pull "+url+" and reboot?"))return;
+      const r=await cmd({cmd:"ota.apply",url});
+      showMsg(r.ok?"Fetching. The device reboots when the image is written.":(r.error||"failed"), !r.ok);
+      refresh();
+    };
+    document.getElementById("otaroll").onclick=async()=>{
+      if(!confirm("Reboot into the previous firmware slot?"))return;
+      showMsg("Rolling back…");
+      try{await cmd({cmd:"ota.rollback"});}catch(e){}
+    };
+    document.getElementById("reb").onclick=()=>{showMsg("Rebooting…");fetch("/api/v1/system/reboot",{method:"POST"});};
+    document.getElementById("fac").onclick=()=>{if(confirm("Erase user config?")){showMsg("Factory reset…");fetch("/api/v1/system/factory_reset",{method:"POST"});}};
+  }else if(tab==="API"){
+    if(!spec){j("/api/v1/openapi.json").then(x=>{spec=x;drawn=null;render()}).catch(()=>{main.innerHTML="<div class='card bad'>OpenAPI fetch failed</div>"});main.innerHTML=`<div class="card"><p class="wait">loading OpenAPI…</p></div>`;return;}
+    const servers=(spec.servers||[]).map(s=>`<code>${esc(s.url)}</code>`).join(" · ");
+    const disc=spec["x-discovery"]||{};
+    const paths=spec.paths||{};
+    const pathRows=Object.keys(paths).map(p=>Object.keys(paths[p]).map(m=>{
+      const op=paths[p][m]||{};
+      const tryGet=(m==="get"&&!op["x-websocket"])?`<button class="act sec" type="button" data-get="${esc(p)}">GET</button>`:"";
+      return `<tr><td><span class="b">${esc(m.toUpperCase())}</span></td><td><code>${esc(p)}</code></td><td>${esc(op.summary||"")}</td><td>${tryGet}</td></tr>`;
+    }).join("")).join("");
+    const mqtt=spec["x-mqtt"]||{};
+    const trows=(mqtt.topics||[]).map(t=>`<tr><td>${t.subscribe?"sub":""}${t.publish?(t.subscribe?"/pub":"pub"):""}${t.retain?" ret":""}</td><td><code>${esc(t.topic)}</code></td><td>${esc(t.summary||"")}</td></tr>`).join("");
+    const cmds=(spec["x-commands"]||[]).map(c=>`<tr class="cmdrow" data-cmd="${esc(c.cmd)}"><td><code>${esc(c.cmd)}</code></td><td>${esc(c.summary||"")}</td></tr>`).join("");
+    main.innerHTML=`<div class="card">
+      ${h2("OpenAPI","api")}
+      <p>${esc(spec.info&&spec.info.title)} ${esc(spec.info&&spec.info.version)} · OpenAPI ${esc(spec.openapi)}</p>
+      <p>servers ${servers||"—"}</p>
+      <p>mDNS <code>${esc(disc.mdns)}.local</code> · <code>${esc(disc.service)}</code> :${disc.port||80}</p>
+      <p>This page is a client of <code>/api/v1/openapi.json</code> — it does not keep a second route list.</p>
+      <button class="act sec" type="button" id="apireload">Reload spec</button>
+    </div>
+    <div class="card">
+      ${h2("HTTP","api")}
+      <table><tr><th></th><th>path</th><th></th><th></th></tr>${pathRows}</table>
+    </div>
+    <div class="card">
+      ${h2("MQTT","mq")}
+      <p>prefix <code>${esc(mqtt.prefix||"")}</code></p>
+      <table><tr><th></th><th>topic</th><th></th></tr>${trows}</table>
+    </div>
+    <div class="card">
+      ${h2("Commands","api")}
+      <p>Click a row to fill, then POST <code>/api/v1/command</code></p>
+      <table><tr><th>cmd</th><th></th></tr>${cmds}</table>
+      <label for="apibody">JSON</label>
+      <textarea id="apibody" rows="6">{"cmd":"pin.set","gpio":4,"value":1,"mode":"out"}</textarea>
+      <button class="act" type="button" id="apigo">POST command</button>
+      <pre id="apiout"></pre>
+    </div>`;
+    const out=document.getElementById("apiout");
+    main.querySelectorAll("[data-get]").forEach(b=>{
+      b.onclick=()=>j(b.dataset.get).then(x=>{out.textContent=JSON.stringify(x,null,2);}).catch(e=>{out.textContent=String(e);});
+    });
+    main.querySelectorAll("[data-cmd]").forEach(tr=>{
+      tr.onclick=()=>{
+        const c=(spec["x-commands"]||[]).find(x=>x.cmd===tr.dataset.cmd);
+        document.getElementById("apibody").value=JSON.stringify((c&&c.example)||{cmd:tr.dataset.cmd},null,2);
+      };
+    });
+    document.getElementById("apireload").onclick=()=>{spec=null;drawn=null;render();};
+    document.getElementById("apigo").onclick=async()=>{
+      let body;
+      try{body=JSON.parse(document.getElementById("apibody").value);}catch(e){showMsg("Invalid JSON", true);return;}
+      const r=await cmd(body);
+      out.textContent=JSON.stringify(r,null,2);
+      showMsg(r.ok?"ok":(r.error||"failed"), !r.ok);
+    };
+  }
+}
+function connectWs(){
+  try{
+    ws=new WebSocket((location.protocol==="https:"?"wss":"ws")+"://"+location.host+"/api/v1/ws");
+    ws.onmessage=()=>refresh();
+    ws.onclose=()=>setTimeout(connectWs,3000);
+  }catch(e){}
+}
+refresh(); setInterval(refresh,8000); connectWs();
+</script>
+</body>
+</html>

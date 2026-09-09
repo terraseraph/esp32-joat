@@ -1,0 +1,5 @@
+idf_component_register(
+    SRCS "src/io_adc.cpp"
+    INCLUDE_DIRS "include"
+    REQUIRES esp_adc json capability_manager resource_manager state_registry
+)

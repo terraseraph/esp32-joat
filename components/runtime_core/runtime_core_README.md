@@ -1,0 +1,37 @@
+# runtime_core_README.md
+
+## Purpose
+
+Shared types: firmware version (`RUNTIME_VERSION`, `RUNTIME_IDF_PINNED`), `RuntimeStatus` (boot state, safe mode, boot count, uptime), and cJSON helpers.
+
+## User story
+
+Overview page and serial banner show firmware, boot state, and safe mode. Every module reports through this status object.
+
+## Public API
+
+- `runtime_version.hpp` — compile-time constants; bump `RUNTIME_CONFIG_SCHEMA` when NVS layout changes
+- `runtime_status.hpp` — `RuntimeStatus::instance()`
+- `json_util.hpp` — `json_str` / `json_int` / `json_bool`
+
+No NVS, REST, or MQTT of its own.
+
+## Depends on
+
+ESP-IDF `json`, `esp_timer`, FreeRTOS.
+
+## Used by
+
+[boot_state_machine_README.md](../../docs/features/boot_state_machine_README.md), config, telemetry, web, command_router.
+
+## How to update and maintain
+
+Add boot states in both the enum and `boot_state_name()`. Keep this component free of Wi-Fi/GPIO so it stays leaf-level. Schema bumps belong here (`RUNTIME_CONFIG_SCHEMA`) and in config_manager init.
+
+## How to test
+
+Serial log after boot lists version and state transitions. Unit-test JSON helpers later on the IDF linux target if needed.
+
+## Known limits
+
+`safe_mode_reason()` returns an unsynchronized C string; treat as diagnostic only.

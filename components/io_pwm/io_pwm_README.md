@@ -12,11 +12,11 @@ PWM output from Hardware tab / MQTT without a custom firmware.
 
 `io_pwm_configure(gpio, hz, duty)`, `io_pwm_set`, `io_pwm_get`, `io_pwm_release`.
 
-`pin.configure` mode `pwm`; `pin.set` with `mode=pwm` uses `value` as duty.
+`pin.configure` mode `pwm`; `pin.set` with `mode=pwm` uses `value` as duty. Publishes `io/pwm` on the event bus (WebSocket + MQTT `…/io`). Publishes `io/pwm` on the event bus (WebSocket + MQTT `…/io`).
 
 ## Depends on
 
-capability (`pwm` requires output), resource_manager, state_registry.
+capability (`pwm` requires output), resource_manager, state_registry, event_bus.
 
 ## Used by
 

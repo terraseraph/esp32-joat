@@ -5,6 +5,7 @@
 
 #include "capability_manager.hpp"
 #include "driver/ledc.h"
+#include "event_bus.hpp"
 #include "esp_log.h"
 #include "resource_manager.hpp"
 #include "state_registry.hpp"
@@ -48,6 +49,7 @@ void publish(int gpio) {
     cJSON_AddNumberToObject(st, "hz", s_by_gpio[gpio].hz);
     cJSON_AddNumberToObject(st, "duty", s_by_gpio[gpio].duty);
     state_set(key, st);
+    event_bus_publish("io/pwm", st);
     cJSON_Delete(st);
 }
 

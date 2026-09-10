@@ -2,6 +2,7 @@
 
 #include <cstdlib>
 #include <cstring>
+#include <unistd.h>
 
 #include "board_profiles.hpp"
 #include "cJSON.h"
@@ -267,14 +268,45 @@ esp_err_t api_factory(httpd_req_t* req) {
 
 void ws_add(int fd) {
     xSemaphoreTake(s_ws_mu, portMAX_DELAY);
+    bool present = false;
+    int slot = -1;
     for (int i = 0; i < 4; ++i) {
-        if (s_ws_fds[i] == 0) {
-            s_ws_fds[i] = fd;
-            s_ws_count++;
+        if (s_ws_fds[i] == fd) {
+            present = true;
+            break;
+        }
+        if (slot < 0 && s_ws_fds[i] == 0) {
+            slot = i;
+        }
+    }
+    if (!present && slot >= 0) {
+        s_ws_fds[slot] = fd;
+        s_ws_count++;
+    }
+    int n = s_ws_count;
+    xSemaphoreGive(s_ws_mu);
+    RuntimeStatus::instance().set_live_viewers(n);
+}
+
+void ws_remove(int fd) {
+    xSemaphoreTake(s_ws_mu, portMAX_DELAY);
+    for (int i = 0; i < 4; ++i) {
+        if (s_ws_fds[i] == fd) {
+            s_ws_fds[i] = 0;
+            if (s_ws_count > 0) {
+                s_ws_count--;
+            }
             break;
         }
     }
+    int n = s_ws_count;
     xSemaphoreGive(s_ws_mu);
+    RuntimeStatus::instance().set_live_viewers(n);
+}
+
+void on_sess_close(httpd_handle_t, int sockfd) {
+    ws_remove(sockfd);
+    close(sockfd);
 }
 
 void ws_broadcast(const char* msg) {
@@ -285,13 +317,26 @@ void ws_broadcast(const char* msg) {
     frame.type = HTTPD_WS_TYPE_TEXT;
     frame.payload = reinterpret_cast<uint8_t*>(const_cast<char*>(msg));
     frame.len = strlen(msg);
+    int drop[4] = {0, 0, 0, 0};
     xSemaphoreTake(s_ws_mu, portMAX_DELAY);
     for (int i = 0; i < 4; ++i) {
-        if (s_ws_fds[i]) {
-            httpd_ws_send_frame_async(s_server, s_ws_fds[i], &frame);
+        if (!s_ws_fds[i]) {
+            continue;
+        }
+        if (httpd_ws_get_fd_info(s_server, s_ws_fds[i]) != HTTPD_WS_CLIENT_WEBSOCKET) {
+            drop[i] = s_ws_fds[i];
+            continue;
+        }
+        if (httpd_ws_send_frame_async(s_server, s_ws_fds[i], &frame) != ESP_OK) {
+            drop[i] = s_ws_fds[i];
         }
     }
     xSemaphoreGive(s_ws_mu);
+    for (int i = 0; i < 4; ++i) {
+        if (drop[i]) {
+            ws_remove(drop[i]);
+        }
+    }
 }
 
 esp_err_t api_ws(httpd_req_t* req) {
@@ -336,6 +381,9 @@ esp_err_t api_ws(httpd_req_t* req) {
 }
 
 void on_bus(const char* topic, cJSON* payload, void*) {
+    if (RuntimeStatus::instance().live_viewers() <= 0) {
+        return;
+    }
     cJSON* wrap = cJSON_CreateObject();
     cJSON_AddStringToObject(wrap, "topic", topic);
     if (payload) {
@@ -465,6 +513,7 @@ esp_err_t web_server_start() {
     config.recv_wait_timeout = 60;  // large OTA uploads over SoftAP
     config.send_wait_timeout = 30;
     config.uri_match_fn = httpd_uri_match_wildcard;
+    config.close_fn = on_sess_close;
     esp_log_level_set("httpd_uri", ESP_LOG_ERROR);
     esp_log_level_set("httpd_txrx", ESP_LOG_ERROR);
     esp_log_level_set("httpd_parse", ESP_LOG_ERROR);

@@ -11,7 +11,7 @@ Remote control and telemetry without the local UI. Device still works if MQTT is
 ## Public API
 
 Subscribe: `system/command`, `config/set`, `components/+/set` (aliases of `command_dispatch`).
-Publish: `availability` (retained online/offline), `status`, `telemetry`, `events` (command replies), `api` (retained OpenAPI pointer).
+Publish: `availability` (retained online/offline), `status`, `telemetry`, `io` (GPIO/PWM live `{topic,data}` — same JSON as WebSocket; not the 4 Hz ADC stream), `events` (command replies), `api` (retained OpenAPI pointer).
 
 `mqtt://host:1883` in NVS. TLS off in MVP.
 

@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Shared types: firmware version (`RUNTIME_VERSION`, `RUNTIME_IDF_PINNED`), `RuntimeStatus` (boot state, safe mode, boot count, uptime), and cJSON helpers.
+Shared types: firmware version (`RUNTIME_VERSION`, `RUNTIME_IDF_PINNED`), `RuntimeStatus` (boot state, safe mode, boot count, uptime, live UI watcher count), and cJSON helpers.
 
 ## User story
 
@@ -11,7 +11,7 @@ Overview page and serial banner show firmware, boot state, and safe mode. Every 
 ## Public API
 
 - `runtime_version.hpp` — compile-time constants; bump `RUNTIME_CONFIG_SCHEMA` when NVS layout changes
-- `runtime_status.hpp` — `RuntimeStatus::instance()`
+- `runtime_status.hpp` — `RuntimeStatus::instance()` including `live_viewers()` (open UI WebSockets; ADC live-sample is gated on this)
 - `json_util.hpp` — `json_str` / `json_int` / `json_bool`
 
 No NVS, REST, or MQTT of its own.

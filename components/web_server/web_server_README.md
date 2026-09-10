@@ -16,7 +16,7 @@ Find the device, configure pins from the Hardware pinout, provision, view logs, 
 - `GET /api/v1/status|hardware|pins|network|network/scan|mqtt|logs|telemetry|ota`
   - `hardware` — board profile, header pinout, buses, `chip` / `chip_info`, SoC `pins` capabilities
 - `POST /api/v1/command|pins|network/wifi|mqtt|ota|system/reboot|system/factory_reset`
-- `GET /api/v1/ws` — WebSocket; JSON commands in, event bus frames out
+- `GET /api/v1/ws` — WebSocket; JSON commands in, event bus frames out. No frames (and no ADC live sample) when `live_viewers()==0`. Browser closes the socket on hidden tabs.
 
 Assets: `web/dist/index.html` via CMake `EMBED_FILES`.
 
@@ -41,4 +41,4 @@ Flash, join AP, open 192.168.4.1, exercise each tab. `GET /api/v1/openapi.json` 
 
 ## Known limits
 
-Unauthenticated on LAN. Max 4 WS clients. `httpd_ws_send_frame_async` payload is a transient buffer — bursts can drop frames. Captive portal needs extra HTTP sockets (`max_open_sockets` 13, `CONFIG_LWIP_MAX_SOCKETS` 20). OpenAPI is compact (no full JSON Schema per path) so it fits RAM.
+Unauthenticated on LAN. Max 4 WS clients. `httpd_ws_send_frame_async` sends immediately in this IDF. Captive portal needs extra HTTP sockets (`max_open_sockets` 13, `CONFIG_LWIP_MAX_SOCKETS` 20). OpenAPI is compact (no full JSON Schema per path) so it fits RAM. ADC live samples are not MQTT-flooded.

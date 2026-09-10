@@ -10,13 +10,13 @@ ADC on GPIO 32–39 (ADC1). Values in millivolts when calibration exists.
 
 ## Public API
 
-`io_adc_configure`, `io_adc_read`, `io_adc_release`.
+`io_adc_configure`, `io_adc_read`, `io_adc_refresh`, `io_adc_release`.
 
-Atten `ADC_ATTEN_DB_12`. REST/MQTT via pin configure mode `adc`; telemetry snapshots state keys `adc_N`.
+Atten `ADC_ATTEN_DB_12`. REST/MQTT via pin configure mode `adc`. A 250 ms task samples configured channels **only while** `RuntimeStatus::live_viewers() > 0` (a Hardware-tab WebSocket). Samples go on the event bus as `io/adc` (20 mV hysteresis) so the UI can paint without `GET /status`. MQTT does **not** get the 4 Hz stream — `io_adc_refresh()` runs on the 15 s telemetry tick for `adc_N` in the snapshot.
 
 ## Depends on
 
-capability (ADC1 only), resource, state_registry, `esp_adc`.
+capability (ADC1 only), resource, state_registry, event_bus, runtime_core (`live_viewers`), `esp_adc`.
 
 ## Used by
 

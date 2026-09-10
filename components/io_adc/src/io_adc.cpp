@@ -1,6 +1,7 @@
 #include "io_adc.hpp"
 
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 
 #include "capability_manager.hpp"
@@ -8,7 +9,11 @@
 #include "esp_adc/adc_cali_scheme.h"
 #include "esp_adc/adc_oneshot.h"
 #include "esp_log.h"
+#include "event_bus.hpp"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
 #include "resource_manager.hpp"
+#include "runtime_status.hpp"
 #include "state_registry.hpp"
 
 static const char* TAG = "io_adc";
@@ -17,9 +22,12 @@ namespace runtime {
 namespace {
 
 constexpr int kMaxGpio = 40;
+constexpr int kHysteresisMv = 20;
+
 adc_oneshot_unit_handle_t s_adc1;
 adc_cali_handle_t s_cali;
 bool s_used[kMaxGpio];
+int s_last[kMaxGpio];
 
 adc_channel_t channel_for(int gpio) {
     const PinInfo* p = capability_pin(gpio);
@@ -29,7 +37,7 @@ adc_channel_t channel_for(int gpio) {
     return static_cast<adc_channel_t>(p->adc_channel);
 }
 
-void publish(int gpio, int mv) {
+void publish(int gpio, int mv, bool to_bus) {
     char key[16];
     snprintf(key, sizeof(key), "adc_%d", gpio);
     cJSON* st = cJSON_CreateObject();
@@ -38,13 +46,68 @@ void publish(int gpio, int mv) {
     cJSON_AddNumberToObject(st, "gpio", gpio);
     cJSON_AddNumberToObject(st, "mv", mv);
     state_set(key, st);
+    if (to_bus) {
+        event_bus_publish("io/adc", st);
+    }
     cJSON_Delete(st);
+}
+
+int convert(int raw) {
+    if (s_cali) {
+        int mv = 0;
+        if (adc_cali_raw_to_voltage(s_cali, raw, &mv) == ESP_OK) {
+            return mv;
+        }
+    }
+    return raw;
+}
+
+int sample(int gpio, bool allow_bus) {
+    if (gpio < 0 || gpio >= kMaxGpio || !s_used[gpio] || !s_adc1) {
+        return -1;
+    }
+    int raw = 0;
+    if (adc_oneshot_read(s_adc1, channel_for(gpio), &raw) != ESP_OK) {
+        return -1;
+    }
+    const int mv = convert(raw);
+    const bool first = s_last[gpio] < 0;
+    const bool changed = first || abs(mv - s_last[gpio]) >= kHysteresisMv;
+    s_last[gpio] = mv;
+    publish(gpio, mv, allow_bus && changed);
+    return mv;
+}
+
+bool any_used() {
+    for (int i = 0; i < kMaxGpio; ++i) {
+        if (s_used[i]) {
+            return true;
+        }
+    }
+    return false;
+}
+
+void live_task(void*) {
+    while (true) {
+        vTaskDelay(pdMS_TO_TICKS(250));
+        if (RuntimeStatus::instance().live_viewers() <= 0 || !any_used()) {
+            continue;
+        }
+        for (int i = 0; i < kMaxGpio; ++i) {
+            if (s_used[i]) {
+                sample(i, true);
+            }
+        }
+    }
 }
 
 }  // namespace
 
 esp_err_t io_adc_init() {
     memset(s_used, 0, sizeof(s_used));
+    for (int i = 0; i < kMaxGpio; ++i) {
+        s_last[i] = -1;
+    }
     adc_oneshot_unit_init_cfg_t unit_cfg = {
         .unit_id = ADC_UNIT_1,
         .clk_src = ADC_RTC_CLK_SRC_DEFAULT,
@@ -68,6 +131,7 @@ esp_err_t io_adc_init() {
 #else
     s_cali = nullptr;
 #endif
+    xTaskCreate(live_task, "adc_live", 3072, nullptr, 4, nullptr);
     ESP_LOGI(TAG, "ADC1 oneshot ready");
     return ESP_OK;
 }
@@ -92,27 +156,19 @@ esp_err_t io_adc_configure(int gpio, char* err, size_t err_len) {
         return errc;
     }
     s_used[gpio] = true;
-    publish(gpio, io_adc_read(gpio));
+    s_last[gpio] = -1;
+    sample(gpio, true);
     return ESP_OK;
 }
 
-int io_adc_read(int gpio) {
-    if (gpio < 0 || gpio >= kMaxGpio || !s_used[gpio] || !s_adc1) {
-        return -1;
-    }
-    int raw = 0;
-    if (adc_oneshot_read(s_adc1, channel_for(gpio), &raw) != ESP_OK) {
-        return -1;
-    }
-    if (s_cali) {
-        int mv = 0;
-        if (adc_cali_raw_to_voltage(s_cali, raw, &mv) == ESP_OK) {
-            publish(gpio, mv);
-            return mv;
+int io_adc_read(int gpio) { return sample(gpio, RuntimeStatus::instance().live_viewers() > 0); }
+
+void io_adc_refresh() {
+    for (int i = 0; i < kMaxGpio; ++i) {
+        if (s_used[i]) {
+            sample(i, false);
         }
     }
-    publish(gpio, raw);
-    return raw;
 }
 
 esp_err_t io_adc_release(int gpio) {
@@ -120,6 +176,7 @@ esp_err_t io_adc_release(int gpio) {
         return ESP_OK;
     }
     s_used[gpio] = false;
+    s_last[gpio] = -1;
     char owner[16];
     snprintf(owner, sizeof(owner), "adc_%d", gpio);
     resource_release(gpio, owner);

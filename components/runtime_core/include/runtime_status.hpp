@@ -38,6 +38,9 @@ public:
     uint32_t boot_count() const;
     void set_boot_count(uint32_t count);
     uint32_t uptime_s() const;
+    /** Open UI WebSockets. ADC live-sample only when this is > 0. */
+    void set_live_viewers(int n);
+    int live_viewers() const;
 
 private:
     RuntimeStatus();
@@ -46,6 +49,7 @@ private:
     bool safe_mode_;
     bool healthy_;
     uint32_t boot_count_;
+    int live_viewers_;
     char reason_[64];
 };
 

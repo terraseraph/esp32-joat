@@ -8,6 +8,7 @@
 #include "event_bus.hpp"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "io_adc.hpp"
 #include "mqtt_manager.hpp"
 #include "network_manager.hpp"
 #include "ota_manager.hpp"
@@ -20,6 +21,7 @@ static const char* TAG = "telemetry";
 namespace runtime {
 
 cJSON* telemetry_snapshot() {
+    io_adc_refresh();
     cJSON* o = cJSON_CreateObject();
     cJSON_AddNumberToObject(o, "v", 1);
     cJSON_AddStringToObject(o, "id", device_id());

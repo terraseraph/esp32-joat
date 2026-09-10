@@ -84,6 +84,7 @@ const MqttTopicDef kMqttTopics[] = {
     {"availability", false, true, true, "LWT retained online / offline"},
     {"status", false, true, true, "Retained identity snapshot"},
     {"telemetry", false, true, false, "Periodic diagnostics"},
+    {"io", false, true, false, "Live GPIO/PWM; same {topic,data} JSON as WebSocket"},
     {"events", false, true, false, "Command replies (corr echoed)"},
     {"api", false, true, true, "Retained pointer at OpenAPI + command topic"},
 };
@@ -218,6 +219,34 @@ void retire_topics(const char* old_root, const char* old_id) {
     ESP_LOGI(TAG, "retired old prefix %s/%s", old_root, old_id);
 }
 
+void on_io(const char* bus_topic, cJSON* payload, void*) {
+    if (!bus_topic || !s_client || !s_connected) {
+        return;
+    }
+    if (strncmp(bus_topic, "io/adc", 6) == 0) {
+        return;
+    }
+    cJSON* wrap = cJSON_CreateObject();
+    cJSON_AddStringToObject(wrap, "topic", bus_topic);
+    if (payload) {
+        cJSON_AddItemToObject(wrap, "data", cJSON_Duplicate(payload, 1));
+    }
+    char* printed = cJSON_PrintUnformatted(wrap);
+    cJSON_Delete(wrap);
+    if (!printed) {
+        return;
+    }
+    char t[128];
+    topic(t, sizeof(t), "io");
+    int msg_id = esp_mqtt_client_publish(s_client, t, printed, 0, 0, 0);
+    cJSON_free(printed);
+    if (msg_id < 0) {
+        s_pub_fail++;
+    } else {
+        s_pub_ok++;
+    }
+}
+
 void on_reconfigure(const char*, cJSON* payload, void*) {
     const char* old_root = json_str(payload, "old_root", "");
     const char* old_id = json_str(payload, "old_topic_id", "");
@@ -242,6 +271,7 @@ esp_err_t mqtt_init() {
     load_root();
     event_bus_subscribe("mqtt/", on_reconfigure, nullptr);
     event_bus_subscribe("identity/", on_reconfigure, nullptr);
+    event_bus_subscribe("io/", on_io, nullptr);
     ESP_LOGI(TAG, "init");
     return ESP_OK;
 }

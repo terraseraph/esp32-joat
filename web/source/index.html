@@ -57,7 +57,7 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
 .pad .silk{font-weight:700;font-size:13px;line-height:1.2}
 .pad .caps{display:flex;flex-wrap:wrap;gap:3px;justify-content:flex-end}
 .pad.r .caps{justify-content:flex-start}
-.pad .use{font-size:11px;color:var(--ok)}
+.pad .use{font-size:11px;color:var(--ok);font-variant-numeric:tabular-nums}
 .pad .use:empty{display:none}
 .pad.dim{opacity:.28}
 .pad.sel{border-color:var(--tab);box-shadow:0 0 0 1px var(--tab)}
@@ -139,7 +139,7 @@ const TABS=[
   {n:"System",c:"#f08060",k:"sys"},
   {n:"API",c:"#7dd3fc",k:"api"}
 ];
-let tab="Overview", st=null, hw=null, spec=null, ws, drawn=null, picked=false, pinFilter="all", selGpio=null;
+let tab="Overview", st=null, hw=null, spec=null, ws, drawn=null, picked=false, pinFilter="all", selGpio=null, wantWs=true;
 const nav=document.getElementById("nav");
 function ico(k){return `<svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${IC[k]||""}</svg>`;}
 function h2(title,k){return `<h2>${ico(k)}${title}</h2>`;}
@@ -273,9 +273,11 @@ function ioOf(g){
 }
 function useLabel(u){
   if(!u) return "";
-  if(u.mode==="adc") return "adc "+(u.mv??"?")+" mV";
-  if(u.mode==="pwm") return "pwm "+(u.duty??0);
-  return (u.mode||"")+" "+(u.level??"");
+  if(u.mode==="adc") return (u.mv??"?")+" mV";
+  if(u.mode==="pwm") return "pwm "+(u.duty??0)+"/1000";
+  if(u.level===1) return (u.mode||"io")+" HIGH";
+  if(u.level===0) return (u.mode||"io")+" LOW";
+  return u.mode||"";
 }
 function busGpios(kind){
   const s={};
@@ -688,14 +690,38 @@ function render(){
     };
   }
 }
+function applyIoEvent(d){
+  if(!d || d.gpio==null) return;
+  if(!st) st={};
+  if(!st.io) st.io={};
+  const id=d.id||((d.mode==="adc"?"adc_":d.mode==="pwm"?"pwm_":"gpio_")+d.gpio);
+  ["gpio_","pwm_","adc_"].forEach(p=>{ const k=p+d.gpio; if(k!==id) delete st.io[k]; });
+  st.io[id]=d;
+  if(tab==="Hardware") paintPinUses();
+}
 function connectWs(){
+  if(!wantWs) return;
+  if(ws && (ws.readyState===0||ws.readyState===1)) return;
   try{
     ws=new WebSocket((location.protocol==="https:"?"wss":"ws")+"://"+location.host+"/api/v1/ws");
-    ws.onmessage=()=>refresh();
-    ws.onclose=()=>setTimeout(connectWs,3000);
+    ws.onmessage=ev=>{
+      let m;
+      try{m=JSON.parse(ev.data);}catch(e){refresh();return;}
+      if(m && typeof m.topic==="string" && m.topic.indexOf("io/")===0){
+        applyIoEvent(m.data);
+        return;
+      }
+      refresh();
+    };
+    ws.onclose=()=>{ws=null; if(wantWs) setTimeout(connectWs,3000);};
   }catch(e){}
 }
-refresh(); setInterval(refresh,8000); connectWs();
+document.addEventListener("visibilitychange",()=>{
+  wantWs=!document.hidden;
+  if(wantWs) connectWs();
+  else if(ws){ const w=ws; ws=null; w.close(); }
+});
+refresh(); setInterval(()=>{ if(!document.hidden) refresh(); },8000); connectWs();
 </script>
 </body>
 </html>

@@ -2,7 +2,7 @@
 
 ## Purpose
 
-15 s diagnostic snapshot (heap, uptime, reset reason, net, mqtt, ota, I/O state). Published to MQTT and the event bus. No on-device history database.
+15 s diagnostic snapshot (heap, uptime, reset reason, net, mqtt, ota, I/O state). ADC channels are refreshed into the registry first. Published to MQTT and the event bus. No on-device history database.
 
 ## User story
 
@@ -14,7 +14,7 @@ Telemetry: MQTT consumers and the Overview page see health. SNTP (boot task) mak
 
 ## Depends on
 
-mqtt_manager, network, identity, runtime_core, state_registry, event_bus, ota_manager.
+mqtt_manager, network, identity, runtime_core, state_registry, event_bus, ota_manager, io_adc (`io_adc_refresh`).
 
 ## Used by
 

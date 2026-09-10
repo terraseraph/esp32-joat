@@ -49,7 +49,8 @@ RuntimeStatus::RuntimeStatus()
       boot_state_(BootState::kBoot),
       safe_mode_(false),
       healthy_(false),
-      boot_count_(0) {
+      boot_count_(0),
+      live_viewers_(0) {
     reason_[0] = '\0';
 }
 
@@ -122,6 +123,19 @@ void RuntimeStatus::set_boot_count(uint32_t count) {
 
 uint32_t RuntimeStatus::uptime_s() const {
     return static_cast<uint32_t>(esp_timer_get_time() / 1000000ULL);
+}
+
+void RuntimeStatus::set_live_viewers(int n) {
+    xSemaphoreTake(mu_, portMAX_DELAY);
+    live_viewers_ = n < 0 ? 0 : n;
+    xSemaphoreGive(mu_);
+}
+
+int RuntimeStatus::live_viewers() const {
+    xSemaphoreTake(mu_, portMAX_DELAY);
+    int v = live_viewers_;
+    xSemaphoreGive(mu_);
+    return v;
 }
 
 }  // namespace runtime

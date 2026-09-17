@@ -33,6 +33,7 @@ Template: [templates/FEATURE_README_TEMPLATE.md](templates/FEATURE_README_TEMPLA
 | io_pwm | mvp | [io_pwm_README.md](../components/io_pwm/io_pwm_README.md) | LEDC PWM (8 ch, shared Hz) |
 | io_servo | mvp | [io_servo_README.md](../components/io_servo/io_servo_README.md) | Hobby servo 50 Hz (8 ch, own timer) |
 | io_adc | mvp | [io_adc_README.md](../components/io_adc/io_adc_README.md) | ADC1 only (Wi-Fi on) |
+| io_rules | mvp | [io_rules_README.md](../components/io_rules/io_rules_README.md) | On-device if-this-then-that (input → output) |
 | mod_mfrc522 | mvp | [mod_mfrc522_README.md](../components/mod_mfrc522/mod_mfrc522_README.md) | SPI RFID; shared bus, unique CS |
 | command_router | mvp | [command_router_README.md](../components/command_router/command_router_README.md) | Single command API for HTTP/WS/MQTT |
 | network_manager | mvp | [network_manager_README.md](../components/network_manager/network_manager_README.md) | STA + SoftAP + mDNS |
@@ -48,7 +49,7 @@ Template: [templates/FEATURE_README_TEMPLATE.md](templates/FEATURE_README_TEMPLA
 
 ## Dependency sketch
 
-Boot → identity + config → capability + resources → safe pins → network → web + MQTT → apply I/O then modules (unless safe mode).
+Boot → identity + config → capability + resources → safe pins → network → web + MQTT → apply I/O then modules then rules (unless safe mode).
 
 HTTP, WebSocket, MQTT, and UART JSON must call `command_router`. Do not fork behaviour in `web/dist/index.html`.
 

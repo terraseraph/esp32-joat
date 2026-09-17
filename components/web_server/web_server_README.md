@@ -16,7 +16,7 @@ Find the device, configure pins from the Hardware pinout, provision, view logs, 
 - `GET /api/v1/status|hardware|pins|network|network/scan|mqtt|logs|telemetry|ota`
   - `hardware` — board profile, header pinout, buses, `chip` / `chip_info`, SoC `pins` capabilities plus live `owner` per GPIO
 - `POST /api/v1/command|pins|network/wifi|mqtt|ota|system/reboot|system/factory_reset`
-- `GET /api/v1/ws` — WebSocket; JSON commands in, event bus frames out. No frames when `live_viewers()==0`. ADC live-sample runs while `live_sinks()>0` (WS, MQTT, or serial session). Browser closes the socket on hidden tabs.
+- `GET /api/v1/ws` — WebSocket; JSON commands in, event bus frames out. No frames when `live_viewers()==0`. ADC live-sample runs while `live_sinks()>0` (WS, MQTT, serial session, or an ADC-watching on-device rule). Browser closes the socket on hidden tabs.
 
 Assets: `web/dist/index.html` via CMake `EMBED_FILES`.
 

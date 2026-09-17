@@ -45,7 +45,9 @@ public:
     bool live_mqtt() const;
     void set_live_serial(bool on);
     bool live_serial() const;
-    /** WS count + MQTT connected + serial session. ADC live-sample when > 0. */
+    void set_live_rules(bool on);
+    bool live_rules() const;
+    /** WS + MQTT + serial + on-device ADC rules. ADC live-sample when > 0. */
     int live_sinks() const;
 
 private:
@@ -58,6 +60,7 @@ private:
     int live_viewers_;
     bool live_mqtt_;
     bool live_serial_;
+    bool live_rules_;
     char reason_[64];
 };
 

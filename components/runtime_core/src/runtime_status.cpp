@@ -52,7 +52,8 @@ RuntimeStatus::RuntimeStatus()
       boot_count_(0),
       live_viewers_(0),
       live_mqtt_(false),
-      live_serial_(false) {
+      live_serial_(false),
+      live_rules_(false) {
     reason_[0] = '\0';
 }
 
@@ -166,6 +167,19 @@ bool RuntimeStatus::live_serial() const {
     return v;
 }
 
+void RuntimeStatus::set_live_rules(bool on) {
+    xSemaphoreTake(mu_, portMAX_DELAY);
+    live_rules_ = on;
+    xSemaphoreGive(mu_);
+}
+
+bool RuntimeStatus::live_rules() const {
+    xSemaphoreTake(mu_, portMAX_DELAY);
+    bool v = live_rules_;
+    xSemaphoreGive(mu_);
+    return v;
+}
+
 int RuntimeStatus::live_sinks() const {
     xSemaphoreTake(mu_, portMAX_DELAY);
     int n = live_viewers_;
@@ -173,6 +187,9 @@ int RuntimeStatus::live_sinks() const {
         n++;
     }
     if (live_serial_) {
+        n++;
+    }
+    if (live_rules_) {
         n++;
     }
     xSemaphoreGive(mu_);

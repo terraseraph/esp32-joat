@@ -12,7 +12,7 @@ ADC on GPIO 32–39 (ADC1). Live state is millivolts (`mv`) plus 12-bit counts (
 
 `io_adc_configure(gpio, sample_ms, hysteresis_mv, smooth, …)`, `io_adc_read`, `io_adc_refresh`, `io_adc_release`.
 
-Atten `ADC_ATTEN_DB_12`. Each tick averages 4 oneshot reads, then EMA: `filt = (smooth * prev + (100-smooth) * mv) / 100` (`smooth` 0 = raw). Event bus `io/adc` only when `|filt - last_sent| >= hysteresis_mv` (or first sample). Live task runs only while `RuntimeStatus::live_sinks() > 0`. `io_adc_refresh()` updates the registry on the 15 s telemetry tick without moving last-sent or flooding the bus.
+Atten `ADC_ATTEN_DB_12`. Each tick averages 4 oneshot reads, then EMA: `filt = (smooth * prev + (100-smooth) * mv) / 100` (`smooth` 0 = raw). Event bus `io/adc` only when `|filt - last_sent| >= hysteresis_mv` (or first sample). Live task runs only while `RuntimeStatus::live_sinks() > 0` (UI, MQTT, serial, or an ADC-watching on-device rule). `io_adc_refresh()` updates the registry on the 15 s telemetry tick without moving last-sent or flooding the bus.
 
 ## Depends on
 
@@ -20,7 +20,7 @@ capability (ADC1 only), resource, state_registry, event_bus, runtime_core (`live
 
 ## Used by
 
-command_router, telemetry (via state).
+command_router, telemetry (via state), [io_rules_README.md](../io_rules/io_rules_README.md).
 
 ## How to update and maintain
 

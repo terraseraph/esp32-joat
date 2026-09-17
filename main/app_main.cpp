@@ -18,6 +18,7 @@
 #include "io_adc.hpp"
 #include "io_gpio.hpp"
 #include "io_pwm.hpp"
+#include "io_rules.hpp"
 #include "io_servo.hpp"
 #include "logging_service.hpp"
 #include "mod_mfrc522.hpp"
@@ -281,6 +282,7 @@ extern "C" void app_main(void) {
     ESP_ERROR_CHECK(runtime::io_pwm_init());
     ESP_ERROR_CHECK(runtime::io_servo_init());
     ESP_ERROR_CHECK(runtime::io_adc_init());
+    ESP_ERROR_CHECK(runtime::io_rules_init());
     runtime::io_gpio_safe_defaults();
 
     ESP_ERROR_CHECK(runtime::command_router_init());
@@ -309,6 +311,7 @@ extern "C" void app_main(void) {
     rt.set_boot_state(runtime::BootState::kComponents);
     runtime::command_apply_saved_io(true);
     runtime::command_apply_saved_modules(true);
+    runtime::command_apply_saved_rules(true);
 
     runtime::telemetry_start_task();
     xTaskCreate(status_led_task, "led", 2048, nullptr, 3, nullptr);

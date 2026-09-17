@@ -23,8 +23,10 @@
 # (if the pin has one) + invert; out = power-on Low/High + pull-up + invert + Set HIGH/LOW;
 # pwm = duty + Hz + Full/Off; servo = angle + live 0/90/180, pulse range collapsed;
 # adc = sample / publish threshold / smooth (no drive buttons);
+# in / adc also show a Rule block (threshold → another pin). Links draw on the pinout.
 # disabled = name + Apply. Close the socket when the tab is hidden so WS is not a live
-# sink; MQTT connected or a UART hello session can still sample ADC.
+# sink; MQTT connected, a UART hello session, or an ADC-watching on-device rule can still
+# sample ADC.
 #
 # The API tab fetches GET /api/v1/openapi.json and renders it. Do not hardcode routes
 # or MQTT topics in the HTML — those come from firmware tables.

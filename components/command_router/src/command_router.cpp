@@ -12,6 +12,7 @@
 #include "io_adc.hpp"
 #include "io_gpio.hpp"
 #include "io_pwm.hpp"
+#include "io_rules.hpp"
 #include "io_servo.hpp"
 #include "json_util.hpp"
 #include "module_manager.hpp"
@@ -170,6 +171,7 @@ cJSON* apply_one_pin(cJSON* pin, bool persist) {
     if (persist) {
         persist_pin(pin);
     }
+    io_rules_on_io_change();
     cJSON* result = cJSON_Duplicate(pin, 1);
     return ok_result(pin, result);
 }
@@ -262,6 +264,11 @@ const CmdInfo kCmds[] = {
      "{\"cmd\":\"module.remove\",\"id\":\"rfid0\"}"},
     {"module.cmd", "Type-specific command (none for mfrc522)",
      "{\"cmd\":\"module.cmd\",\"id\":\"rfid0\"}"},
+    {"rule.set", "Upsert an on-device pin rule (one per source GPIO)",
+     "{\"cmd\":\"rule.set\",\"rule\":{\"on\":{\"gpio\":32,\"op\":\"gt\",\"value\":1000},\"then\":{\"gpio\":18,\"value\":1},\"else\":{\"gpio\":18,\"value\":0}}}"},
+    {"rule.remove", "Delete a rule by id or source gpio",
+     "{\"cmd\":\"rule.remove\",\"gpio\":32}"},
+    {"rule.list", "List persisted on-device pin rules", "{\"cmd\":\"rule.list\"}"},
 };
 
 }  // namespace
@@ -314,6 +321,14 @@ esp_err_t command_apply_saved_modules(bool skip_if_safe_mode) {
         return ESP_OK;
     }
     return module_apply_saved();
+}
+
+esp_err_t command_apply_saved_rules(bool skip_if_safe_mode) {
+    if (skip_if_safe_mode && RuntimeStatus::instance().safe_mode()) {
+        ESP_LOGW(TAG, "safe mode: skipping rule apply");
+        return ESP_OK;
+    }
+    return io_rules_apply_saved();
 }
 
 cJSON* command_dispatch(cJSON* req) {
@@ -557,6 +572,32 @@ cJSON* command_dispatch(cJSON* req) {
             return err_result(req, err[0] ? err : esp_err_to_name(rc));
         }
         return ok_result(req, result);
+    }
+    if (strcmp(cmd, "rule.set") == 0) {
+        cJSON* spec = cJSON_GetObjectItemCaseSensitive(req, "rule");
+        if (!cJSON_IsObject(spec)) {
+            spec = req;
+        }
+        char err[96];
+        err[0] = '\0';
+        esp_err_t rc = io_rules_set(spec, err, sizeof(err));
+        if (rc != ESP_OK) {
+            return err_result(req, err[0] ? err : esp_err_to_name(rc));
+        }
+        return ok_result(req, io_rules_list_json());
+    }
+    if (strcmp(cmd, "rule.remove") == 0) {
+        char err[96];
+        err[0] = '\0';
+        esp_err_t rc = io_rules_remove(json_str(req, "id", ""), json_int(req, "gpio", -1), err,
+                                       sizeof(err));
+        if (rc != ESP_OK) {
+            return err_result(req, err[0] ? err : esp_err_to_name(rc));
+        }
+        return ok_result(req, io_rules_list_json());
+    }
+    if (strcmp(cmd, "rule.list") == 0) {
+        return ok_result(req, io_rules_list_json());
     }
     return err_result(req, "unknown cmd");
 }

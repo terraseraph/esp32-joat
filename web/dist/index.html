@@ -52,7 +52,13 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
 .field .hint,.checkfield .hint{margin:4px 0 0}
 .checkfield{margin:12px 0}
 .checkfield .hint{margin:0 0 0 26px}
-.pinwrap{overflow-x:auto}
+.pinwrap{overflow-x:auto;position:relative}
+.rulelinks{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:2;overflow:visible}
+.pad.rule-src{border-color:#c084fc;box-shadow:0 0 0 1px rgba(192,132,252,.45)}
+.pad.rule-dst{border-color:#3dcec0;box-shadow:0 0 0 1px rgba(61,206,192,.4)}
+.pad .rule{font-size:11px;color:#c084fc;font-variant-numeric:tabular-nums}
+.pad .rule:empty{display:none}
+.pad.dstpick{outline:2px dashed #3dcec0;outline-offset:1px}
 .pinout{display:grid;grid-template-columns:minmax(0,1fr) 14px 108px 14px minmax(0,1fr);grid-template-rows:repeat(var(--n,19),minmax(36px,auto));column-gap:8px;row-gap:3px;align-items:stretch;min-width:720px;--n:19}
 .pcb{grid-column:2/5;grid-row:1/-1;background:#152018;border:1.4px solid #3dcec0;border-radius:10px;z-index:0;pointer-events:none}
 .mod{grid-column:3;grid-row:1/span 3;z-index:1;pointer-events:none;background:#1c2430;border:1px solid #8b97a8;border-radius:4px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;font-size:10px;color:var(--muted);text-align:center;padding:4px}
@@ -179,7 +185,7 @@ const TABS=[
   {n:"System",c:"#f08060",k:"sys"},
   {n:"API",c:"#7dd3fc",k:"api"}
 ];
-let tab="Overview", st=null, hw=null, spec=null, ws, drawn=null, picked=false, pinFilter="all", selGpio=null, wantWs=true, pinCfg={}, mods=null, modCat=null, wiz=null;
+let tab="Overview", st=null, hw=null, spec=null, ws, drawn=null, picked=false, pinFilter="all", selGpio=null, wantWs=true, pinCfg={}, mods=null, modCat=null, wiz=null, rules=[], rulePick=false, ruleDest=null;
 const MODE_LAB={in:"In",out:"Out",pwm:"PWM",servo:"Servo",adc:"ADC",disabled:"Off"};
 const MODE_HINT={
   in:"Digital input. Each stable edge is published over MQTT and the live UI.",
@@ -282,6 +288,7 @@ function paintLive(){
   else if(tab==="Hardware"){
     paintPinUses();
     paintAddonLive();
+    if(!rulePick) paintRuleForm();
   }
   else if(tab==="Network"){
     const n=net();
@@ -416,6 +423,170 @@ function allowedModes(p){
   m.push("disabled");
   return m;
 }
+function ruleOfSrc(g){return (rules||[]).find(r=>r.on&&r.on.gpio===g);}
+function ruleOfDst(g){return (rules||[]).find(r=>(r.then&&r.then.gpio===g)||(r.else&&r.else.gpio===g));}
+function outputUses(){
+  const seen={}, out=[];
+  Object.values((st&&st.io)||{}).forEach(u=>{
+    if(u&&(u.mode==="out"||u.mode==="pwm"||u.mode==="servo")&&u.gpio!=null&&!seen[u.gpio]){
+      seen[u.gpio]=1; out.push(u);
+    }
+  });
+  return out.sort((a,b)=>a.gpio-b.gpio);
+}
+function ruleCanTake(g){
+  if(g==null||g===selGpio) return false;
+  const u=ioOf(g);
+  return !!(u&&(u.mode==="out"||u.mode==="pwm"||u.mode==="servo"));
+}
+function actLabel(gpio, value){
+  const u=ioOf(gpio);
+  const mode=u&&u.mode;
+  if(mode==="pwm") return "PWM "+value;
+  if(mode==="servo") return value+"°";
+  return value?"HIGH":"LOW";
+}
+function destModeOf(g){
+  const u=ioOf(g);
+  return (u&&u.mode)||"";
+}
+function setRuleDest(g){
+  ruleDest=g;
+  const u=ioOf(g);
+  const thenN=pinField("rthenv");
+  const elseN=pinField("relsev");
+  const existing=selGpio!=null?ruleOfSrc(selGpio):null;
+  const same=existing&&existing.then&&existing.then.gpio===g;
+  if(u&&u.mode==="out"){
+    if(thenN && document.activeElement!==thenN) thenN.value=same?existing.then.value:1;
+    if(elseN && document.activeElement!==elseN) elseN.value=same&&existing.else?existing.else.value:0;
+  }else if(u&&u.mode==="pwm"){
+    if(thenN && document.activeElement!==thenN) thenN.value=same?existing.then.value:1000;
+    if(elseN && document.activeElement!==elseN) elseN.value=same&&existing.else?existing.else.value:0;
+  }else if(u&&u.mode==="servo"){
+    if(thenN && document.activeElement!==thenN) thenN.value=same?existing.then.value:90;
+    if(elseN && document.activeElement!==elseN) elseN.value=same&&existing.else?existing.else.value:0;
+  }
+}
+function paintRuleLinks(){
+  const wrap=document.querySelector(".pinwrap");
+  const svg=document.getElementById("rulelinks");
+  const pinout=wrap&&wrap.querySelector(".pinout");
+  if(!wrap||!svg||!pinout) return;
+  const wr=wrap.getBoundingClientRect();
+  svg.setAttribute("viewBox","0 0 "+Math.max(pinout.scrollWidth,1)+" "+Math.max(pinout.scrollHeight,1));
+  svg.setAttribute("width", pinout.scrollWidth);
+  svg.setAttribute("height", pinout.scrollHeight);
+  const lines=["<defs><marker id=\"rarr\" markerWidth=\"8\" markerHeight=\"8\" refX=\"6\" refY=\"3\" orient=\"auto\"><path d=\"M0,0 L6,3 L0,6\" fill=\"#c084fc\"/></marker></defs>"];
+  (rules||[]).forEach(r=>{
+    const sg=r.on&&r.on.gpio, dg=r.then&&r.then.gpio;
+    if(sg==null||dg==null) return;
+    const src=wrap.querySelector('.pad[data-gpio="'+sg+'"]');
+    const dst=wrap.querySelector('.pad[data-gpio="'+dg+'"]');
+    if(!src||!dst) return;
+    const a=src.getBoundingClientRect(), b=dst.getBoundingClientRect();
+    const inner=(el,r)=>el.classList.contains("r")?r.left:r.right;
+    const x1=inner(src,a)-wr.left+wrap.scrollLeft;
+    const y1=a.top+a.height/2-wr.top+wrap.scrollTop;
+    const x2=inner(dst,b)-wr.left+wrap.scrollLeft;
+    const y2=b.top+b.height/2-wr.top+wrap.scrollTop;
+    lines.push(`<path d="M${x1.toFixed(1)} ${y1.toFixed(1)} C${((x1+x2)/2).toFixed(1)} ${y1.toFixed(1)}, ${((x1+x2)/2).toFixed(1)} ${y2.toFixed(1)}, ${x2.toFixed(1)} ${y2.toFixed(1)}" fill="none" stroke="#c084fc" stroke-width="1.6" marker-end="url(#rarr)"/>`);
+  });
+  svg.innerHTML=lines.join("");
+}
+function paintRuleForm(){
+  const box=pinField("prule");
+  if(!box) return;
+  const mode=currentMode();
+  const show=mode==="in"||mode==="adc";
+  box.hidden=!show || selGpio==null;
+  const banner=document.getElementById("wizbanner");
+  if(banner && !(wiz&&wiz.picking)){
+    banner.hidden=!rulePick;
+    if(rulePick) banner.textContent="Click an output pin (Out / PWM / Servo) to link from GPIO "+selGpio+".";
+  }
+  if(!show || selGpio==null) return;
+  const u=ioOf(selGpio);
+  const existing=ruleOfSrc(selGpio);
+  const msg=pinField("prulemsg");
+  const srcReady=!!(u&&(u.mode==="in"||u.mode==="adc"));
+  if(msg){
+    if(!srcReady) msg.textContent="Apply this pin as In or ADC before saving a rule.";
+    else if(existing) msg.textContent="Linked to GPIO "+existing.then.gpio+" · "+actLabel(existing.then.gpio, existing.then.value)+(existing.else?" / else "+actLabel(existing.else.gpio, existing.else.value):"");
+    else msg.textContent=outputUses().length?"Pick an output, set the trip, then Save rule.":"Configure an Out / PWM / Servo pin first, then pick it here.";
+  }
+  if(ruleDest==null && existing) setRuleDest(existing.then.gpio);
+  const dests=pinField("rdests");
+  if(dests){
+    dests.innerHTML=outputUses().filter(p=>p.gpio!==selGpio).map(p=>{
+      const on=p.gpio===ruleDest?" on":"";
+      return `<button type="button" data-gpio="${p.gpio}" class="${on}">GPIO ${p.gpio} ${esc(MODE_LAB[p.mode]||p.mode)}</button>`;
+    }).join("")||`<p class="hint">No outputs configured yet.</p>`;
+  }
+  const adc=pinField("rwhen-adc");
+  const din=pinField("rwhen-in");
+  if(adc) adc.hidden=mode!=="adc";
+  if(din) din.hidden=mode!=="in";
+  if(mode==="adc"){
+    const op=pinField("rop");
+    const th=pinField("rth");
+    if(op && document.activeElement!==op) op.value=(existing&&existing.on&&existing.on.op)||"gt";
+    if(th && document.activeElement!==th) th.value=(existing&&existing.on&&existing.on.value!=null)?existing.on.value:1000;
+  }else{
+    const lv=(existing&&existing.on&&existing.on.op==="eq")?existing.on.value:1;
+    const hid=pinField("rlevel");
+    if(hid) hid.value=lv?1:0;
+    const g=pinField("rlevelg");
+    if(g) [...g.querySelectorAll("button")].forEach(b=>b.classList.toggle("on", +b.dataset.v===+(hid&&hid.value)));
+  }
+  const act=pinField("ract");
+  const dm=destModeOf(ruleDest);
+  if(act) act.hidden=ruleDest==null||!dm;
+  const num=dm==="pwm"||dm==="servo";
+  const thenNwrap=pinField("rthennum");
+  const elseNwrap=pinField("relsenum");
+  const theng=pinField("rtheng");
+  const elseg=pinField("relseg");
+  if(thenNwrap) thenNwrap.hidden=!num;
+  if(elseNwrap) elseNwrap.hidden=!num;
+  const thenLab=pinField("rthenlab");
+  const elseLab=pinField("relselab");
+  if(thenLab) thenLab.textContent=dm==="pwm"?"Then duty (0–1000)":dm==="servo"?"Then angle (0–180)":"Then";
+  if(elseLab) elseLab.textContent=dm==="pwm"?"Else duty (0–1000)":dm==="servo"?"Else angle (0–180)":"Else";
+  const thenV=pinField("rthenv");
+  const elseV=pinField("relsev");
+  if(num){
+    if(theng) theng.innerHTML="";
+    if(elseg) elseg.innerHTML="";
+    if(thenV){ thenV.min=0; thenV.max=dm==="pwm"?1000:180; }
+    if(elseV){ elseV.min=0; elseV.max=dm==="pwm"?1000:180; }
+  }else if(dm==="out"){
+    const tv=thenV?+thenV.value:1;
+    const ev=elseV?+elseV.value:0;
+    if(theng) theng.innerHTML=`<button type="button" data-v="1"${tv?" class=\"on\"":""}>HIGH</button><button type="button" data-v="0"${tv?"":" class=\"on\""}>LOW</button>`;
+    if(elseg) elseg.innerHTML=`<button type="button" data-v="1"${ev?" class=\"on\"":""}>HIGH</button><button type="button" data-v="0"${ev?"":" class=\"on\""}>LOW</button>`;
+  }
+  const del=pinField("rdel");
+  if(del) del.hidden=!existing;
+  const save=pinField("rsave");
+  if(save) save.disabled=!srcReady||ruleDest==null||!ruleCanTake(ruleDest);
+}
+function ruleThenValue(){
+  const dm=destModeOf(ruleDest);
+  if(dm==="out"){
+    const on=document.querySelector("#rtheng button.on");
+    return on?+on.dataset.v:+pinVal("rthenv",1);
+  }
+  return +pinVal("rthenv", dm==="servo"?90:1000);
+}
+function ruleElseValue(){
+  const dm=destModeOf(ruleDest);
+  if(dm==="out"){
+    const on=document.querySelector("#relseg button.on");
+    return on?+on.dataset.v:+pinVal("relsev",0);
+  }
+  return +pinVal("relsev", 0);
+}
 function pinField(id){return document.getElementById(id);}
 function pinVal(id, fallback){
   const n=pinField(id);
@@ -461,14 +632,16 @@ function paintModes(modes, cur, locked){
 function applyPinFilter(){
   const filts=document.getElementById("pfilts");
   if(filts) [...filts.querySelectorAll("button")].forEach(b=>b.classList.toggle("on", b.dataset.f===pinFilter));
-  const picking=!!(wiz&&wiz.picking);
-  document.querySelectorAll(".pad").forEach(el=>{
+    const picking=!!(wiz&&wiz.picking);
+    const destPick=!!rulePick;
+    document.querySelectorAll(".pad").forEach(el=>{
     const raw=el.dataset.gpio;
     const g=raw===""?null:+raw;
     const p=g==null?null:pinByGpio(g);
     const f=pinFilter;
     let ok=true;
     if(picking) ok=g!=null&&wizCanTake(g);
+    else if(destPick) ok=g!=null&&ruleCanTake(g);
     else if(f==="all") ok=true;
     else if(f==="io") ok=!!(p&&(p.input||p.output)&&!p.flash);
     else if(f==="adc") ok=!!(p&&(p.adc1||p.adc2));
@@ -479,6 +652,7 @@ function applyPinFilter(){
     else if(f==="on") ok=g!=null&&(!!ioOf(g)||!!pinOwner(g));
     else ok=g!=null&&!!busGpios(f)[g];
     el.classList.toggle("dim", !ok);
+    el.classList.toggle("dstpick", destPick && ok);
   });
 }
 function paintPinUses(){
@@ -487,12 +661,22 @@ function paintPinUses(){
     const g=+el.dataset.gpio;
     const u=ioOf(g);
     const span=el.querySelector(".use");
+    const rspan=el.querySelector(".rule");
     if(span){
       if(u) span.textContent=useLabel(u);
       else { const o=pinOwner(g); span.textContent=o?ownerLabel(o):""; }
     }
-    el.classList.toggle("on", !!u || !!pinOwner(g));
+    const rs=ruleOfSrc(g);
+    const rd=ruleOfDst(g);
+    if(rspan){
+      if(rs&&rs.then) rspan.textContent="→ "+rs.then.gpio+" "+actLabel(rs.then.gpio, rs.then.value);
+      else if(rd&&rd.on) rspan.textContent="← "+rd.on.gpio;
+      else rspan.textContent="";
+    }
+    el.classList.toggle("on", !!u || !!pinOwner(g) || !!rs || !!rd);
     el.classList.toggle("sel", selGpio===g || wizCurrentGpio()===g);
+    el.classList.toggle("rule-src", !!rs);
+    el.classList.toggle("rule-dst", !!rd && !rs);
     const bar=el.querySelector(".adcbar");
     const fill=bar&&bar.querySelector("i");
     const raw=adcRaw(u);
@@ -502,6 +686,7 @@ function paintPinUses(){
     }
   });
   paintAdcGauge(selGpio==null?null:ioOf(selGpio));
+  paintRuleLinks();
   applyPinFilter();
 }
 function boardChrome(){
@@ -521,12 +706,15 @@ function padBtn(p, side, row){
     <span class="silk">${esc(label)}</span>
     <span class="caps">${has?capBadges(info):`<span class="b mute">${esc(p.kind)}</span>`}</span>
     <span class="use"></span>
+    <span class="rule"></span>
     <span class="adcbar" hidden><i></i></span>
   </button>${side==="left"?hole:""}`;
 }
 function selectPad(gpio, kind, silk){
   if(selGpio!=null && selGpio!==gpio) rememberPin(selGpio);
   selGpio=gpio;
+  ruleDest=null;
+  rulePick=false;
   document.querySelectorAll(".pad").forEach(el=>el.classList.toggle("sel", gpio!=null && el.dataset.gpio!=="" && +el.dataset.gpio===gpio));
   const p=gpio!=null?pinByGpio(gpio):null;
   const meta=document.getElementById("pmeta");
@@ -567,9 +755,13 @@ function selectPad(gpio, kind, silk){
   }).join("<br>");
   const adcCh=p&&p.adc1?` · ADC1 ch ${p.adc_channel}`:p&&p.adc2?` · ADC2 ch ${p.adc_channel}`:"";
   const own=pinOwner(gpio);
+  const linked=ruleOfSrc(gpio);
+  const driven=ruleOfDst(gpio);
   meta.innerHTML=`<p><strong>GPIO ${gpio}</strong> ${p&&p.role?`<span class="b role">${esc(p.role)}</span>`:""}</p>
     <p class="hint">${esc(p&&p.notes||"")}${adcCh}${p&&p.touch?` · touch T${p.touch_channel}`:""}</p>
     ${own?`<p class="hint">Owned by <code>${esc(own)}</code> (${esc(ownerLabel(own))}). Disable or remove that module before using this pin as GPIO.</p>`:""}
+    ${linked&&linked.then?`<p class="hint">Rule → GPIO ${linked.then.gpio} ${esc(actLabel(linked.then.gpio, linked.then.value))}.</p>`:""}
+    ${driven&&driven.on?`<p class="hint">Driven by GPIO ${driven.on.gpio} rule.</p>`:""}
     ${analogHint(p)}
     ${busTxt?`<p class="hint">${busTxt}</p>`:""}`;
   paintAdcGauge(u);
@@ -626,6 +818,9 @@ function syncPinExtras(){
     off.disabled=locked||!showSet;
     off.textContent=mode==="pwm"?"Off":"Set LOW";
   }
+  const showRule=mode==="in"||mode==="adc";
+  (showRule?show:hide)("prule");
+  if(showRule) paintRuleForm();
 }
 function bindPinEditor(){
   const cfg=pinField("pcfg");
@@ -703,6 +898,88 @@ function bindPinEditor(){
     const a=pinField("pangle");
     if(a) a.value=angle;
     cmd({cmd:"pin.set",gpio:g,value:angle,mode:"servo"}).then(refresh);
+  };
+  const dests=pinField("rdests");
+  if(dests) dests.onclick=e=>{
+    const b=e.target.closest("button[data-gpio]");
+    if(!b) return;
+    const g=+b.dataset.gpio;
+    if(!ruleCanTake(g)){ showMsg("That pin is not an output", true); return; }
+    setRuleDest(g);
+    paintRuleForm();
+    paintPinUses();
+  };
+  const pick=pinField("rpick");
+  if(pick) pick.onclick=()=>{
+    if(selGpio==null){ showMsg("Pick an input pin first", true); return; }
+    rulePick=true;
+    paintRuleForm();
+    applyPinFilter();
+  };
+  const lvl=pinField("rlevelg");
+  if(lvl) lvl.onclick=e=>{
+    const b=e.target.closest("button[data-v]");
+    if(!b) return;
+    const hid=pinField("rlevel");
+    if(hid) hid.value=b.dataset.v;
+    [...lvl.querySelectorAll("button")].forEach(x=>x.classList.toggle("on", x===b));
+  };
+  const theng=pinField("rtheng");
+  if(theng) theng.onclick=e=>{
+    const b=e.target.closest("button[data-v]");
+    if(!b) return;
+    const hid=pinField("rthenv");
+    if(hid) hid.value=b.dataset.v;
+    [...theng.querySelectorAll("button")].forEach(x=>x.classList.toggle("on", x===b));
+  };
+  const elseg=pinField("relseg");
+  if(elseg) elseg.onclick=e=>{
+    const b=e.target.closest("button[data-v]");
+    if(!b) return;
+    const hid=pinField("relsev");
+    if(hid) hid.value=b.dataset.v;
+    [...elseg.querySelectorAll("button")].forEach(x=>x.classList.toggle("on", x===b));
+  };
+  const save=pinField("rsave");
+  if(save) save.onclick=async()=>{
+    if(selGpio==null){ showMsg("Pick an input pin", true); return; }
+    const mode=currentMode();
+    if(mode!=="in"&&mode!=="adc"){ showMsg("Rules live on In or ADC pins", true); return; }
+    const src=ioOf(selGpio);
+    if(!src||(src.mode!=="in"&&src.mode!=="adc")){ showMsg("Apply this pin as In or ADC first", true); return; }
+    if(ruleDest==null||!ruleCanTake(ruleDest)){ showMsg("Pick an output pin", true); return; }
+    if(ruleDest===selGpio){ showMsg("Output must be a different pin", true); return; }
+    let op="eq", value=1;
+    if(mode==="adc"){
+      op=pinVal("rop","gt");
+      value=+pinVal("rth",1000);
+      if(!Number.isFinite(value)){ showMsg("Enter a millivolt threshold", true); return; }
+    }else{
+      value=+pinVal("rlevel",1)?1:0;
+      op="eq";
+    }
+    const thenV=ruleThenValue();
+    const elseV=ruleElseValue();
+    if(!Number.isFinite(thenV)||!Number.isFinite(elseV)){ showMsg("Then / else need a number", true); return; }
+    const r=await cmd({cmd:"rule.set",rule:{
+      on:{gpio:selGpio,op,value},
+      then:{gpio:ruleDest,value:thenV},
+      else:{gpio:ruleDest,value:elseV}
+    }});
+    if(r.ok) rules=(r.result&&r.result.rules)||[];
+    showMsg(r.ok?"Rule saved":(r.error||"failed"), !r.ok);
+    paintRuleForm();
+    paintPinUses();
+  };
+  const del=pinField("rdel");
+  if(del) del.onclick=async()=>{
+    if(selGpio==null) return;
+    const r=await cmd({cmd:"rule.remove",gpio:selGpio});
+    if(r.ok) rules=(r.result&&r.result.rules)||[];
+    ruleDest=null;
+    showMsg(r.ok?"Rule removed":(r.error||"failed"), !r.ok);
+    paintRuleForm();
+    paintPinUses();
   };
 }
 function typeById(t){return ((modCat&&modCat.types)||[]).find(x=>x.type===t);}
@@ -1133,11 +1410,19 @@ function onPadClick(g, kind, silk){
     wizTake(g);
     return;
   }
+  if(rulePick){
+    if(g==null||!ruleCanTake(g)){ showMsg("Pick an Out / PWM / Servo pin", true); return; }
+    setRuleDest(g);
+    rulePick=false;
+    paintRuleForm();
+    paintPinUses();
+    return;
+  }
   selectPad(g, kind, silk);
 }
 function tabMeta(){return TABS.find(t=>t.n===tab)||TABS[0];}
 function render(){
-  if(drawn==="Hardware" && tab!=="Hardware"){ rememberPin(selGpio); wiz=null; }
+  if(drawn==="Hardware" && tab!=="Hardware"){ rememberPin(selGpio); wiz=null; rulePick=false; }
   const tm=tabMeta();
   document.documentElement.style.setProperty("--tab", tm.c);
   [...nav.children].forEach((b,i)=>b.className=TABS[i].n===tab?"on":"");
@@ -1164,10 +1449,11 @@ function render(){
   }else if(tab==="Hardware"){
     if(!hw){
       main.innerHTML=`<div class="card"><p class="wait">loading pin map…</p></div>`;
-      Promise.all([j("/api/v1/hardware"), cmd({cmd:"module.catalog"}), cmd({cmd:"module.list"})]).then(([h,c,l])=>{
+      Promise.all([j("/api/v1/hardware"), cmd({cmd:"module.catalog"}), cmd({cmd:"module.list"}), cmd({cmd:"rule.list"})]).then(([h,c,l,rl])=>{
         hw=h;
         if(c&&c.ok) modCat=c.result;
         if(l&&l.ok) mods=l.result;
+        if(rl&&rl.ok) rules=(rl.result&&rl.result.rules)||[];
         drawn=null; render();
       }).catch(()=>{});
       return;
@@ -1188,7 +1474,7 @@ function render(){
       <p class="hint">Analog in: ADC mode on ADC1 (GPIO 32–39, A1). ADC2 pins (A2) cannot analog-read while Wi-Fi is on — this firmware keeps Wi-Fi on.</p>
       <p class="hint" id="wizbanner" hidden></p>
       <div class="filts" id="pfilts">${filts.map(([id,lab])=>`<button type="button" data-f="${esc(id)}">${esc(lab)}</button>`).join("")}</div>
-      <div class="pinwrap"><div class="pinout" style="--n:${n}">${pads}</div></div>
+      <div class="pinwrap"><svg class="rulelinks" id="rulelinks" aria-hidden="true"></svg><div class="pinout" style="--n:${n}">${pads}</div></div>
     </div>
     <div class="card hw-cfg">
       ${h2("Configure","pin")}
@@ -1288,6 +1574,53 @@ function render(){
           <label class="check"><input type="checkbox" id="pinvert"> Invert logic</label>
           <p class="hint" id="pinvhint"></p>
         </div>
+        <div id="prule" hidden>
+          <label>Rule</label>
+          <p class="hint">When this input trips, set another pin. Runs on the box with no host. Apply the pin mode first, then pick an output that is already Out / PWM / Servo.</p>
+          <p class="hint" id="prulemsg"></p>
+          <div class="pinpick" id="rdests"></div>
+          <button class="act sec" type="button" id="rpick">Pick output on pinout</button>
+          <div id="rwhen-adc" hidden>
+            <div class="row">
+              <div class="field">
+                <label for="rop">When mV</label>
+                <select id="rop">
+                  <option value="gt">&gt;</option>
+                  <option value="ge">≥</option>
+                  <option value="lt">&lt;</option>
+                  <option value="le">≤</option>
+                </select>
+              </div>
+              <div class="field">
+                <label for="rth">Threshold (mV)</label>
+                <input id="rth" type="number" inputmode="numeric" min="0" max="3300" value="1000">
+                <p class="hint">Millivolts, ~0–3300. 1000 ≈ 1.0 V.</p>
+              </div>
+            </div>
+          </div>
+          <div id="rwhen-in" hidden>
+            <label>When input is</label>
+            <div class="modes" id="rlevelg" role="group" aria-label="When input">
+              <button type="button" data-v="1" class="on">HIGH</button>
+              <button type="button" data-v="0">LOW</button>
+            </div>
+            <input id="rlevel" type="hidden" value="1">
+          </div>
+          <div id="ract" hidden>
+            <label id="rthenlab">Then</label>
+            <div class="modes" id="rtheng" role="group"></div>
+            <div class="field" id="rthennum" hidden>
+              <input id="rthenv" type="number" inputmode="numeric">
+            </div>
+            <label id="relselab">Else</label>
+            <div class="modes" id="relseg" role="group"></div>
+            <div class="field" id="relsenum" hidden>
+              <input id="relsev" type="number" inputmode="numeric">
+            </div>
+          </div>
+          <button class="act" type="button" id="rsave">Save rule</button>
+          <button class="act sec" type="button" id="rdel" hidden>Remove rule</button>
+        </div>
         <button class="act" type="button" id="pcfg">Apply</button>
         <button class="act sec" type="button" id="pon" hidden>Set HIGH</button>
         <button class="act sec" type="button" id="poff" hidden>Set LOW</button>
@@ -1317,6 +1650,7 @@ function render(){
     paintPinUses();
     paintModList();
     paintWizard();
+    paintRuleForm();
     const add=document.getElementById("maddstart");
     if(add) add.onclick=startWiz;
     if(selGpio!=null && !(wiz&&wiz.picking)) selectPad(selGpio, "gpio", String(selGpio));
@@ -1415,7 +1749,7 @@ function render(){
       ${h2("Device","sys")}
       <button class="act sec" type="button" id="reb">Reboot</button>
       <button class="act danger" type="button" id="fac">Factory reset (keeps MAC identity)</button>
-      <p>Factory reset clears Wi-Fi, pins, MQTT, and the AP password (recovery AP is open again).</p>
+      <p>Factory reset clears Wi-Fi, pins, rules, MQTT, and the AP password (recovery AP is open again).</p>
       <p>Physical recovery (press BOOT <em>after</em> the app is running, not while resetting): 5s recovery AP, 10s clear Wi-Fi, 20s factory reset.</p>
     </div>`;
     document.getElementById("otaup").onclick=async()=>{

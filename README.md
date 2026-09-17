@@ -47,6 +47,7 @@ Node-RED (same LAN as a provisioned board): see [docs/features/nodered_README.md
 ```powershell
 python test/test_capability_spec.py
 python test/test_module_spec.py
+python test/test_rule_spec.py
 ```
 
 ## Layout

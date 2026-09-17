@@ -10,6 +10,7 @@ esp_err_t command_router_init();
 cJSON* command_dispatch(cJSON* req);
 esp_err_t command_apply_saved_io(bool skip_if_safe_mode);
 esp_err_t command_apply_saved_modules(bool skip_if_safe_mode);
+esp_err_t command_apply_saved_rules(bool skip_if_safe_mode);
 /** Republish each pin on the event bus (MQTT/WS/serial hydrate). Returns pin count. */
 int io_emit_snapshot();
 /** Array of {cmd, summary, example}. Caller deletes. Keep in sync with command_dispatch. */

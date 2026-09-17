@@ -12,6 +12,14 @@ describe("parseIoMessage", () => {
     assert.equal(ev.value, 1);
     assert.equal(ev.mode, "out");
   });
+  it("reads ADC millivolts from mode=adc even if other numeric fields exist", () => {
+    const ev = parseIoMessage({
+      topic: "io/adc",
+      data: { gpio: 32, mode: "adc", mv: 1774, raw: 2000, id: "adc_32" },
+    });
+    assert.equal(ev.value, 1774);
+    assert.equal(ev.mode, "adc");
+  });
   it("ignores telemetry frames", () => {
     assert.equal(parseIoMessage({ topic: "telemetry", data: { heap_free: 1 } }), null);
   });

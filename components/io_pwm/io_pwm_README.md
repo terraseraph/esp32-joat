@@ -2,7 +2,7 @@
 
 ## Purpose
 
-LEDC high-speed timer 0, 10-bit duty, up to 8 channels. Duty is permille (0–1000).
+LEDC high-speed timer 0, 10-bit duty, up to 8 channels. Duty is permille (0–1000). Independent of [io_servo_README.md](../io_servo/io_servo_README.md) (low-speed 50 Hz).
 
 ## User story
 
@@ -32,4 +32,4 @@ Scope or LED on GPIO 4, duty 100 vs 900.
 
 ## Known limits
 
-8 channels. Frequency 50–20000 Hz.
+8 PWM channels. Frequency 50–20000 Hz. Servos must use `servo` mode — sharing this timer would change their 20 ms frame.

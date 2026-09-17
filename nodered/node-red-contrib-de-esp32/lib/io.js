@@ -32,8 +32,13 @@ function parseIoMessage(raw) {
   if (typeof data.gpio !== "number") {
     return null;
   }
+  const mode = data.mode || "";
   let value = null;
-  if (typeof data.level === "number") {
+  if (mode === "adc" && typeof data.mv === "number") {
+    value = data.mv;
+  } else if (mode === "pwm" && typeof data.duty === "number") {
+    value = data.duty;
+  } else if (typeof data.level === "number") {
     value = data.level;
   } else if (typeof data.duty === "number") {
     value = data.duty;
@@ -45,7 +50,7 @@ function parseIoMessage(raw) {
   return {
     gpio: data.gpio,
     value,
-    mode: data.mode || "",
+    mode,
     id: data.id || "",
     topic: topic || "io/gpio",
     data,

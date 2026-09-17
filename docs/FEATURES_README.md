@@ -27,10 +27,13 @@ Template: [templates/FEATURE_README_TEMPLATE.md](templates/FEATURE_README_TEMPLA
 | state_registry | mvp | [state_registry_README.md](../components/state_registry/state_registry_README.md) | Live I/O and system state |
 | capability_manager | mvp | [capability_manager_README.md](../components/capability_manager/capability_manager_README.md) | ESP32 pin truth; reject before mutate |
 | board_profiles | mvp | [board_profiles_README.md](../components/board_profiles/board_profiles_README.md) | DevKitC LED/BOOT + header pinout / buses |
-| resource_manager | mvp | [resource_manager_README.md](../components/resource_manager/resource_manager_README.md) | One owner per GPIO |
+| resource_manager | mvp | [resource_manager_README.md](../components/resource_manager/resource_manager_README.md) | One owner per GPIO; SPI host refcount |
+| module_manager | mvp | [module_manager_README.md](../components/module_manager/module_manager_README.md) | Catalog + NVS instances; apply/teardown vtable |
 | io_gpio | mvp | [io_gpio_README.md](../components/io_gpio/io_gpio_README.md) | Digital in/out + debounce IRQ |
-| io_pwm | mvp | [io_pwm_README.md](../components/io_pwm/io_pwm_README.md) | LEDC PWM |
+| io_pwm | mvp | [io_pwm_README.md](../components/io_pwm/io_pwm_README.md) | LEDC PWM (8 ch, shared Hz) |
+| io_servo | mvp | [io_servo_README.md](../components/io_servo/io_servo_README.md) | Hobby servo 50 Hz (8 ch, own timer) |
 | io_adc | mvp | [io_adc_README.md](../components/io_adc/io_adc_README.md) | ADC1 only (Wi-Fi on) |
+| mod_mfrc522 | mvp | [mod_mfrc522_README.md](../components/mod_mfrc522/mod_mfrc522_README.md) | SPI RFID; shared bus, unique CS |
 | command_router | mvp | [command_router_README.md](../components/command_router/command_router_README.md) | Single command API for HTTP/WS/MQTT |
 | network_manager | mvp | [network_manager_README.md](../components/network_manager/network_manager_README.md) | STA + SoftAP + mDNS |
 | provisioning | mvp | [provisioning_README.md](../components/provisioning/provisioning_README.md) | Captive DNS + test-before-commit Wi-Fi |
@@ -45,7 +48,7 @@ Template: [templates/FEATURE_README_TEMPLATE.md](templates/FEATURE_README_TEMPLA
 
 ## Dependency sketch
 
-Boot → identity + config → capability + resources → safe pins → network → web + MQTT → apply I/O (unless safe mode).
+Boot → identity + config → capability + resources → safe pins → network → web + MQTT → apply I/O then modules (unless safe mode).
 
 HTTP, WebSocket, MQTT, and UART JSON must call `command_router`. Do not fork behaviour in `web/dist/index.html`.
 

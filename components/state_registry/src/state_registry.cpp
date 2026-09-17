@@ -78,6 +78,23 @@ esp_err_t state_set(const char* key, cJSON* value) {
     return ESP_OK;
 }
 
+esp_err_t state_clear(const char* key) {
+    if (!key) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    xSemaphoreTake(s_mu, portMAX_DELAY);
+    Slot* slot = find_unlocked(key);
+    if (slot) {
+        if (slot->value) {
+            cJSON_Delete(slot->value);
+            slot->value = nullptr;
+        }
+        slot->key[0] = '\0';
+    }
+    xSemaphoreGive(s_mu);
+    return ESP_OK;
+}
+
 cJSON* state_get_clone(const char* key) {
     if (!key) {
         return nullptr;

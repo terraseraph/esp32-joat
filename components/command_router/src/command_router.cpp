@@ -12,7 +12,9 @@
 #include "io_adc.hpp"
 #include "io_gpio.hpp"
 #include "io_pwm.hpp"
+#include "io_servo.hpp"
 #include "json_util.hpp"
+#include "module_manager.hpp"
 #include "network_manager.hpp"
 #include "ota_manager.hpp"
 #include "provisioning.hpp"
@@ -118,13 +120,13 @@ cJSON* apply_one_pin(cJSON* pin, bool persist) {
     char err[96];
     err[0] = '\0';
     esp_err_t rc = ESP_OK;
+    io_gpio_release(gpio);
+    io_pwm_release(gpio);
+    io_adc_release(gpio);
+    io_servo_release(gpio);
     if (strcmp(mode, "disabled") == 0) {
-        io_gpio_release(gpio);
-        io_pwm_release(gpio);
-        io_adc_release(gpio);
+        rc = ESP_OK;
     } else if (strcmp(mode, "out") == 0 || strcmp(mode, "in") == 0) {
-        io_pwm_release(gpio);
-        io_adc_release(gpio);
         int debounce_ms = 50;
         if (strcmp(mode, "in") == 0) {
             debounce_ms = clamp_int(json_int(pin, "debounce_ms", 50), 0, 500);
@@ -137,13 +139,21 @@ cJSON* apply_one_pin(cJSON* pin, bool persist) {
                                json_int(pin, "boot", 0), json_bool(pin, "irq", strcmp(mode, "in") == 0),
                                debounce_ms, err, sizeof(err));
     } else if (strcmp(mode, "pwm") == 0) {
-        io_gpio_release(gpio);
-        io_adc_release(gpio);
         rc = io_pwm_configure(gpio, json_int(pin, "hz", 1000), json_int(pin, "duty", 0), err,
                               sizeof(err));
+    } else if (strcmp(mode, "servo") == 0) {
+        int min_us = clamp_int(json_int(pin, "min_us", 1000), 500, 1500);
+        int max_us = clamp_int(json_int(pin, "max_us", 2000), 1500, 2500);
+        if (max_us <= min_us) {
+            min_us = 1000;
+            max_us = 2000;
+        }
+        int angle = clamp_int(json_int(pin, "angle", 90), 0, 180);
+        set_num(pin, "min_us", min_us);
+        set_num(pin, "max_us", max_us);
+        set_num(pin, "angle", angle);
+        rc = io_servo_configure(gpio, angle, min_us, max_us, err, sizeof(err));
     } else if (strcmp(mode, "adc") == 0) {
-        io_gpio_release(gpio);
-        io_pwm_release(gpio);
         int sample_ms = clamp_int(json_int(pin, "sample_ms", 50), 20, 1000);
         int hysteresis_mv = clamp_int(json_int(pin, "hysteresis_mv", 20), 5, 500);
         int smooth = clamp_int(json_int(pin, "smooth", 70), 0, 90);
@@ -188,6 +198,13 @@ int io_emit_snapshot() {
             topic = "io/pwm";
         } else if (strncmp(it->string, "adc_", 4) == 0) {
             topic = "io/adc";
+        } else if (strncmp(it->string, "servo_", 6) == 0) {
+            topic = "io/servo";
+        } else if (strncmp(it->string, "mod_", 4) == 0) {
+            const char* typ = json_str(it, "type", "");
+            if (strcmp(typ, "mfrc522") == 0) {
+                topic = "io/rfid";
+            }
         }
         if (!topic) {
             continue;
@@ -211,8 +228,8 @@ struct CmdInfo {
 const CmdInfo kCmds[] = {
     {"pin.configure", "Validate and persist a GPIO mode",
      "{\"cmd\":\"pin.configure\",\"pin\":{\"gpio\":4,\"mode\":\"out\",\"name\":\"gpio_4\"}}"},
-    {"pin.set", "Set a configured output or PWM duty (0-1000)",
-     "{\"cmd\":\"pin.set\",\"gpio\":4,\"value\":1000,\"mode\":\"out\"}"},
+    {"pin.set", "Set output, PWM duty (0-1000), or servo angle (0-180)",
+     "{\"cmd\":\"pin.set\",\"gpio\":4,\"value\":90,\"mode\":\"servo\"}"},
     {"network.wifi.set", "Test STA then save credentials",
      "{\"cmd\":\"network.wifi.set\",\"ssid\":\"MyNet\",\"password\":\"secret\"}"},
     {"network.wifi.scan", "Scan visible SSIDs", "{\"cmd\":\"network.wifi.scan\"}"},
@@ -235,6 +252,16 @@ const CmdInfo kCmds[] = {
     {"serial.hello", "Start UART IO session; returns identity (no pin dump)",
      "{\"cmd\":\"serial.hello\"}"},
     {"serial.bye", "Stop UART IO session", "{\"cmd\":\"serial.bye\"}"},
+    {"module.catalog", "Addon types and pin schemas", "{\"cmd\":\"module.catalog\"}"},
+    {"module.list", "Configured module instances plus live state", "{\"cmd\":\"module.list\"}"},
+    {"module.add", "Validate, apply, and persist a module instance",
+     "{\"cmd\":\"module.add\",\"type\":\"mfrc522\",\"id\":\"rfid0\",\"bus\":\"vspi\",\"pins\":{\"sck\":18,\"miso\":19,\"mosi\":23,\"cs\":5,\"rst\":4}}"},
+    {"module.configure", "Re-apply pins for an existing module id",
+     "{\"cmd\":\"module.configure\",\"id\":\"rfid0\",\"pins\":{\"sck\":18,\"miso\":19,\"mosi\":23,\"cs\":15}}"},
+    {"module.remove", "Teardown and forget a module instance",
+     "{\"cmd\":\"module.remove\",\"id\":\"rfid0\"}"},
+    {"module.cmd", "Type-specific command (none for mfrc522)",
+     "{\"cmd\":\"module.cmd\",\"id\":\"rfid0\"}"},
 };
 
 }  // namespace
@@ -281,6 +308,14 @@ esp_err_t command_apply_saved_io(bool skip_if_safe_mode) {
     return ESP_OK;
 }
 
+esp_err_t command_apply_saved_modules(bool skip_if_safe_mode) {
+    if (skip_if_safe_mode && RuntimeStatus::instance().safe_mode()) {
+        ESP_LOGW(TAG, "safe mode: skipping module apply");
+        return ESP_OK;
+    }
+    return module_apply_saved();
+}
+
 cJSON* command_dispatch(cJSON* req) {
     if (!req) {
         return err_result(nullptr, "empty request");
@@ -302,6 +337,8 @@ cJSON* command_dispatch(cJSON* req) {
         esp_err_t rc = ESP_ERR_NOT_SUPPORTED;
         if (strcmp(mode, "pwm") == 0) {
             rc = io_pwm_set(gpio, value);
+        } else if (strcmp(mode, "servo") == 0) {
+            rc = io_servo_set(gpio, value);
         } else {
             rc = io_gpio_set(gpio, value);
         }
@@ -479,6 +516,46 @@ cJSON* command_dispatch(cJSON* req) {
         RuntimeStatus::instance().set_live_serial(false);
         cJSON* result = cJSON_CreateObject();
         cJSON_AddBoolToObject(result, "session", false);
+        return ok_result(req, result);
+    }
+    if (strcmp(cmd, "module.catalog") == 0) {
+        return ok_result(req, module_catalog_json());
+    }
+    if (strcmp(cmd, "module.list") == 0) {
+        return ok_result(req, module_list_json());
+    }
+    if (strcmp(cmd, "module.add") == 0 || strcmp(cmd, "module.configure") == 0) {
+        cJSON* spec = cJSON_GetObjectItemCaseSensitive(req, "module");
+        if (!cJSON_IsObject(spec)) {
+            spec = req;
+        }
+        char err[96];
+        err[0] = '\0';
+        esp_err_t rc = (strcmp(cmd, "module.add") == 0) ? module_add(spec, err, sizeof(err))
+                                                        : module_configure(spec, err, sizeof(err));
+        if (rc != ESP_OK) {
+            return err_result(req, err[0] ? err : esp_err_to_name(rc));
+        }
+        return ok_result(req, module_list_json());
+    }
+    if (strcmp(cmd, "module.remove") == 0) {
+        char err[96];
+        err[0] = '\0';
+        esp_err_t rc = module_remove(json_str(req, "id", ""), err, sizeof(err));
+        if (rc != ESP_OK) {
+            return err_result(req, err[0] ? err : esp_err_to_name(rc));
+        }
+        return ok_result(req, module_list_json());
+    }
+    if (strcmp(cmd, "module.cmd") == 0) {
+        char err[96];
+        err[0] = '\0';
+        cJSON* result = nullptr;
+        esp_err_t rc = module_cmd(json_str(req, "id", ""), req, &result, err, sizeof(err));
+        if (rc != ESP_OK) {
+            cJSON_Delete(result);
+            return err_result(req, err[0] ? err : esp_err_to_name(rc));
+        }
         return ok_result(req, result);
     }
     return err_result(req, "unknown cmd");

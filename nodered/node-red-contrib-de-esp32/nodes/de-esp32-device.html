@@ -67,7 +67,7 @@
     return m;
   };
 
-  DeEsp32.capBadges = function(p) {
+  DeEsp32.capBadges = function(p, mode) {
     if (!p) {
       return "";
     }
@@ -77,7 +77,7 @@
     } else if (p.input_only) {
       a.push(["in", "in-only", "Input only"]);
     } else if (p.output) {
-      a.push(["io", "io", "Digital in/out"]);
+      a.push(["io", "io", "Digital in/out capability — not the node mode"]);
     }
     if (p.adc1) {
       a.push(["adc", "A1", "ADC1 analog — ADC mode, works with Wi-Fi"]);
@@ -99,6 +99,14 @@
     if (p.role) {
       a.push(["role", p.role, p.role]);
     }
+    if (mode === "adc" || mode === "pwm" || mode === "in" || mode === "out") {
+      const want = mode === "adc" ? "adc" : (mode === "pwm" ? "pwm" : (mode === "in" && p.input_only ? "in" : "io"));
+      a.sort(function(x, y) {
+        const xs = x[0] === want ? 0 : 1;
+        const ys = y[0] === want ? 0 : 1;
+        return xs - ys;
+      });
+    }
     return a.map(function(row) {
       return '<span class="b ' + row[0] + '" title="' + DeEsp32.esc(row[2] || "") + '">' +
         DeEsp32.esc(row[1]) + "</span>";
@@ -112,15 +120,15 @@
     const modes = DeEsp32.allowedModes(pin, family);
     const $mode = $("#node-input-pinMode");
     if ($mode.length) {
-      const cur = $mode.val();
-      $mode.empty();
-      if (!modes.length) {
-        $mode.append($("<option>").val(family === "out" ? "out" : "in").text(family === "out" ? "Out" : "In"));
-      } else {
+      const cur = $mode.val() || $mode.data("keepMode") || "";
+      if (modes.length) {
+        $mode.empty();
         modes.forEach(function(m) {
           $mode.append($("<option>").val(m).text(DeEsp32.MODE_LAB[m] || m));
         });
-        $mode.val(modes.indexOf(cur) >= 0 ? cur : modes[0]);
+        const next = modes.indexOf(cur) >= 0 ? cur : modes[0];
+        $mode.val(next);
+        $mode.data("keepMode", next);
       }
     }
     const mode = $mode.length ? $mode.val() : (family === "out" ? "out" : "in");
@@ -139,7 +147,7 @@
             ? '<p class="de-esp32-hint">ADC2 analog is unavailable while Wi-Fi is on. Use GPIO 32–39 (A1).</p>'
             : "");
         $meta.html(
-          "<p><strong>GPIO " + gpio + "</strong> " + DeEsp32.capBadges(pin) + "</p>" +
+          "<p><strong>GPIO " + gpio + "</strong> " + DeEsp32.capBadges(pin, mode) + "</p>" +
           '<p class="de-esp32-hint">' + DeEsp32.esc(pin.notes || "") + DeEsp32.esc(adcCh) +
           (pin.touch ? " · touch T" + pin.touch_channel : "") + "</p>" + analog
         );
@@ -181,7 +189,7 @@
         has && selected === g ? "sel" : "",
       ].join(" ");
       const label = has ? ("GPIO " + g) : p.silk;
-      const caps = has ? DeEsp32.capBadges(info) : ('<span class="b mute">' + DeEsp32.esc(p.kind || "") + "</span>");
+      const caps = has ? DeEsp32.capBadges(info, mode) : ('<span class="b mute">' + DeEsp32.esc(p.kind || "") + "</span>");
       const title = has ? ((info && info.notes) || "") : (p.kind || "");
       return '<button type="button" class="' + cls + '" data-gpio="' + (has ? g : "") +
         '" data-kind="' + DeEsp32.esc(p.kind) + '" data-silk="' + DeEsp32.esc(p.silk) +
@@ -211,13 +219,29 @@
     });
   };
 
-  DeEsp32.loadHardware = function(host, port) {
-    return $.getJSON("de-esp32/hardware", { host: host, port: port || 80 });
+  DeEsp32.ajaxErr = function(xhr) {
+    const body = xhr && xhr.responseJSON && xhr.responseJSON.error;
+    if (body) {
+      return body;
+    }
+    const st = (xhr && xhr.statusText) || "";
+    if (/abort/i.test(st) || st === "This operation was aborted") {
+      return "device HTTP timed out (Pi could not reach the box)";
+    }
+    return st || "failed";
+  };
+
+  DeEsp32.loadHardware = function(host, port, id) {
+    const q = { host: host, port: port || 80 };
+    if (id) {
+      q.id = id;
+    }
+    return $.getJSON("de-esp32/hardware", q);
   };
 
   DeEsp32.bindGpioEditor = function(family, boxId, refreshId) {
     let hwCache = null;
-    function paint() {
+    function paint(note) {
       const $box = $("#" + boxId);
       if (!hwCache) {
         return;
@@ -240,25 +264,56 @@
         selected: $("#node-input-gpio").val(),
         onSelect: onSelect,
       });
+      const warn = note || hwCache.warning;
+      if (warn || hwCache.via === "devkitc-fallback") {
+        $box.prepend(
+          '<p class="de-esp32-hint">' +
+            DeEsp32.esc(warn || "Live pin map unreachable — DevKitC layout") +
+            "</p>"
+        );
+      }
+    }
+    function applyHw(hw, note) {
+      if (!hw || !hw.header) {
+        return;
+      }
+      hwCache = hw;
+      paint(note);
     }
     function refresh() {
       const $box = $("#" + boxId);
       const dev = RED.nodes.node($("#node-input-device").val());
-      if (!dev || !dev.host) {
-        $box.html('<p class="de-esp32-hint">Pick a device with a host first.</p>');
-        return;
-      }
       $box.html('<p class="de-esp32-hint">loading pin map…</p>');
-      DeEsp32.loadHardware(dev.host, dev.port).done(function(hw) {
-        hwCache = hw;
-        paint();
-      }).fail(function(xhr) {
-        const err = (xhr.responseJSON && xhr.responseJSON.error) || xhr.statusText || "failed";
-        $box.html('<p class="de-esp32-hint">' + DeEsp32.esc(err) + "</p>");
-      });
+      $.getJSON("de-esp32/pinout-template")
+        .done(function(hw) {
+          applyHw(hw, (!dev || !dev.host) ? "Pick a device with a host to try a live map." : "");
+          if (!dev || !dev.host) {
+            return;
+          }
+          DeEsp32.loadHardware(dev.host, dev.port, dev.id)
+            .done(function(live) {
+              applyHw(live);
+            })
+            .fail(function(xhr) {
+              applyHw(hwCache, DeEsp32.ajaxErr(xhr));
+            });
+        })
+        .fail(function(xhr) {
+          if (!dev || !dev.host) {
+            $box.html('<p class="de-esp32-hint">Pick a device with a host first.</p>');
+            return;
+          }
+          DeEsp32.loadHardware(dev.host, dev.port, dev.id)
+            .done(function(live) {
+              applyHw(live);
+            })
+            .fail(function(xhr2) {
+              $box.html('<p class="de-esp32-hint">' + DeEsp32.esc(DeEsp32.ajaxErr(xhr2 || xhr)) + "</p>");
+            });
+        });
     }
     $("#node-input-device").on("change", refresh);
-    $("#node-input-pinMode").on("change", paint);
+    $("#node-input-pinMode").on("change", function() { paint(); });
     $("#" + refreshId).on("click", refresh);
     setTimeout(refresh, 0);
   };
@@ -342,8 +397,7 @@
             }
           })
           .fail(function(xhr) {
-            const err = (xhr.responseJSON && xhr.responseJSON.error) || xhr.statusText || "scan failed";
-            $("#de-esp32-scan-msg").text(err);
+            $("#de-esp32-scan-msg").text(DeEsp32.ajaxErr(xhr));
           })
           .always(function() {
             $btn.prop("disabled", false);

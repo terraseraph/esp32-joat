@@ -86,7 +86,7 @@ const MqttTopicDef kMqttTopics[] = {
     {"status", false, true, true, "Retained identity snapshot"},
     {"telemetry", false, true, false, "Periodic diagnostics"},
     {"io", false, true, false,
-     "Live per-pin GPIO/PWM/ADC {topic,data} JSON (QoS 1); hydrate burst on connect"},
+     "Live GPIO/PWM/servo/ADC/RFID {topic,data} JSON (QoS 1); hydrate burst on connect"},
     {"events", false, true, false, "Command replies (corr echoed)"},
     {"api", false, true, true, "Retained pointer at OpenAPI + command topic"},
 };

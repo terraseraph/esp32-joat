@@ -14,7 +14,7 @@ def allows(gpio: int, mode: str) -> bool:
         return False
     if mode == "disabled":
         return True
-    if mode in ("out", "pwm"):
+    if mode in ("out", "pwm", "servo"):
         return gpio not in INPUT_ONLY and gpio not in FLASH
     if mode == "in":
         return gpio not in FLASH
@@ -44,6 +44,8 @@ class CapabilitySpec(unittest.TestCase):
     def test_general_out(self):
         self.assertTrue(allows(4, "out"))
         self.assertTrue(allows(4, "pwm"))
+        self.assertTrue(allows(4, "servo"))
+        self.assertFalse(allows(34, "servo"))
         self.assertFalse(allows(4, "adc"))
 
     def test_strapping_still_usable_but_flagged(self):

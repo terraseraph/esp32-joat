@@ -113,6 +113,27 @@ pre{white-space:pre-wrap;max-height:320px;overflow:auto;background:var(--in);pad
 .gauge .n{color:var(--muted);font-size:12px;font-variant-numeric:tabular-nums;white-space:nowrap}
 .adcbar{height:4px;width:100%;background:var(--in);border:1px solid var(--line);border-radius:99px;overflow:hidden;margin-top:2px}
 .adcbar>i{display:block;height:100%;width:0;background:#c084fc}
+.modrow,.addon{padding:10px 0;border-bottom:1px solid var(--line)}
+.modrow:last-child,.addon:last-child{border-bottom:0}
+.addonhead{display:flex;justify-content:space-between;align-items:flex-start;gap:8px}
+.addonhead .act{margin:0}
+.addon .modes{margin:8px 0 0}
+.steps{display:flex;flex-wrap:wrap;gap:4px;margin:0 0 12px}
+.steps span{flex:1 1 4.8em;text-align:center;padding:6px 4px;border-radius:99px;font-size:11px;color:var(--muted);border:1px solid var(--line)}
+.steps span.on{color:var(--tab);border-color:var(--tab);background:var(--in)}
+.steps span.done{color:var(--ok);border-color:rgba(61,186,110,.33)}
+.pick{display:flex;flex-direction:column;gap:8px}
+.pickbtn{display:flex;width:100%;text-align:left;padding:12px;background:var(--in);border:1px solid var(--line);color:var(--fg);border-radius:var(--r);cursor:pointer;font:inherit}
+.pickbtn:hover,.pickbtn.on{border-color:var(--tab)}
+.pickbtn strong{display:block;font-size:14px}
+.pickbtn span{display:block;color:var(--muted);font-size:12px;margin-top:2px}
+.pinpick{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0}
+.pinpick button{min-width:52px;padding:8px 10px;min-height:40px;border:1px solid var(--line);background:var(--in);color:var(--fg);border-radius:var(--r);cursor:pointer;font-size:13px}
+.pinpick button.on{border-color:var(--tab);color:var(--tab)}
+.wizacts{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+.wizacts .act{margin:0}
+details.adv{margin:10px 0 0;border:1px solid var(--line);border-radius:var(--r);padding:8px 10px;background:var(--in)}
+details.adv summary{cursor:pointer;color:var(--muted);font-size:13px}
 .wait{color:var(--muted);padding:20px 8px}
 @media(max-width:640px){.row{grid-template-columns:1fr}#pills{max-width:100%;justify-content:flex-start}}
 @media(max-width:720px){.pinout{grid-template-columns:1fr 1fr;grid-template-rows:none;min-width:0}.pcb,.mod,.usb{grid-column:1/-1;grid-row:1}.pcb{min-height:120px}.mod{max-width:120px;justify-self:center;align-self:center}.usb{align-self:end;margin-bottom:8px}.hole{display:none}.pad,.pad.r{grid-row:auto}.pad{grid-column:1}.pad.r{grid-column:2}}
@@ -158,12 +179,13 @@ const TABS=[
   {n:"System",c:"#f08060",k:"sys"},
   {n:"API",c:"#7dd3fc",k:"api"}
 ];
-let tab="Overview", st=null, hw=null, spec=null, ws, drawn=null, picked=false, pinFilter="all", selGpio=null, wantWs=true, pinCfg={};
-const MODE_LAB={in:"In",out:"Out",pwm:"PWM",adc:"ADC",disabled:"Off"};
+let tab="Overview", st=null, hw=null, spec=null, ws, drawn=null, picked=false, pinFilter="all", selGpio=null, wantWs=true, pinCfg={}, mods=null, modCat=null, wiz=null;
+const MODE_LAB={in:"In",out:"Out",pwm:"PWM",servo:"Servo",adc:"ADC",disabled:"Off"};
 const MODE_HINT={
   in:"Digital input. Each stable edge is published over MQTT and the live UI.",
   out:"Digital output. Apply saves the power-on level; Set HIGH/LOW changes it live.",
   pwm:"PWM output. Duty is 0–1000 (0–100%). All PWM pins share one frequency.",
+  servo:"Hobby servo at 50 Hz (8 channels, separate from PWM). Angle 0–180. Apply saves rest position.",
   adc:"Analog input on ADC1 (~0–3.3 V). This mode cannot drive the pin.",
   disabled:"Release the pin (high impedance). Stops sampling and output."
 };
@@ -243,9 +265,24 @@ function overviewBody(){
     ["AP SSID", `<code>${esc(st&&st.ap_ssid)}</code> · ${n.ap_open!==false?"open":"WPA2"}`]
   ])+(st&&st.safe_mode?`<p class="bad">Safe mode: ${esc(st.safe_reason)} — I/O config not applied.</p>`:"");
 }
+function paintAddonLive(){
+  ((mods&&mods.modules)||[]).forEach(m=>{
+    const n=document.getElementById("modlive-"+m.id);
+    if(!n) return;
+    const live=(st&&st.io&&st.io["mod_"+m.id])||m.state||{};
+    n.textContent=live.present?live.uid:"—";
+  });
+  document.querySelectorAll("[data-slive]").forEach(n=>{
+    const u=ioOf(+n.dataset.slive);
+    n.textContent=u&&u.angle!=null?u.angle+"°":"—";
+  });
+}
 function paintLive(){
   if(tab==="Overview") setLive("ov", overviewBody());
-  else if(tab==="Hardware") paintPinUses();
+  else if(tab==="Hardware"){
+    paintPinUses();
+    paintAddonLive();
+  }
   else if(tab==="Network"){
     const n=net();
     setLive("nmeta", kv([
@@ -296,12 +333,23 @@ async function refresh(){
 function pinByGpio(g){return (hw&&hw.pins||[]).find(p=>p.gpio===g);}
 function ioOf(g){
   const io=(st&&st.io)||{};
-  return io["gpio_"+g]||io["pwm_"+g]||io["adc_"+g]||null;
+  return io["gpio_"+g]||io["pwm_"+g]||io["servo_"+g]||io["adc_"+g]||null;
+}
+function pinOwner(g){
+  const p=pinByGpio(g);
+  return (p&&p.owner)||"";
+}
+function ownerLabel(o){
+  if(!o) return "";
+  if(o.indexOf("mod_")==0) return "RFID "+o.slice(4);
+  if(o.indexOf("bus_")==0) return o.slice(4).toUpperCase()+" bus";
+  return o;
 }
 function useLabel(u){
   if(!u) return "";
   if(u.mode==="adc") return (u.mv??"?")+" mV";
   if(u.mode==="pwm") return "pwm "+(u.duty??0)+"/1000";
+  if(u.mode==="servo") return "servo "+(u.angle??"?")+"°";
   if(u.level===1) return (u.mode||"io")+" HIGH";
   if(u.level===0) return (u.mode||"io")+" LOW";
   return u.mode||"";
@@ -363,7 +411,7 @@ function allowedModes(p){
   if(!p||p.flash) return ["disabled"];
   const m=[];
   if(p.input) m.push("in");
-  if(p.output&&!p.input_only){m.push("out"); if(p.pwm) m.push("pwm");}
+  if(p.output&&!p.input_only){m.push("out"); if(p.pwm){m.push("pwm"); m.push("servo");}}
   if(p.adc1) m.push("adc");
   m.push("disabled");
   return m;
@@ -384,6 +432,9 @@ function rememberPin(g){
     boot:+pinVal("pboot",0),
     duty:+pinVal("pduty",0),
     hz:+pinVal("phz",1000),
+    angle:+pinVal("pangle",90),
+    minu:+pinVal("pminu",1000),
+    maxu:+pinVal("pmaxu",2000),
     deb:+pinVal("pdeb",50),
     samp:+pinVal("psamp",50),
     hyst:+pinVal("physt",20),
@@ -410,20 +461,22 @@ function paintModes(modes, cur, locked){
 function applyPinFilter(){
   const filts=document.getElementById("pfilts");
   if(filts) [...filts.querySelectorAll("button")].forEach(b=>b.classList.toggle("on", b.dataset.f===pinFilter));
+  const picking=!!(wiz&&wiz.picking);
   document.querySelectorAll(".pad").forEach(el=>{
     const raw=el.dataset.gpio;
     const g=raw===""?null:+raw;
     const p=g==null?null:pinByGpio(g);
     const f=pinFilter;
     let ok=true;
-    if(f==="all") ok=true;
+    if(picking) ok=g!=null&&wizCanTake(g);
+    else if(f==="all") ok=true;
     else if(f==="io") ok=!!(p&&(p.input||p.output)&&!p.flash);
     else if(f==="adc") ok=!!(p&&(p.adc1||p.adc2));
     else if(f==="pwm") ok=!!(p&&p.pwm&&!p.flash);
     else if(f==="touch") ok=!!(p&&p.touch);
     else if(f==="strap") ok=!!(p&&p.strap);
     else if(f==="flash") ok=!!(p&&p.flash);
-    else if(f==="on") ok=g!=null&&!!ioOf(g);
+    else if(f==="on") ok=g!=null&&(!!ioOf(g)||!!pinOwner(g));
     else ok=g!=null&&!!busGpios(f)[g];
     el.classList.toggle("dim", !ok);
   });
@@ -434,9 +487,12 @@ function paintPinUses(){
     const g=+el.dataset.gpio;
     const u=ioOf(g);
     const span=el.querySelector(".use");
-    if(span) span.textContent=useLabel(u);
-    el.classList.toggle("on", !!u);
-    el.classList.toggle("sel", selGpio===g);
+    if(span){
+      if(u) span.textContent=useLabel(u);
+      else { const o=pinOwner(g); span.textContent=o?ownerLabel(o):""; }
+    }
+    el.classList.toggle("on", !!u || !!pinOwner(g));
+    el.classList.toggle("sel", selGpio===g || wizCurrentGpio()===g);
     const bar=el.querySelector(".adcbar");
     const fill=bar&&bar.querySelector("i");
     const raw=adcRaw(u);
@@ -510,8 +566,10 @@ function selectPad(gpio, kind, silk){
     return `${esc(b.label)} ${esc(role?role[0].toUpperCase():"")} — ${esc(b.hint)}`;
   }).join("<br>");
   const adcCh=p&&p.adc1?` · ADC1 ch ${p.adc_channel}`:p&&p.adc2?` · ADC2 ch ${p.adc_channel}`:"";
+  const own=pinOwner(gpio);
   meta.innerHTML=`<p><strong>GPIO ${gpio}</strong> ${p&&p.role?`<span class="b role">${esc(p.role)}</span>`:""}</p>
     <p class="hint">${esc(p&&p.notes||"")}${adcCh}${p&&p.touch?` · touch T${p.touch_channel}`:""}</p>
+    ${own?`<p class="hint">Owned by <code>${esc(own)}</code> (${esc(ownerLabel(own))}). Disable or remove that module before using this pin as GPIO.</p>`:""}
     ${analogHint(p)}
     ${busTxt?`<p class="hint">${busTxt}</p>`:""}`;
   paintAdcGauge(u);
@@ -531,6 +589,7 @@ function syncPinExtras(){
   (mode==="adc"?show:hide)("padc");
   (mode==="out"?show:hide)("prow-boot");
   (mode==="pwm"?show:hide)("prow-pwm");
+  (mode==="servo"?show:hide)("prow-servo");
   const canPull=!!(p&&p.pull)&&(mode==="in"||mode==="out");
   (canPull?show:hide)("prow-pull");
   ((mode==="in"||mode==="out")?show:hide)("prow-inv");
@@ -549,6 +608,9 @@ function syncPinExtras(){
   fill("psamp", u&&u.sample_ms, saved.samp??50);
   fill("physt", u&&u.hysteresis_mv, saved.hyst??20);
   fill("psmooth", u&&u.smooth, saved.smooth??70);
+  fill("pangle", u&&u.angle, saved.angle??90);
+  fill("pminu", u&&u.min_us, saved.minu??1000);
+  fill("pmaxu", u&&u.max_us, saved.maxu??2000);
   const cfg=pinField("pcfg");
   const on=pinField("pon");
   const off=pinField("poff");
@@ -604,6 +666,11 @@ function bindPinEditor(){
       pin.duty=+(pinVal("pduty",0));
       pin.hz=+(pinVal("phz",1000));
     }
+    if(mode==="servo"){
+      pin.angle=+(pinVal("pangle",90));
+      pin.min_us=+(pinVal("pminu",1000));
+      pin.max_us=+(pinVal("pmaxu",2000));
+    }
     if(mode==="adc"){
       pin.sample_ms=+(pinVal("psamp",50));
       pin.hysteresis_mv=+(pinVal("physt",20));
@@ -626,10 +693,451 @@ function bindPinEditor(){
   };
   pinField("pon").onclick=()=>setLive(currentMode()==="pwm"?1000:1);
   pinField("poff").onclick=()=>setLive(0);
+  const sbtns=pinField("pservog");
+  if(sbtns) sbtns.onclick=e=>{
+    const b=e.target.closest("button[data-angle]");
+    if(!b) return;
+    const g=gpioOrMsg();
+    if(g==null) return;
+    const angle=+b.dataset.angle;
+    const a=pinField("pangle");
+    if(a) a.value=angle;
+    cmd({cmd:"pin.set",gpio:g,value:angle,mode:"servo"}).then(refresh);
+  };
+}
+function typeById(t){return ((modCat&&modCat.types)||[]).find(x=>x.type===t);}
+function busPins(busId){
+  const b=(hw&&hw.buses||[]).find(x=>x.id===busId);
+  return (b&&b.pins)||{};
+}
+function busById(id){return (hw&&hw.buses||[]).find(b=>b.id===id);}
+function nextModId(prefix){
+  const have=new Set(((mods&&mods.modules)||[]).map(m=>m.id));
+  for(let i=0;i<16;i++){ const id=(prefix||"rfid")+i; if(!have.has(id)) return id; }
+  return (prefix||"rfid")+"x";
+}
+function typeCount(type){return ((mods&&mods.modules)||[]).filter(m=>m.type===type).length;}
+function addonServos(){
+  const io=(st&&st.io)||{};
+  const seen={}, out=[];
+  Object.keys(io).forEach(k=>{
+    const u=io[k];
+    if(u&&u.mode==="servo"&&u.gpio!=null&&!seen[u.gpio]){ seen[u.gpio]=1; out.push(u); }
+  });
+  return out.sort((a,b)=>a.gpio-b.gpio);
+}
+function pinTaken(g){
+  const o=pinOwner(g);
+  if(o && String(o).indexOf("bus_")!==0) return true;
+  const u=ioOf(g);
+  return !!(u && u.mode && u.mode!=="disabled");
+}
+function instRoles(t){return (t&&t.pins||[]).filter(p=>p.share!=="bus");}
+function busRoles(t){return (t&&t.pins||[]).filter(p=>p.share==="bus");}
+function roleHint(role){
+  if(!role) return "";
+  if(role.share==="bus") return "Taken from the SPI bus and shared with other devices on it.";
+  if(role.role==="cs") return "Chip-select. On an RC522 the pad labelled SDA is CS, not I2C. Click it on the pinout.";
+  if(role.role==="rst") return "Reset. Skip if RST is tied high on the module.";
+  return role.required?"Click a free GPIO on the pinout, or a button below.":"Optional. Skip if unused.";
+}
+function wizCurrentGpio(){
+  if(!wiz||!wiz.picking) return null;
+  if(wiz.kind==="servo") return wiz.gpio!=null?wiz.gpio:null;
+  const v=(wiz.pins||{})[wiz.picking];
+  return v==null?null:+v;
+}
+function wizCanTake(g){
+  if(!wiz||!wiz.picking||g==null) return false;
+  const p=pinByGpio(g);
+  if(!p||p.flash) return false;
+  const cur=wizCurrentGpio();
+  if(wiz.kind==="servo"){
+    if(!(p.output&&p.pwm&&!p.input_only)) return false;
+    return g===cur || !pinTaken(g);
+  }
+  const t=typeById(wiz.type);
+  const role=(t&&t.pins||[]).find(r=>r.role===wiz.picking);
+  if(!role) return false;
+  if(role.cap==="out" && (!p.output||p.input_only)) return false;
+  if(role.cap==="in" && !p.input) return false;
+  const bp=busPins(wiz.bus);
+  if(Object.entries(bp).some(([k,v])=>k!=="ss" && +v===g)) return false;
+  if(Object.entries(wiz.pins||{}).some(([k,v])=>k!==wiz.picking && +v===g)) return false;
+  return g===cur || !pinTaken(g);
+}
+function wizPinButtons(selected){
+  return (hw&&hw.pins||[]).filter(p=>p.gpio!=null&&(p.gpio===selected||wizCanTake(p.gpio))).map(p=>{
+    const g=p.gpio;
+    return `<button type="button" data-gpio="${g}" class="${g===selected?"on":""}">GPIO ${g}</button>`;
+  }).join("");
+}
+function fillBusPins(t, busId){
+  const bp=busPins(busId);
+  const next={};
+  (t.pins||[]).forEach(p=>{
+    if(p.share==="bus" && bp[p.role]!=null) next[p.role]=+bp[p.role];
+  });
+  if(bp.ss!=null && !pinTaken(+bp.ss)) next.cs=+bp.ss;
+  else if(wiz.pins && wiz.pins.cs!=null) next.cs=wiz.pins.cs;
+  wiz.pins=next;
+}
+function cancelWiz(){ wiz=null; paintWizard(); paintPinUses(); }
+function startWiz(){
+  rememberPin(selGpio);
+  wiz={step:0};
+  paintWizard();
+  const box=document.getElementById("modwiz");
+  if(box) box.scrollIntoView({block:"nearest"});
+}
+function paintWizBanner(){
+  const n=document.getElementById("wizbanner");
+  if(!n) return;
+  if(wiz&&wiz.picking){
+    n.hidden=false;
+    n.textContent=wiz.kind==="servo"
+      ?"Adding a servo — click a highlighted GPIO on the pinout for the signal wire."
+      :"Adding an addon — click a highlighted GPIO for "+String(wiz.picking).toUpperCase()+".";
+  }else n.hidden=true;
+}
+function stepper(names, i){
+  return `<div class="steps">${names.map((n,k)=>`<span class="${k===i?"on":k<i?"done":""}">${k+1} ${esc(n)}</span>`).join("")}</div>`;
+}
+function wizActs(nextLabel, nextId, extra){
+  return `<div class="wizacts">
+    <button class="act sec" type="button" id="wizback">Back</button>
+    ${extra||""}
+    ${nextId?`<button class="act" type="button" id="${nextId}">${esc(nextLabel)}</button>`:""}
+  </div>`;
+}
+function pinSummary(pins){
+  return Object.keys(pins||{}).map(k=>k.toUpperCase()+" "+pins[k]).join(" · ")||"—";
+}
+function paintModList(){
+  const box=document.getElementById("modlist");
+  if(!box) return;
+  const items=(mods&&mods.modules)||[];
+  const servos=addonServos();
+  if(!items.length && !servos.length){
+    box.innerHTML=`<p class="hint">Nothing added yet. Add addon walks through the type and pins — nothing is saved until the last step.</p>`;
+    return;
+  }
+  const modsHtml=items.map(m=>{
+    const live=(st&&st.io&&st.io["mod_"+m.id])||m.state||{};
+    const uid=live.present?live.uid:"—";
+    const t=typeById(m.type);
+    return `<div class="addon">
+      <div class="addonhead">
+        <div>
+          <strong>${esc(m.id)}</strong> <span class="b io">${esc((t&&t.label)||m.type)}</span>
+          <p class="hint">${esc(m.bus||"")} · ${esc(pinSummary(m.pins))}</p>
+        </div>
+        <button type="button" class="act sec" data-rm="${esc(m.id)}">Remove</button>
+      </div>
+      <p>Tag <code id="modlive-${esc(m.id)}">${esc(uid||"—")}</code></p>
+    </div>`;
+  }).join("");
+  const servoHtml=servos.map(u=>{
+    const g=u.gpio;
+    return `<div class="addon">
+      <div class="addonhead">
+        <div>
+          <strong>GPIO ${g}</strong> <span class="b pwm">Servo</span>
+          <p class="hint">${u.min_us||1000}–${u.max_us||2000} µs · 50 Hz</p>
+        </div>
+        <button type="button" class="act sec" data-unservo="${g}">Remove</button>
+      </div>
+      <p>Angle <code data-slive="${g}">${u.angle!=null?u.angle+"°":"—"}</code></p>
+      <div class="modes" data-sgpio="${g}" role="group" aria-label="Live servo angle">
+        <button type="button" data-angle="0">0°</button>
+        <button type="button" data-angle="90">90°</button>
+        <button type="button" data-angle="180">180°</button>
+      </div>
+    </div>`;
+  }).join("");
+  box.innerHTML=modsHtml+servoHtml;
+  box.querySelectorAll("[data-rm]").forEach(b=>{
+    b.onclick=async()=>{
+      const r=await cmd({cmd:"module.remove",id:b.dataset.rm});
+      showMsg(r.ok?"Removed":(r.error||"failed"), !r.ok);
+      if(r.ok){ mods=r.result; hw=null; drawn=null; refresh(); }
+    };
+  });
+  box.querySelectorAll("[data-unservo]").forEach(b=>{
+    b.onclick=async()=>{
+      const gpio=+b.dataset.unservo;
+      const r=await cmd({cmd:"pin.configure",pin:{gpio,mode:"disabled",name:"gpio_"+gpio}});
+      showMsg(r.ok?"Servo released":(r.error||"failed"), !r.ok);
+      if(r.ok){ hw=null; drawn=null; refresh(); }
+    };
+  });
+  box.querySelectorAll("[data-sgpio]").forEach(g=>{
+    g.onclick=e=>{
+      const btn=e.target.closest("button[data-angle]");
+      if(!btn) return;
+      cmd({cmd:"pin.set",gpio:+g.dataset.sgpio,value:+btn.dataset.angle,mode:"servo"}).then(refresh);
+    };
+  });
+}
+function paintWizard(){
+  const box=document.getElementById("modwiz");
+  const list=document.getElementById("modlist");
+  const add=document.getElementById("maddstart");
+  paintWizBanner();
+  if(!box) return;
+  if(!wiz){
+    box.innerHTML="";
+    if(list) list.hidden=false;
+    if(add) add.hidden=false;
+    applyPinFilter();
+    return;
+  }
+  if(list) list.hidden=true;
+  if(add) add.hidden=true;
+  const types=(modCat&&modCat.types)||[];
+  let body="";
+  if(wiz.step===0){
+    wiz.picking=null;
+    const cards=types.map(t=>{
+      const n=typeCount(t.type);
+      const full=t.max_instances!=null&&n>=t.max_instances;
+      return `<button type="button" class="pickbtn" data-type="${esc(t.type)}" ${full?"disabled":""}>
+        <div><strong>${esc(t.label)}</strong>
+        <span>${esc(t.summary||"Catalog addon.")}</span>
+        <span>${n}${t.max_instances!=null?" / "+t.max_instances:""} in use${full?" — at limit":""}</span></div>
+      </button>`;
+    }).join("");
+    const sc=addonServos().length;
+    const sfull=sc>=8;
+    body=`<p class="hint">Choose what to add. You pick pins next; nothing is saved yet.</p>
+      <div class="pick">${cards}
+        <button type="button" class="pickbtn" data-kind="servo" ${sfull?"disabled":""}>
+          <div><strong>Hobby servo</strong>
+          <span>50 Hz pulse on a GPIO (8 max, separate from PWM). Pick a pin, then a rest angle.</span>
+          <span>${sc} / 8 in use${sfull?" — at limit":""}</span></div>
+        </button>
+      </div>
+      <div class="wizacts"><button class="act sec" type="button" id="wizcancel">Cancel</button></div>`;
+  }else if(wiz.kind==="servo"){
+    const names=["Type","Pin","Angle"];
+    if(wiz.step===1){
+      wiz.picking="gpio";
+      body=`${stepper(names,1)}
+        <p>Signal wire. Click a highlighted GPIO on the pinout (output + PWM, not 34–39).</p>
+        <p class="hint">Selected: <strong>${wiz.gpio!=null?"GPIO "+wiz.gpio:"none"}</strong></p>
+        <div class="pinpick" id="wizpins">${wizPinButtons(wiz.gpio)}</div>
+        ${wizActs("Next","wiznext")}`;
+    }else{
+      wiz.picking=null;
+      const ang=wiz.angle!=null?wiz.angle:90;
+      body=`${stepper(names,2)}
+        <p>Rest angle saved on add. Live 0° / 90° / 180° also work after it exists.</p>
+        <div class="modes" id="wizang" role="group">
+          <button type="button" data-angle="0"${ang===0?" class=\"on\"":""}>0°</button>
+          <button type="button" data-angle="90"${ang===90?" class=\"on\"":""}>90°</button>
+          <button type="button" data-angle="180"${ang===180?" class=\"on\"":""}>180°</button>
+        </div>
+        <div class="field"><label for="wizangle">Angle (0–180)</label>
+          <input id="wizangle" type="number" inputmode="numeric" min="0" max="180" value="${ang}"></div>
+        <details class="adv"><summary>Pulse range (optional)</summary>
+          <div class="row">
+            <div class="field"><label for="wizminu">Min µs at 0°</label>
+              <input id="wizminu" type="number" inputmode="numeric" min="500" max="1500" value="${wiz.minu||1000}"></div>
+            <div class="field"><label for="wizmaxu">Max µs at 180°</label>
+              <input id="wizmaxu" type="number" inputmode="numeric" min="1500" max="2500" value="${wiz.maxu||2000}"></div>
+          </div>
+        </details>
+        <p class="hint">GPIO ${wiz.gpio} · rest ${ang}°.</p>
+        ${wizActs("Add servo","wizgo")}`;
+    }
+  }else{
+    const t=typeById(wiz.type);
+    if(!t){ cancelWiz(); return; }
+    const names=["Type","Bus","Pins","Save"];
+    const inst=instRoles(t);
+    if(wiz.step===2 && (!inst.length || (wiz.roleIdx||0)>=inst.length)) wiz.step=3;
+    if(wiz.step===1){
+      wiz.picking=null;
+      const buses=(hw&&hw.buses||[]).filter(b=>!t.bus||b.kind===t.bus);
+      body=`${stepper(names,1)}
+        <p>${esc(t.summary||"Choose the bus this addon shares.")}</p>
+        <div class="pick">${buses.map(b=>{
+          const p=b.pins||{};
+          const txt=["sck","mosi","miso","ss"].filter(k=>p[k]!=null).map(k=>k.toUpperCase()+" "+p[k]).join(" · ");
+          return `<button type="button" class="pickbtn${wiz.bus===b.id?" on":""}" data-bus="${esc(b.id)}">
+            <div><strong>${esc(b.label)}</strong><span>${esc(txt)}</span><span>${esc(b.hint||"")}</span></div>
+          </button>`;
+        }).join("")}</div>
+        ${wizActs("Next","wiznext")}`;
+    }else if(wiz.step===2){
+      const role=inst[wiz.roleIdx||0];
+      wiz.picking=role?role.role:null;
+      const selected=role&&wiz.pins?wiz.pins[role.role]:null;
+      const bus=busById(wiz.bus);
+      const shared=busRoles(t).map(r=>r.role.toUpperCase()+" "+((wiz.pins||{})[r.role]??"—")).join(" · ");
+      const done=inst.slice(0,wiz.roleIdx||0).map(r=>{
+        const v=(wiz.pins||{})[r.role];
+        return r.role.toUpperCase()+(v==null?" skipped":" GPIO "+v);
+      }).join(" · ");
+      body=`${stepper(names,2)}
+        <p class="hint">${esc((bus&&bus.label)||wiz.bus)} shared: ${esc(shared)}</p>
+        ${done?`<p class="hint">Already set: ${esc(done)}</p>`:""}
+        <p><strong>${esc(role?role.role.toUpperCase():"")}${role&&role.required?"":" (optional)"}</strong></p>
+        <p class="hint">${esc(roleHint(role))}</p>
+        <p>Selected: <strong>${selected!=null?"GPIO "+selected:"none"}</strong></p>
+        <div class="pinpick" id="wizpins">${wizPinButtons(selected)}</div>
+        ${wizActs("Next","wiznext", role&&!role.required?`<button class="act sec" type="button" id="wizskip">Skip</button>`:"")}`;
+    }else{
+      wiz.picking=null;
+      const id=wiz.id||nextModId((t&&t.id_prefix)||"mod");
+      body=`${stepper(names,3)}
+        <p>Check the wiring, then add. The id is for MQTT and the list.</p>
+        <div class="field"><label for="wizid">Id</label>
+          <input id="wizid" value="${esc(id)}" autocomplete="off" maxlength="16"></div>
+        <p class="hint">${esc((t&&t.label)||wiz.type)} on ${esc(wiz.bus)} · ${esc(pinSummary(wiz.pins))}</p>
+        ${wizActs("Add "+((t&&t.label)||"addon"),"wizgo")}`;
+    }
+  }
+  box.innerHTML=body;
+  applyPinFilter();
+  paintPinUses();
+  const back=document.getElementById("wizback");
+  if(back) back.onclick=()=>wizBack();
+  const cancel=document.getElementById("wizcancel");
+  if(cancel) cancel.onclick=cancelWiz;
+  box.querySelectorAll("[data-type]").forEach(b=>b.onclick=()=>wizPickType(b.dataset.type));
+  box.querySelectorAll("[data-kind]").forEach(b=>b.onclick=()=>wizPickServo());
+  box.querySelectorAll("[data-bus]").forEach(b=>b.onclick=()=>{ wiz.bus=b.dataset.bus; fillBusPins(typeById(wiz.type), wiz.bus); paintWizard(); });
+  const pins=document.getElementById("wizpins");
+  if(pins) pins.onclick=e=>{
+    const b=e.target.closest("button[data-gpio]");
+    if(!b||b.disabled) return;
+    wizTake(+b.dataset.gpio);
+  };
+  const ang=document.getElementById("wizang");
+  if(ang) ang.onclick=e=>{
+    const b=e.target.closest("button[data-angle]");
+    if(!b) return;
+    wiz.angle=+b.dataset.angle;
+    const inp=document.getElementById("wizangle");
+    if(inp) inp.value=wiz.angle;
+    [...ang.children].forEach(x=>x.classList.toggle("on", x===b));
+  };
+  const skip=document.getElementById("wizskip");
+  if(skip) skip.onclick=()=>{
+    const t=typeById(wiz.type);
+    const role=instRoles(t)[wiz.roleIdx||0];
+    if(role && wiz.pins) delete wiz.pins[role.role];
+    wizNextRole();
+  };
+  const next=document.getElementById("wiznext");
+  if(next) next.onclick=wizNext;
+  const go=document.getElementById("wizgo");
+  if(go) go.onclick=wizCommit;
+}
+function wizPickType(type){
+  const t=typeById(type);
+  if(!t) return;
+  wiz.kind="mod";
+  wiz.type=type;
+  wiz.bus=t.default_bus||"";
+  wiz.pins={};
+  wiz.roleIdx=0;
+  wiz.id=nextModId(t.id_prefix||"mod");
+  fillBusPins(t, wiz.bus);
+  wiz.step=t.bus?1:2;
+  paintWizard();
+}
+function wizPickServo(){
+  wiz.kind="servo";
+  wiz.step=1;
+  wiz.angle=90;
+  wiz.minu=1000;
+  wiz.maxu=2000;
+  wiz.gpio=null;
+  paintWizard();
+}
+function wizTake(g){
+  if(!wizCanTake(g)){ showMsg("That pin is not free for this step", true); return; }
+  if(wiz.kind==="servo") wiz.gpio=g;
+  else { wiz.pins=wiz.pins||{}; wiz.pins[wiz.picking]=g; }
+  paintWizard();
+}
+function wizBack(){
+  if(!wiz) return;
+  if(wiz.kind==="mod" && wiz.step===2 && (wiz.roleIdx||0)>0){ wiz.roleIdx--; paintWizard(); return; }
+  if(wiz.step<=0){ cancelWiz(); return; }
+  wiz.step--;
+  if(wiz.kind==="mod" && wiz.step===2){
+    const n=instRoles(typeById(wiz.type)).length;
+    wiz.roleIdx=Math.max(0, n-1);
+  }
+  paintWizard();
+}
+function wizNextRole(){
+  const inst=instRoles(typeById(wiz.type));
+  wiz.roleIdx=(wiz.roleIdx||0)+1;
+  if(wiz.roleIdx>=inst.length){ wiz.step=3; wiz.roleIdx=inst.length; }
+  paintWizard();
+}
+function wizNext(){
+  if(!wiz) return;
+  if(wiz.kind==="servo"){
+    if(wiz.gpio==null){ showMsg("Pick a GPIO for the servo", true); return; }
+    wiz.step=2;
+    paintWizard();
+    return;
+  }
+  const t=typeById(wiz.type);
+  if(wiz.step===1){
+    if(!wiz.bus){ showMsg("Pick a bus", true); return; }
+    fillBusPins(t, wiz.bus);
+    wiz.step=2;
+    wiz.roleIdx=0;
+    paintWizard();
+    return;
+  }
+  if(wiz.step===2){
+    const role=instRoles(t)[wiz.roleIdx||0];
+    if(role&&role.required && (wiz.pins||{})[role.role]==null){
+      showMsg("Pick a GPIO for "+role.role, true); return;
+    }
+    wizNextRole();
+  }
+}
+async function wizCommit(){
+  if(!wiz) return;
+  if(wiz.kind==="servo"){
+    const a=document.getElementById("wizangle");
+    const mi=document.getElementById("wizminu");
+    const ma=document.getElementById("wizmaxu");
+    if(a) wiz.angle=+a.value;
+    if(mi) wiz.minu=+mi.value;
+    if(ma) wiz.maxu=+ma.value;
+    if(wiz.gpio==null){ showMsg("Pick a GPIO for the servo", true); return; }
+    const r=await cmd({cmd:"pin.configure",pin:{gpio:wiz.gpio,mode:"servo",name:"servo_"+wiz.gpio,angle:wiz.angle||90,min_us:wiz.minu||1000,max_us:wiz.maxu||2000}});
+    showMsg(r.ok?"Servo added on GPIO "+wiz.gpio:(r.error||"failed"), !r.ok);
+    if(r.ok){ wiz=null; hw=null; drawn=null; refresh(); }
+    return;
+  }
+  const t=typeById(wiz.type);
+  const idEl=document.getElementById("wizid");
+  const id=((idEl&&idEl.value)||wiz.id||"").trim();
+  const r=await cmd({cmd:"module.add",type:t.type,id,bus:wiz.bus,pins:wiz.pins||{}});
+  showMsg(r.ok?"Added "+((t&&t.label)||id):(r.error||"failed"), !r.ok);
+  if(r.ok){ wiz=null; mods=r.result; hw=null; drawn=null; refresh(); }
+}
+function onPadClick(g, kind, silk){
+  if(wiz&&wiz.picking){
+    if(g==null){ showMsg("Need a GPIO for this step", true); return; }
+    wizTake(g);
+    return;
+  }
+  selectPad(g, kind, silk);
 }
 function tabMeta(){return TABS.find(t=>t.n===tab)||TABS[0];}
 function render(){
-  if(drawn==="Hardware" && tab!=="Hardware") rememberPin(selGpio);
+  if(drawn==="Hardware" && tab!=="Hardware"){ rememberPin(selGpio); wiz=null; }
   const tm=tabMeta();
   document.documentElement.style.setProperty("--tab", tm.c);
   [...nav.children].forEach((b,i)=>b.className=TABS[i].n===tab?"on":"");
@@ -654,7 +1162,16 @@ function render(){
       refresh();
     };
   }else if(tab==="Hardware"){
-    if(!hw){j("/api/v1/hardware").then(x=>{hw=x;drawn=null;render()});main.innerHTML=`<div class="card"><p class="wait">loading pin map…</p></div>`;return;}
+    if(!hw){
+      main.innerHTML=`<div class="card"><p class="wait">loading pin map…</p></div>`;
+      Promise.all([j("/api/v1/hardware"), cmd({cmd:"module.catalog"}), cmd({cmd:"module.list"})]).then(([h,c,l])=>{
+        hw=h;
+        if(c&&c.ok) modCat=c.result;
+        if(l&&l.ok) mods=l.result;
+        drawn=null; render();
+      }).catch(()=>{});
+      return;
+    }
     const left=(hw.header&&hw.header.left)||[];
     const right=(hw.header&&hw.header.right)||[];
     const n=Math.max(left.length, right.length, 1);
@@ -669,6 +1186,7 @@ function render(){
       <p>${esc(hw.board_name)} · ${esc(hw.chip)} · ${esc(feats)}</p>
       <p>Status LED GPIO ${hw.status_led_gpio} · BOOT GPIO ${hw.boot_gpio} (hold after boot, not during reset)</p>
       <p class="hint">Analog in: ADC mode on ADC1 (GPIO 32–39, A1). ADC2 pins (A2) cannot analog-read while Wi-Fi is on — this firmware keeps Wi-Fi on.</p>
+      <p class="hint" id="wizbanner" hidden></p>
       <div class="filts" id="pfilts">${filts.map(([id,lab])=>`<button type="button" data-f="${esc(id)}">${esc(lab)}</button>`).join("")}</div>
       <div class="pinwrap"><div class="pinout" style="--n:${n}">${pads}</div></div>
     </div>
@@ -711,6 +1229,33 @@ function render(){
             </div>
           </div>
         </div>
+        <div id="prow-servo" hidden>
+          <div class="field">
+            <label for="pangle">Angle (0–180)</label>
+            <input id="pangle" type="number" inputmode="numeric" min="0" max="180" value="90">
+            <p class="hint">Rest position saved on Apply. Live 0° / 90° / 180° below does not change the saved rest angle until you Apply.</p>
+          </div>
+          <div class="modes" id="pservog" role="group" aria-label="Live servo angle">
+            <button type="button" data-angle="0">0°</button>
+            <button type="button" data-angle="90">90°</button>
+            <button type="button" data-angle="180">180°</button>
+          </div>
+          <details class="adv">
+            <summary>Pulse range (optional)</summary>
+            <div class="row">
+              <div class="field">
+                <label for="pminu">Min pulse (µs)</label>
+                <input id="pminu" type="number" inputmode="numeric" min="500" max="1500" value="1000">
+                <p class="hint">Pulse at 0°. 1000 µs is typical; some servos want 500.</p>
+              </div>
+              <div class="field">
+                <label for="pmaxu">Max pulse (µs)</label>
+                <input id="pmaxu" type="number" inputmode="numeric" min="1500" max="2500" value="2000">
+                <p class="hint">Pulse at 180°. 2000 µs is typical. 8 servos max, 50 Hz, not shared with PWM.</p>
+              </div>
+            </div>
+          </details>
+        </div>
         <div class="field" id="prow-deb" hidden>
           <label for="pdeb">Debounce (ms)</label>
           <input id="pdeb" type="number" inputmode="numeric" min="0" max="500" value="50">
@@ -748,6 +1293,13 @@ function render(){
         <button class="act sec" type="button" id="poff" hidden>Set LOW</button>
       </div>
     </div>
+    </div>
+    <div class="card">
+      ${h2("Addons","hw")}
+      <p class="hint">RFID readers and servos. Add addon is a short wizard — pick the type, then pins. Nothing is saved until the last step. Pin roles still come from <code>module.catalog</code>.</p>
+      <div id="modlist"></div>
+      <div id="modwiz"></div>
+      <button class="act" type="button" id="maddstart">Add addon</button>
     </div>`;
     document.getElementById("pfilts").onclick=e=>{
       const b=e.target.closest("button[data-f]");
@@ -758,12 +1310,16 @@ function render(){
     main.querySelectorAll(".pad").forEach(el=>{
       el.onclick=()=>{
         const g=el.dataset.gpio===""?null:+el.dataset.gpio;
-        selectPad(g, el.dataset.kind, el.dataset.silk);
+        onPadClick(g, el.dataset.kind, el.dataset.silk);
       };
     });
     bindPinEditor();
     paintPinUses();
-    if(selGpio!=null) selectPad(selGpio, "gpio", String(selGpio));
+    paintModList();
+    paintWizard();
+    const add=document.getElementById("maddstart");
+    if(add) add.onclick=startWiz;
+    if(selGpio!=null && !(wiz&&wiz.picking)) selectPad(selGpio, "gpio", String(selGpio));
   }else if(tab==="Network"){
     const n=net();
     main.innerHTML=`<div class="card">
@@ -947,13 +1503,22 @@ function render(){
   }
 }
 function applyIoEvent(d){
+  if(d && d.type==="mfrc522" && d.id){
+    if(!st) st={};
+    if(!st.io) st.io={};
+    st.io["mod_"+d.id]=d;
+    const n=document.getElementById("modlive-"+d.id);
+    if(n) n.textContent=d.present?d.uid:"—";
+    if(tab==="Hardware") paintPinUses();
+    return;
+  }
   if(!d || d.gpio==null) return;
   if(!st) st={};
   if(!st.io) st.io={};
-  const id=d.id||((d.mode==="adc"?"adc_":d.mode==="pwm"?"pwm_":"gpio_")+d.gpio);
-  ["gpio_","pwm_","adc_"].forEach(p=>{ const k=p+d.gpio; if(k!==id) delete st.io[k]; });
+  const id=d.id||((d.mode==="adc"?"adc_":d.mode==="pwm"?"pwm_":d.mode==="servo"?"servo_":"gpio_")+d.gpio);
+  ["gpio_","pwm_","adc_","servo_"].forEach(p=>{ const k=p+d.gpio; if(k!==id) delete st.io[k]; });
   st.io[id]=d;
-  if(tab==="Hardware") paintPinUses();
+  if(tab==="Hardware"){ paintPinUses(); paintAddonLive(); }
 }
 function connectWs(){
   if(!wantWs) return;

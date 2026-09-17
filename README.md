@@ -1,6 +1,6 @@
 # de-esp32 — managed device runtime
 
-Native **ESP-IDF 5.4.2** firmware for classic ESP32 (WROOM-32 DevKitC, 4 MB, no PSRAM). Flash once, then configure GPIO/PWM/ADC1, Wi-Fi, and MQTT from a local UI. **Not Arduino.**
+Native **ESP-IDF 5.4.2** firmware for classic ESP32 (WROOM-32 DevKitC, 4 MB, no PSRAM). Flash once, then configure GPIO/PWM/ADC1, hobby servos, optional RFID (MFRC522), Wi-Fi, and MQTT from a local UI. **Not Arduino.**
 
 Feature index (start here): **[docs/FEATURES_README.md](docs/FEATURES_README.md)**
 
@@ -46,6 +46,7 @@ Node-RED (same LAN as a provisioned board): see [docs/features/nodered_README.md
 
 ```powershell
 python test/test_capability_spec.py
+python test/test_module_spec.py
 ```
 
 ## Layout

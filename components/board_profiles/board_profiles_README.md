@@ -32,4 +32,4 @@ LED slow blink in AP-only, solid when STA has IP (and not safe mode).
 
 ## Known limits
 
-One profile compiled in. WROVER/PSRAM boards are not a Phase 1 target. 30-pin DevKit variants omit flash GPIOs 6–11; this profile is the 38-pin silkscreen. Buses are default pin mux, not a live SPI/I2C driver.
+One profile compiled in. WROVER/PSRAM boards are not a Phase 1 target. 30-pin DevKit variants omit flash GPIOs 6–11; this profile is the 38-pin silkscreen. Bus tables are the default pin mux for the UI; a live SPI host is claimed when an MFRC522 instance is enabled.

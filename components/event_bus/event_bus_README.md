@@ -14,7 +14,7 @@ Live control: pin edges and telemetry appear in the UI without polling-only.
 
 Prefix match is `strncmp`. Empty prefix matches all (web_server).
 
-Topics used: `io/gpio`, `io/pwm`, `io/adc` (live samples while any live sink), `net`, `mqtt/reconfigure`, `identity/rename`, `telemetry`.
+Topics used: `io/gpio`, `io/pwm`, `io/adc` (live samples while any live sink), `io/servo`, `io/rfid` (UID present/absent), `net`, `mqtt/reconfigure`, `identity/rename`, `telemetry`.
 
 ## Depends on
 
@@ -22,7 +22,7 @@ cJSON, FreeRTOS mutex. Max 12 subscribers.
 
 ## Used by
 
-io_gpio, io_pwm, io_adc, network, command_router (mqtt reconfigure, io.hydrate), mqtt_manager, telemetry, web_server, serial_session.
+io_gpio, io_pwm, io_adc, io_servo, mod_mfrc522, network, command_router (mqtt reconfigure, io.hydrate), mqtt_manager, telemetry, web_server, serial_session.
 
 ## How to update and maintain
 

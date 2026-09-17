@@ -5,6 +5,7 @@ const discover = require("../lib/discover");
 const fingerprint = require("../lib/fingerprint");
 const http = require("../lib/http");
 const io = require("../lib/io");
+const devkitc = require("../lib/devkitc-hardware");
 
 function asyncRoute(fn) {
   return (req, res) => {
@@ -282,11 +283,33 @@ module.exports = function (RED) {
   );
 
   RED.httpAdmin.get(
+    "/de-esp32/pinout-template",
+    RED.auth.needsPermission("de-esp32-device.read"),
+    (req, res) => {
+      const hw = devkitc.snapshot();
+      hw.via = "devkitc-fallback";
+      res.json(hw);
+    },
+  );
+
+  RED.httpAdmin.get(
     "/de-esp32/hardware",
     RED.auth.needsPermission("de-esp32-device.read"),
     asyncRoute(async (req, res) => {
       const { host, port } = hostFromReq(req, RED);
-      res.json(await http.getHardware(host, port, 4000));
+      if (!host) {
+        res.json(devkitc.withFallbackMeta(new Error("host required")));
+        return;
+      }
+      try {
+        const hw = await http.getHardware(host, port, 1200);
+        if (hw && typeof hw === "object") {
+          hw.via = "http";
+        }
+        res.json(hw);
+      } catch (err) {
+        res.json(devkitc.withFallbackMeta(err));
+      }
     }),
   );
 

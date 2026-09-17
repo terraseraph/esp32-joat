@@ -20,6 +20,7 @@
 #include "mqtt_manager.hpp"
 #include "network_manager.hpp"
 #include "ota_manager.hpp"
+#include "resource_manager.hpp"
 #include "runtime_status.hpp"
 #include "runtime_version.hpp"
 #include "security.hpp"
@@ -126,7 +127,14 @@ esp_err_t api_hardware(httpd_req_t* req) {
     cJSON* o = board_profile_json();
     cJSON_AddStringToObject(o, "chip", chip_model());
     cJSON_AddItemToObject(o, "chip_info", chip_info_json());
-    cJSON_AddItemToObject(o, "pins", capability_dump());
+    cJSON* pins = capability_dump();
+    cJSON* it = nullptr;
+    cJSON_ArrayForEach(it, pins) {
+        int g = json_int(it, "gpio", -1);
+        const char* owner = resource_owner(g);
+        cJSON_AddStringToObject(it, "owner", (owner && owner[0]) ? owner : "");
+    }
+    cJSON_AddItemToObject(o, "pins", pins);
     return send_json(req, o);
 }
 
@@ -408,7 +416,7 @@ struct ApiRoute {
 
 const ApiRoute kRoutes[] = {
     {"/api/v1/status", HTTP_GET, api_status, "Live device status", false, false},
-    {"/api/v1/hardware", HTTP_GET, api_hardware, "Chip, header pinout, buses, GPIO capabilities", false, false},
+    {"/api/v1/hardware", HTTP_GET, api_hardware, "Chip, header pinout, buses, GPIO capabilities and owners", false, false},
     {"/api/v1/pins", HTTP_GET, api_pins, "Live I/O snapshot", false, false},
     {"/api/v1/pins", HTTP_POST, api_pins, "pin.configure (or any cmd)", false, false},
     {"/api/v1/command", HTTP_POST, api_command, "JSON command_dispatch", false, false},

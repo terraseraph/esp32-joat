@@ -18,7 +18,8 @@ Keys (MVP):
 - `network.ssid` / `network.password` str
 - `security.ap_password` str (empty / missing = open recovery AP)
 - `mqtt.uri` / `mqtt.user` / `mqtt.password` / `mqtt.root` str (root default `devices`), `mqtt.enabled` u8
-- `io.pins` blob (JSON). Pin objects may include `debounce_ms` (`in`), `sample_ms` / `hysteresis_mv` / `smooth` (`adc`); missing keys use firmware defaults.
+- `io.pins` blob (JSON). Pin objects may include `debounce_ms` (`in`), `sample_ms` / `hysteresis_mv` / `smooth` (`adc`), `angle` / `min_us` / `max_us` (`servo`); missing keys use firmware defaults.
+- `components.modules` blob (JSON, schema 2). `{v:1, modules:[{id,type,bus,enabled,pins}]}`. Missing blob is empty.
 
 `config_factory_reset()` erases those namespaces then reboots via the command router.
 
@@ -28,7 +29,7 @@ Keys (MVP):
 
 ## Used by
 
-identity (device name), network, mqtt, command_router, boot.
+identity (device name), network, mqtt, command_router, boot, [module_manager_README.md](../module_manager/module_manager_README.md).
 
 ## How to update and maintain
 
@@ -40,4 +41,4 @@ Set Wi-Fi, reboot, confirm STA reconnects. Factory reset, confirm AP returns ope
 
 ## Known limits
 
-NVS blob ~2 KB for pin JSON. Do not store certificates here in MVP.
+NVS blob ~2 KB for pin JSON and for the modules blob. Do not store certificates here in MVP.

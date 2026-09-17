@@ -11,7 +11,7 @@ Remote control and telemetry without the local UI. Device still works if MQTT is
 ## Public API
 
 Subscribe: `system/command`, `config/set`, `components/+/set` (aliases of `command_dispatch`).
-Publish: `availability` (retained online/offline), `status`, `telemetry` (15 s fat snapshot), `io` (per-pin live `{topic,data}` JSON, same as WebSocket — GPIO/PWM edges and ADC-on-threshold; QoS 1, not retained; hydrate burst of one message per pin on connect), `events` (command replies), `api` (retained OpenAPI pointer).
+Publish: `availability` (retained online/offline), `status`, `telemetry` (15 s fat snapshot), `io` (per-pin live `{topic,data}` JSON, same as WebSocket — GPIO/PWM/servo edges, ADC-on-threshold, RFID UID present/absent; QoS 1, not retained; hydrate burst of one message per pin/module on connect), `events` (command replies), `api` (retained OpenAPI pointer).
 
 Connected counts as a live sink so ADC samples without a browser.
 
@@ -35,7 +35,7 @@ Do not add commands here — add them in command_router (`ota.apply` / `ota.roll
 
 ## How to test
 
-Mosquitto on LAN. Subscribe to `{root}/<topic_id>/io`. After connect you should see one message per configured pin, then edges immediately. ADC moves when millivolts cross `hysteresis_mv`. `telemetry` stays 15 s. Publish `{"cmd":"pin.set","gpio":4,"value":1}` to `{root}/<topic_id>/system/command`.
+Mosquitto on LAN. Subscribe to `{root}/<topic_id>/io`. After connect you should see one message per configured pin and RFID instance, then edges immediately. ADC moves when millivolts cross `hysteresis_mv`. RFID publishes when UID appears or leaves. `telemetry` stays 15 s. Publish `{"cmd":"pin.set","gpio":4,"value":1}` to `{root}/<topic_id>/system/command`.
 
 ## Known limits
 

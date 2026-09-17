@@ -55,4 +55,4 @@ Cursor agents follow `.cursor/skills/nodered-push/SKILL.md`. Iterate: `.\tools\n
 
 ## Known limits
 
-Windows mDNS is flaky (same as `tools/discover.py`). No LAN `/24` sweep from the palette. PWM/ADC nodes are later. Max 4 ESP WebSocket clients — one config node shares the socket among gpio-in children. Two boards with the same name share MQTT topics.
+Windows mDNS is flaky (same as `tools/discover.py`). No LAN `/24` sweep from the palette. PWM/ADC nodes are later. Max 4 ESP WebSocket clients — one config node shares the socket among gpio-in children. Two boards with the same name share MQTT topics. If the Node-RED host cannot HTTP the box (typical when MQTT is on another subnet), the pin picker uses the bundled DevKitC `hardware` snapshot instead of failing on a fetch abort.

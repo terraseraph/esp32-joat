@@ -206,6 +206,7 @@ esp_err_t io_gpio_release(int gpio) {
     char owner[16];
     snprintf(owner, sizeof(owner), "gpio_%d", gpio);
     resource_release(gpio, owner);
+    state_clear(owner);
     return ESP_OK;
 }
 

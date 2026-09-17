@@ -119,14 +119,14 @@ bool capability_allows(int gpio, const char* mode, char* err, size_t err_len) {
     if (strcmp(mode, "disabled") == 0) {
         return true;
     }
-    if (strcmp(mode, "out") == 0 || strcmp(mode, "pwm") == 0) {
+    if (strcmp(mode, "out") == 0 || strcmp(mode, "pwm") == 0 || strcmp(mode, "servo") == 0) {
         if (p->flags & PIN_INPUT_ONLY) {
             return fail("gpio is input-only");
         }
         if ((p->flags & PIN_OUTPUT) == 0) {
             return fail("gpio cannot output");
         }
-        if (strcmp(mode, "pwm") == 0 && (p->flags & PIN_PWM) == 0) {
+        if ((strcmp(mode, "pwm") == 0 || strcmp(mode, "servo") == 0) && (p->flags & PIN_PWM) == 0) {
             return fail("gpio not suitable for PWM");
         }
         return true;

@@ -18,7 +18,10 @@
 #include "io_adc.hpp"
 #include "io_gpio.hpp"
 #include "io_pwm.hpp"
+#include "io_servo.hpp"
 #include "logging_service.hpp"
+#include "mod_mfrc522.hpp"
+#include "module_manager.hpp"
 #include "mqtt_manager.hpp"
 #include "network_manager.hpp"
 #include "nvs_flash.h"
@@ -276,10 +279,13 @@ extern "C" void app_main(void) {
     rt.set_boot_state(runtime::BootState::kSafePins);
     ESP_ERROR_CHECK(runtime::io_gpio_init());
     ESP_ERROR_CHECK(runtime::io_pwm_init());
+    ESP_ERROR_CHECK(runtime::io_servo_init());
     ESP_ERROR_CHECK(runtime::io_adc_init());
     runtime::io_gpio_safe_defaults();
 
     ESP_ERROR_CHECK(runtime::command_router_init());
+    ESP_ERROR_CHECK(runtime::module_manager_init());
+    ESP_ERROR_CHECK(runtime::mod_mfrc522_init());
     ESP_ERROR_CHECK(runtime::ota_init());
     ESP_ERROR_CHECK(runtime::telemetry_init());
     ESP_ERROR_CHECK(runtime::mqtt_init());
@@ -302,6 +308,7 @@ extern "C" void app_main(void) {
 
     rt.set_boot_state(runtime::BootState::kComponents);
     runtime::command_apply_saved_io(true);
+    runtime::command_apply_saved_modules(true);
 
     runtime::telemetry_start_task();
     xTaskCreate(status_led_task, "led", 2048, nullptr, 3, nullptr);

@@ -160,6 +160,7 @@ esp_err_t io_pwm_release(int gpio) {
     char owner[16];
     snprintf(owner, sizeof(owner), "pwm_%d", gpio);
     resource_release(gpio, owner);
+    state_clear(owner);
     return ESP_OK;
 }
 

@@ -29,7 +29,7 @@ npm test
 .\tools\nodered_push.ps1 -HostName 192.168.0.132
 ```
 
-The script **DELETE**s `node-red-contrib-de-esp32` then POSTs a fresh tarball (`module_already_loaded` otherwise). If DELETE returns `type_in_use`, it briefly parks de-esp32 nodes on the canvas, swaps the module, then restores the flow. Default host is `192.168.0.132` port `1880`, or the last successful target in `tools/nodered_state.json`. Pass `-HostName` / `-Port` when the user named a different editor.
+The script bumps the package patch version (Node-RED often keeps the old `require` cache when the tarball is still `0.1.0`), **DELETE**s `node-red-contrib-de-esp32` then POSTs a fresh tarball (`module_already_loaded` otherwise). If DELETE returns `type_in_use`, it briefly parks de-esp32 nodes on the canvas, swaps the module, then restores the flow. After install, probe `GET /de-esp32/pinout-template` — HTTP 404 means the runtime did not reload; bump/push again or restart Node-RED. Default host is `192.168.0.132` port `1880`, or the last successful target in `tools/nodered_state.json`. Pass `-HostName` / `-Port` when the user named a different editor.
 
 3. **Confirm** the JSON names `node-red-contrib-de-esp32` and the three node types (`de-esp32-device`, `de-esp32-gpio-in`, `de-esp32-gpio-out`) with `enabled: true`. Install path on this Pi is `/home/pi/.node-red/node_modules/node-red-contrib-de-esp32`. Tell the user to **refresh the Node-RED browser tab** — the runtime has the module; the editor cache does not update until reload.
 

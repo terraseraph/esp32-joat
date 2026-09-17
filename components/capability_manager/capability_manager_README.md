@@ -22,7 +22,7 @@ None of our components (SoC knowledge only).
 
 ## Used by
 
-io_gpio, io_pwm, io_adc, command_router, web_server, [board_profiles_README.md](../board_profiles/board_profiles_README.md) (LED/BOOT numbers).
+io_gpio, io_pwm, io_adc, io_servo, command_router, web_server, [board_profiles_README.md](../board_profiles/board_profiles_README.md) (LED/BOOT numbers), [module_manager_README.md](../module_manager/module_manager_README.md).
 
 ## How to update and maintain
 
@@ -30,8 +30,8 @@ When adding a board that routes GPIO 37/38, keep the SoC flags and put routing n
 
 ## How to test
 
-`python test/test_capability_spec.py`. Hardware: try to configure GPIO 6 as out — API error. GPIO 34 as out — error. GPIO 32 as adc — ok. GPIO 4 as adc — error.
+`python test/test_capability_spec.py`. `python test/test_module_spec.py` for RFID pin recipes. Hardware: try to configure GPIO 6 as out — API error. GPIO 34 as out — error. GPIO 32 as adc — ok. GPIO 4 as adc — error.
 
 ## Known limits
 
-GPIO 1/3 are UART0; allowed by the table but noted. GPIO 37/38 often unbonded on WROOM modules. `role` is documentation (including RFID-style SPI names); firmware still only configures `in`/`out`/`pwm`/`adc`. DAC is flagged, not driven.
+GPIO 1/3 are UART0; allowed by the table but noted. GPIO 37/38 often unbonded on WROOM modules. `role` is documentation (including RFID-style SPI names). GPIO modes are `in`/`out`/`pwm`/`servo`/`adc`; SPI devices are claimed through [module_manager_README.md](../module_manager/module_manager_README.md). DAC is flagged, not driven.

@@ -14,7 +14,7 @@ Find the device, configure pins from the Hardware pinout, provision, view logs, 
 - Unmatched GET (captive probes) — 302 to `http://192.168.4.1/` with a body (iOS needs the body)
 - `GET /api/v1/openapi.json` — OpenAPI 3.0 generated from `kRoutes` + `command_catalog()` + `mqtt_topics_json()`. CORS `*`. Vendor extensions: `x-commands`, `x-mqtt`, `x-discovery` (`mdns`, `service=_http._tcp`, `de_service=_de-esp32._tcp`, `board`, `port`)
 - `GET /api/v1/status|hardware|pins|network|network/scan|mqtt|logs|telemetry|ota`
-  - `hardware` — board profile, header pinout, buses, `chip` / `chip_info`, SoC `pins` capabilities
+  - `hardware` — board profile, header pinout, buses, `chip` / `chip_info`, SoC `pins` capabilities plus live `owner` per GPIO
 - `POST /api/v1/command|pins|network/wifi|mqtt|ota|system/reboot|system/factory_reset`
 - `GET /api/v1/ws` — WebSocket; JSON commands in, event bus frames out. No frames when `live_viewers()==0`. ADC live-sample runs while `live_sinks()>0` (WS, MQTT, or serial session). Browser closes the socket on hidden tabs.
 
@@ -22,7 +22,7 @@ Assets: `web/dist/index.html` via CMake `EMBED_FILES`.
 
 ## Depends on
 
-command_router, identity, network, mqtt, logging, telemetry, ota, capability, board, config, event_bus, security (AP SSID display only).
+command_router, identity, network, mqtt, logging, telemetry, ota, capability, board, config, event_bus, security (AP SSID display only), resource_manager (GPIO owners on `/hardware`).
 
 ## Used by
 

@@ -51,11 +51,18 @@ module.exports = function (RED) {
     }
 
     const onEv = (ev) => {
-      node.status({ fill: "green", shape: "dot", text: `GPIO ${node.gpio}: ${ev.value}` });
+      if (node.pinMode === "adc" && ev.mode && ev.mode !== "adc") {
+        return;
+      }
+      if (node.pinMode === "in" && ev.mode && ev.mode !== "in") {
+        return;
+      }
+      const label = ev.mode === "adc" || node.pinMode === "adc" ? "ADC" : "GPIO";
+      node.status({ fill: "green", shape: "dot", text: `${label} ${node.gpio}: ${ev.value}` });
       node.send({
         payload: ev.value,
         gpio: ev.gpio,
-        mode: ev.mode,
+        mode: ev.mode || node.pinMode,
         topic: ev.id || `gpio_${ev.gpio}`,
         data: ev.data,
       });

@@ -37,7 +37,10 @@ RTC_NOINIT crash counter (`s_rtc_crash`) is not in NVS.
 [provisioning_README.md](../../components/provisioning/provisioning_README.md),
 [ota_manager_README.md](../../components/ota_manager/ota_manager_README.md),
 [serial_session_README.md](../../components/serial_session/serial_session_README.md),
-[io_gpio_README.md](../../components/io_gpio/io_gpio_README.md).
+[io_gpio_README.md](../../components/io_gpio/io_gpio_README.md),
+[io_servo_README.md](../../components/io_servo/io_servo_README.md),
+[module_manager_README.md](../../components/module_manager/module_manager_README.md),
+[mod_mfrc522_README.md](../../components/mod_mfrc522/mod_mfrc522_README.md).
 
 ## Used by
 
@@ -45,7 +48,7 @@ Nothing calls the orchestrator except the IDF `app_main` entry. Status is read b
 
 ## How to update and maintain
 
-Keep init order: NVS before identity, capability before I/O, network before httpd/MQTT, **skip `command_apply_saved_io` in safe mode**. After `mark_healthy()`, call `ota_mark_valid` so a pending image is confirmed (or rolled back in safe mode). Do not start driving outputs in `io_gpio_init`. BOOT hold must run **after** the ROM bootloader — holding GPIO0 at reset is download mode, not recovery.
+Keep init order: NVS before identity, capability before I/O, `module_manager_init` + type register before network, network before httpd/MQTT, **skip `command_apply_saved_io` and `command_apply_saved_modules` in safe mode**. After `mark_healthy()`, call `ota_mark_valid` so a pending image is confirmed (or rolled back in safe mode). Do not start driving outputs in `io_gpio_init`. BOOT hold must run **after** the ROM bootloader — holding GPIO0 at reset is download mode, not recovery.
 
 ## How to test
 

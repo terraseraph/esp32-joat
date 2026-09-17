@@ -22,6 +22,8 @@ if (-not $HostName) { $HostName = "192.168.0.132" }
 
 Push-Location $pkg
 try {
+    $ver = node -e "const fs=require('fs'); const p=JSON.parse(fs.readFileSync('package.json','utf8')); const n=p.version.split('.').map(Number); n[2]=(n[2]||0)+1; p.version=n.join('.'); fs.writeFileSync('package.json', JSON.stringify(p,null,2)+'\n'); process.stdout.write(p.version);"
+    Write-Host "palette version $ver"
     $tgz = (npm pack --silent | Select-Object -Last 1).Trim()
     if (-not $tgz -or -not (Test-Path $tgz)) {
         throw "npm pack did not write a tarball"
@@ -109,4 +111,10 @@ $body = $resp.Body
     ConvertTo-Json | Set-Content -Path $statePath -Encoding utf8
 
 Write-Host $body
+$probe = Invoke-CurlCode @("http://${HostName}:${Port}/de-esp32/pinout-template")
+if ($probe.Code -ne "200") {
+    Write-Host "pinout-template HTTP $($probe.Code) - runtime did not reload new routes"
+} else {
+    Write-Host "pinout-template ok"
+}
 Write-Host "Installed. Reload the Node-RED editor (browser refresh) to pick up nodes."

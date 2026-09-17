@@ -1,6 +1,6 @@
 {
   "name": "node-red-contrib-de-esp32",
-  "version": "0.1.0",
+  "version": "0.1.2",
   "description": "Node-RED nodes for de-esp32 GPIO boxes: LAN discover, rename, DevKitC pinout picker",
   "keywords": [
     "node-red",

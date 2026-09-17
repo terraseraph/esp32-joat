@@ -35,17 +35,19 @@ Template: [templates/FEATURE_README_TEMPLATE.md](templates/FEATURE_README_TEMPLA
 | network_manager | mvp | [network_manager_README.md](../components/network_manager/network_manager_README.md) | STA + SoftAP + mDNS |
 | provisioning | mvp | [provisioning_README.md](../components/provisioning/provisioning_README.md) | Captive DNS + test-before-commit Wi-Fi |
 | web_server | mvp | [web_server_README.md](../components/web_server/web_server_README.md) | REST `/api/v1`, OpenAPI, WebSocket, embedded UI |
-| mqtt_manager | mvp | [mqtt_manager_README.md](../components/mqtt_manager/mqtt_manager_README.md) | Remote commands and telemetry |
-| telemetry | mvp | [telemetry_README.md](../components/telemetry/telemetry_README.md) | Periodic diagnostics snapshot |
+| mqtt_manager | mvp | [mqtt_manager_README.md](../components/mqtt_manager/mqtt_manager_README.md) | Remote commands and live `io` events |
+| telemetry | mvp | [telemetry_README.md](../components/telemetry/telemetry_README.md) | 15 s diagnostics snapshot (hydrate) |
+| serial_session | mvp | [serial_session_README.md](../components/serial_session/serial_session_README.md) | UART0 REPL + hello/hydrate NDJSON IO stream |
 | ota_manager | mvp | [ota_manager_README.md](../components/ota_manager/ota_manager_README.md) | A/B apply, URL pull, pending confirm, rollback |
 | Flash tool (Windows) | mvp | [flash_tool_README.md](features/flash_tool_README.md) | Lists COM ports, flashes, optional device name |
 | LAN discover / OTA | mvp | [lan_discover_ota_README.md](features/lan_discover_ota_README.md) | mDNS+HTTP scan; Wi-Fi OTA push |
+| Node-RED contrib | mvp | [nodered_README.md](features/nodered_README.md) | Host palette: discover/rename + GPIO in/out pinout |
 
 ## Dependency sketch
 
 Boot → identity + config → capability + resources → safe pins → network → web + MQTT → apply I/O (unless safe mode).
 
-HTTP, WebSocket, and MQTT must call `command_router`. Do not fork behaviour in `web/dist/index.html`.
+HTTP, WebSocket, MQTT, and UART JSON must call `command_router`. Do not fork behaviour in `web/dist/index.html`.
 
 ## How to add a feature
 

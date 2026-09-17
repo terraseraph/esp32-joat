@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Digital input/output with optional invert, pulls, and 50 ms debounced ANYEDGE IRQs. Boot does **not** drive outputs until config apply.
+Digital input/output with optional invert, pulls, and software-debounced ANYEDGE IRQs. Debounce is per pin (`debounce_ms`, default 50, 0–500) for inputs. Boot does **not** drive outputs until config apply.
 
 ## User story
 
@@ -12,7 +12,9 @@ GPIO / live control: configure an output, toggle from UI or MQTT; input edges up
 
 `io_gpio_configure`, `io_gpio_set`, `io_gpio_get`, `io_gpio_release`, `io_gpio_safe_defaults`.
 
-Commands: `pin.configure` mode `in`/`out`, `pin.set`.
+Commands: `pin.configure` mode `in`/`out`, `pin.set`. Inputs accept `debounce_ms` (default 50). Outputs publish immediately (no debounce).
+
+Each level change publishes one `io/gpio` event (state_registry + event bus).
 
 ## Depends on
 

@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Find live de-esp32 boards on the LAN and push A/B firmware over HTTP. Discovery uses mDNS `_http._tcp` (the firmware already advertises this, with an A record for the current IP) plus an HTTP `/24` probe of `GET /api/v1/status`. OTA is `POST /api/v1/ota` of `de_esp32_runtime.bin`. Cursor agents follow `.cursor/skills/ota-push/SKILL.md`.
+Find live de-esp32 boards on the LAN and push A/B firmware over HTTP. Discovery uses mDNS `_http._tcp` (and `_de-esp32._tcp` for Node-RED / unique-type browse; firmware advertises both, with an A record for the current IP) plus an HTTP `/24` probe of `GET /api/v1/status`. OTA is `POST /api/v1/ota` of `de_esp32_runtime.bin`. Cursor agents follow `.cursor/skills/ota-push/SKILL.md`.
 
 ## User story
 
@@ -26,7 +26,7 @@ Fingerprint: `ota.project == de_esp32_runtime` or hostname `esp32-*`.
 
 ## Depends on
 
-[network_manager_README.md](../../components/network_manager/network_manager_README.md) (mDNS `_http._tcp` + A record),
+[network_manager_README.md](../../components/network_manager/network_manager_README.md) (mDNS `_http._tcp` + `_de-esp32._tcp` + A record),
 [ota_manager_README.md](../../components/ota_manager/ota_manager_README.md),
 [web_server_README.md](../../components/web_server/web_server_README.md) (`POST /api/v1/ota`, `GET /api/v1/status`),
 [toolchain_README.md](toolchain_README.md),

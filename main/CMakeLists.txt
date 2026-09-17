@@ -4,5 +4,5 @@ idf_component_register(
     REQUIRES runtime_core logging config_manager device_identity security event_bus state_registry
              capability_manager resource_manager board_profiles io_gpio io_pwm io_adc
              command_router network_manager provisioning web_server mqtt_manager telemetry
-             ota_manager driver console nvs_flash esp_netif esp_event esp_wifi
+             ota_manager serial_session driver console nvs_flash esp_netif esp_event esp_wifi
 )

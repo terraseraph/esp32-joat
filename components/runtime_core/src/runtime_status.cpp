@@ -50,7 +50,9 @@ RuntimeStatus::RuntimeStatus()
       safe_mode_(false),
       healthy_(false),
       boot_count_(0),
-      live_viewers_(0) {
+      live_viewers_(0),
+      live_mqtt_(false),
+      live_serial_(false) {
     reason_[0] = '\0';
 }
 
@@ -136,6 +138,45 @@ int RuntimeStatus::live_viewers() const {
     int v = live_viewers_;
     xSemaphoreGive(mu_);
     return v;
+}
+
+void RuntimeStatus::set_live_mqtt(bool on) {
+    xSemaphoreTake(mu_, portMAX_DELAY);
+    live_mqtt_ = on;
+    xSemaphoreGive(mu_);
+}
+
+bool RuntimeStatus::live_mqtt() const {
+    xSemaphoreTake(mu_, portMAX_DELAY);
+    bool v = live_mqtt_;
+    xSemaphoreGive(mu_);
+    return v;
+}
+
+void RuntimeStatus::set_live_serial(bool on) {
+    xSemaphoreTake(mu_, portMAX_DELAY);
+    live_serial_ = on;
+    xSemaphoreGive(mu_);
+}
+
+bool RuntimeStatus::live_serial() const {
+    xSemaphoreTake(mu_, portMAX_DELAY);
+    bool v = live_serial_;
+    xSemaphoreGive(mu_);
+    return v;
+}
+
+int RuntimeStatus::live_sinks() const {
+    xSemaphoreTake(mu_, portMAX_DELAY);
+    int n = live_viewers_;
+    if (live_mqtt_) {
+        n++;
+    }
+    if (live_serial_) {
+        n++;
+    }
+    xSemaphoreGive(mu_);
+    return n;
 }
 
 }  // namespace runtime

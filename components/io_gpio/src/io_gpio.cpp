@@ -27,6 +27,7 @@ struct GpioSlot {
     bool invert;
     bool irq;
     int last;
+    int debounce_ms;
     TickType_t debounce_until;
 };
 
@@ -42,6 +43,9 @@ void publish_gpio(int gpio, int level) {
     cJSON_AddStringToObject(st, "mode", s_slots[gpio].output ? "out" : "in");
     cJSON_AddNumberToObject(st, "gpio", gpio);
     cJSON_AddNumberToObject(st, "level", level);
+    if (!s_slots[gpio].output) {
+        cJSON_AddNumberToObject(st, "debounce_ms", s_slots[gpio].debounce_ms);
+    }
     state_set(key, st);
     event_bus_publish("io/gpio", st);
     cJSON_Delete(st);
@@ -65,10 +69,13 @@ void irq_task(void*) {
             continue;
         }
         TickType_t now = xTaskGetTickCount();
-        if (now < s_slots[gpio].debounce_until) {
-            continue;
+        const int db = s_slots[gpio].debounce_ms;
+        if (db > 0) {
+            if (now < s_slots[gpio].debounce_until) {
+                continue;
+            }
+            s_slots[gpio].debounce_until = now + pdMS_TO_TICKS(db);
         }
-        s_slots[gpio].debounce_until = now + pdMS_TO_TICKS(50);
         int level = io_gpio_get(gpio);
         if (level == s_slots[gpio].last) {
             continue;
@@ -103,7 +110,7 @@ void io_gpio_safe_defaults() {
 }
 
 esp_err_t io_gpio_configure(int gpio, bool output, bool pull_up, bool pull_down, bool invert,
-                            int boot_level, bool irq, char* err, size_t err_len) {
+                            int boot_level, bool irq, int debounce_ms, char* err, size_t err_len) {
     const char* mode = output ? "out" : "in";
     if (!capability_allows(gpio, mode, err, err_len)) {
         return ESP_ERR_INVALID_ARG;
@@ -138,10 +145,17 @@ esp_err_t io_gpio_configure(int gpio, bool output, bool pull_up, bool pull_down,
         gpio_isr_handler_remove(static_cast<gpio_num_t>(gpio));
     }
 
+    if (debounce_ms < 0) {
+        debounce_ms = 0;
+    }
+    if (debounce_ms > 500) {
+        debounce_ms = 500;
+    }
     s_slots[gpio].used = true;
     s_slots[gpio].output = output;
     s_slots[gpio].invert = invert;
     s_slots[gpio].irq = irq && !output;
+    s_slots[gpio].debounce_ms = output ? 0 : debounce_ms;
 
     if (output) {
         int physical = invert ? (boot_level ? 0 : 1) : (boot_level ? 1 : 0);
@@ -204,6 +218,9 @@ cJSON* io_gpio_state(int gpio) {
         cJSON_AddNumberToObject(o, "level", io_gpio_get(gpio));
         cJSON_AddBoolToObject(o, "invert", s_slots[gpio].invert);
         cJSON_AddBoolToObject(o, "irq", s_slots[gpio].irq);
+        if (!s_slots[gpio].output) {
+            cJSON_AddNumberToObject(o, "debounce_ms", s_slots[gpio].debounce_ms);
+        }
     }
     return o;
 }

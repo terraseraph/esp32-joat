@@ -2,7 +2,7 @@
 
 ## Purpose
 
-15 s diagnostic snapshot (heap, uptime, reset reason, net, mqtt, ota, I/O state). ADC channels are refreshed into the registry first. Published to MQTT and the event bus. No on-device history database.
+15 s diagnostic snapshot (heap, uptime, reset reason, net, mqtt, ota, I/O state). This is the fat hydrate, not the live pin bus — GPIO/PWM/ADC-on-change go to MQTT `…/io` and WebSocket immediately. ADC channels are refreshed into the registry first (`io_adc_refresh`, no event bus). Published to MQTT and the event bus. No on-device history database.
 
 ## User story
 
@@ -22,7 +22,7 @@ web_server, mqtt publish path, boot.
 
 ## How to update and maintain
 
-Keep the period ≥ 10 s to protect heap and flash (we do not write NVS here). Add fields in the snapshot only; Grafana belongs off-device.
+Keep the period ≥ 10 s to protect heap and flash (we do not write NVS here). Do not speed this up for live pins — that is `…/io`. Add fields in the snapshot only; Grafana belongs off-device.
 
 ## How to test
 

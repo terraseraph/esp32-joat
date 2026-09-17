@@ -38,9 +38,15 @@ public:
     uint32_t boot_count() const;
     void set_boot_count(uint32_t count);
     uint32_t uptime_s() const;
-    /** Open UI WebSockets. ADC live-sample only when this is > 0. */
+    /** Open UI WebSockets. WebSocket frames only when this is > 0. */
     void set_live_viewers(int n);
     int live_viewers() const;
+    void set_live_mqtt(bool on);
+    bool live_mqtt() const;
+    void set_live_serial(bool on);
+    bool live_serial() const;
+    /** WS count + MQTT connected + serial session. ADC live-sample when > 0. */
+    int live_sinks() const;
 
 private:
     RuntimeStatus();
@@ -50,6 +56,8 @@ private:
     bool healthy_;
     uint32_t boot_count_;
     int live_viewers_;
+    bool live_mqtt_;
+    bool live_serial_;
     char reason_[64];
 };
 

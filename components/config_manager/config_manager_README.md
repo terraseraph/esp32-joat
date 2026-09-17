@@ -18,7 +18,7 @@ Keys (MVP):
 - `network.ssid` / `network.password` str
 - `security.ap_password` str (empty / missing = open recovery AP)
 - `mqtt.uri` / `mqtt.user` / `mqtt.password` / `mqtt.root` str (root default `devices`), `mqtt.enabled` u8
-- `io.pins` blob (JSON)
+- `io.pins` blob (JSON). Pin objects may include `debounce_ms` (`in`), `sample_ms` / `hysteresis_mv` / `smooth` (`adc`); missing keys use firmware defaults.
 
 `config_factory_reset()` erases those namespaces then reboots via the command router.
 

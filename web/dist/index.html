@@ -28,7 +28,9 @@ nav button{display:flex;flex-direction:column;align-items:center;gap:3px;backgro
 nav button .i{color:inherit}
 nav button.on{border-color:var(--tc);color:var(--tc);background:var(--in)}
 main{padding:12px;max-width:1080px;margin:0 auto}
+.hw-split{display:grid;gap:12px}
 .card{background:var(--card);border:1px solid var(--line);border-top:3px solid var(--tab);padding:14px;margin:0 0 12px;border-radius:var(--r)}
+.hw-split>.card{margin-bottom:0}
 .card.hot{border-top-color:var(--bad)}
 .card h2{display:flex;align-items:center;gap:8px;margin:0 0 12px;font-size:15px;font-weight:650;color:var(--tab)}
 .card h2 .i{width:18px;height:18px}
@@ -44,6 +46,12 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
 .filts{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 10px}
 .filts button{padding:6px 10px;min-height:36px;border:1px solid var(--line);background:var(--in);color:var(--muted);border-radius:99px;cursor:pointer;font-size:12px}
 .filts button.on{color:var(--tab);border-color:var(--tab);background:var(--card)}
+.modes{display:flex;flex-wrap:wrap;gap:6px;margin:4px 0 2px}
+.modes button{flex:1 1 4.2em;padding:10px 8px;min-height:44px;border:1px solid var(--line);background:var(--in);color:var(--muted);border-radius:var(--r);cursor:pointer;font-size:13px;font-weight:650}
+.modes button.on{color:var(--fg);border-color:var(--tab);background:var(--card)}
+.field .hint,.checkfield .hint{margin:4px 0 0}
+.checkfield{margin:12px 0}
+.checkfield .hint{margin:0 0 0 26px}
 .pinwrap{overflow-x:auto}
 .pinout{display:grid;grid-template-columns:minmax(0,1fr) 14px 108px 14px minmax(0,1fr);grid-template-rows:repeat(var(--n,19),minmax(36px,auto));column-gap:8px;row-gap:3px;align-items:stretch;min-width:720px;--n:19}
 .pcb{grid-column:2/5;grid-row:1/-1;background:#152018;border:1.4px solid #3dcec0;border-radius:10px;z-index:0;pointer-events:none}
@@ -99,9 +107,20 @@ pre{white-space:pre-wrap;max-height:320px;overflow:auto;background:var(--in);pad
 .b.mute{color:var(--muted)}.b.warn{color:var(--warn);border-color:rgba(224,168,74,.33)}.b.adc{color:#c084fc;border-color:rgba(192,132,252,.33)}
 .bar{height:8px;background:var(--in);border-radius:99px;overflow:hidden;margin-top:10px;border:1px solid var(--line)}
 .bar>span{display:block;height:100%;background:var(--acc);width:0}
+.gauge{display:flex;align-items:center;gap:8px;margin:8px 0 0}
+.gauge .track{flex:1;height:10px;background:var(--in);border:1px solid var(--line);border-radius:99px;overflow:hidden}
+.gauge .track>i{display:block;height:100%;width:0;background:#c084fc}
+.gauge .n{color:var(--muted);font-size:12px;font-variant-numeric:tabular-nums;white-space:nowrap}
+.adcbar{height:4px;width:100%;background:var(--in);border:1px solid var(--line);border-radius:99px;overflow:hidden;margin-top:2px}
+.adcbar>i{display:block;height:100%;width:0;background:#c084fc}
 .wait{color:var(--muted);padding:20px 8px}
 @media(max-width:640px){.row{grid-template-columns:1fr}#pills{max-width:100%;justify-content:flex-start}}
 @media(max-width:720px){.pinout{grid-template-columns:1fr 1fr;grid-template-rows:none;min-width:0}.pcb,.mod,.usb{grid-column:1/-1;grid-row:1}.pcb{min-height:120px}.mod{max-width:120px;justify-self:center;align-self:center}.usb{align-self:end;margin-bottom:8px}.hole{display:none}.pad,.pad.r{grid-row:auto}.pad{grid-column:1}.pad.r{grid-column:2}}
+@media(min-width:1100px){
+  main{max-width:1360px}
+  .hw-split{grid-template-columns:minmax(0,1fr) minmax(320px,400px);align-items:start}
+  .hw-cfg{position:sticky;top:72px;max-height:calc(100dvh - 84px);overflow:auto}
+}
 </style>
 </head>
 <body>
@@ -139,7 +158,15 @@ const TABS=[
   {n:"System",c:"#f08060",k:"sys"},
   {n:"API",c:"#7dd3fc",k:"api"}
 ];
-let tab="Overview", st=null, hw=null, spec=null, ws, drawn=null, picked=false, pinFilter="all", selGpio=null, wantWs=true;
+let tab="Overview", st=null, hw=null, spec=null, ws, drawn=null, picked=false, pinFilter="all", selGpio=null, wantWs=true, pinCfg={};
+const MODE_LAB={in:"In",out:"Out",pwm:"PWM",adc:"ADC",disabled:"Off"};
+const MODE_HINT={
+  in:"Digital input. Each stable edge is published over MQTT and the live UI.",
+  out:"Digital output. Apply saves the power-on level; Set HIGH/LOW changes it live.",
+  pwm:"PWM output. Duty is 0–1000 (0–100%). All PWM pins share one frequency.",
+  adc:"Analog input on ADC1 (~0–3.3 V). This mode cannot drive the pin.",
+  disabled:"Release the pin (high impedance). Stops sampling and output."
+};
 const nav=document.getElementById("nav");
 function ico(k){return `<svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${IC[k]||""}</svg>`;}
 function h2(title,k){return `<h2>${ico(k)}${title}</h2>`;}
@@ -279,6 +306,29 @@ function useLabel(u){
   if(u.level===0) return (u.mode||"io")+" LOW";
   return u.mode||"";
 }
+function adcRaw(u){
+  if(!u || u.mode!=="adc") return null;
+  if(u.raw!=null) return Math.max(0, Math.min(4096, +u.raw));
+  if(u.mv!=null) return Math.max(0, Math.min(4096, Math.round((+u.mv)/3300*4096)));
+  return null;
+}
+function adcPct(raw){ return Math.max(0, Math.min(100, (raw/4096)*100)); }
+function paintAdcGauge(u){
+  const live=document.getElementById("plive");
+  const g=document.getElementById("pgauge");
+  const raw=adcRaw(u);
+  if(live){
+    if(selGpio==null) live.textContent="—";
+    else live.textContent=u?useLabel(u):"not configured";
+  }
+  if(g){
+    g.hidden=raw==null;
+    const fill=g.querySelector("i");
+    const n=document.getElementById("praw");
+    if(fill && raw!=null) fill.style.width=adcPct(raw)+"%";
+    if(n) n.textContent=raw!=null?raw+"/4096":"";
+  }
+}
 function busGpios(kind){
   const s={};
   (hw&&hw.buses||[]).forEach(b=>{
@@ -294,22 +344,68 @@ function capBadges(p){
   if(p.flash) a.push(["mute","flash"]);
   else if(p.input_only) a.push(["in","in-only"]);
   else if(p.output) a.push(["io","io"]);
-  if(p.adc1) a.push(["adc","A1"]);
-  else if(p.adc2) a.push(["adc","A2"]);
+  if(p.adc1) a.push(["adc","A1","ADC1 analog — ADC mode, works with Wi-Fi"]);
+  else if(p.adc2) a.push(["warn","A2","ADC2 analog unavailable while Wi-Fi is on"]);
   if(p.pwm&&!p.flash) a.push(["pwm","PWM"]);
   if(p.touch) a.push(["touch","T"+(p.touch_channel>=0?p.touch_channel:"")]);
   if(p.dac) a.push(["dac","DAC"]);
   if(p.strap) a.push(["warn","strap"]);
   if(p.role) a.push(["role",p.role]);
-  return a.map(([c,t])=>`<span class="b ${c}">${esc(t)}</span>`).join("");
+  return a.map(([c,t,title])=>`<span class="b ${c}"${title?` title="${esc(title)}"`:""}>${esc(t)}</span>`).join("");
+}
+function analogHint(p){
+  if(!p) return "";
+  if(p.adc1) return `<p class="hint">This pin can read analog voltage in ADC mode (ADC1, ~0–3.3 V). Digital In is high/low only.</p>`;
+  if(p.adc2) return `<p class="hint warn">ADC2 analog is unavailable while Wi-Fi is on. Use GPIO 32–39 (ADC1) in ADC mode.</p>`;
+  return "";
 }
 function allowedModes(p){
   if(!p||p.flash) return ["disabled"];
-  const m=["disabled"];
+  const m=[];
   if(p.input) m.push("in");
   if(p.output&&!p.input_only){m.push("out"); if(p.pwm) m.push("pwm");}
   if(p.adc1) m.push("adc");
+  m.push("disabled");
   return m;
+}
+function pinField(id){return document.getElementById(id);}
+function pinVal(id, fallback){
+  const n=pinField(id);
+  if(!n || n.value==="") return fallback;
+  return n.value;
+}
+function rememberPin(g){
+  if(g==null) return;
+  pinCfg[g]={
+    mode:currentMode(),
+    name:pinVal("pname","gpio_"+g),
+    pull:!!(pinField("ppull")&&pinField("ppull").checked),
+    invert:!!(pinField("pinvert")&&pinField("pinvert").checked),
+    boot:+pinVal("pboot",0),
+    duty:+pinVal("pduty",0),
+    hz:+pinVal("phz",1000),
+    deb:+pinVal("pdeb",50),
+    samp:+pinVal("psamp",50),
+    hyst:+pinVal("physt",20),
+    smooth:+pinVal("psmooth",70)
+  };
+}
+function setBootUi(v){
+  const n=v?1:0;
+  const el=pinField("pboot");
+  if(el) el.value=n;
+  const box=pinField("pbootg");
+  if(box) [...box.querySelectorAll("button")].forEach(b=>b.classList.toggle("on", +b.dataset.v===n));
+}
+function currentMode(){return pinVal("pmode","disabled");}
+function paintModes(modes, cur, locked){
+  const box=pinField("pmodes");
+  const modeEl=pinField("pmode");
+  if(!box) return;
+  const val=modes.includes(cur)?cur:(modes.find(m=>m!=="disabled")||modes[0]);
+  if(modeEl) modeEl.value=val;
+  box.innerHTML=modes.map(m=>`<button type="button" data-mode="${m}"${locked?" disabled":""}>${MODE_LAB[m]||m}</button>`).join("");
+  [...box.children].forEach(b=>b.classList.toggle("on", b.dataset.mode===val));
 }
 function applyPinFilter(){
   const filts=document.getElementById("pfilts");
@@ -341,12 +437,15 @@ function paintPinUses(){
     if(span) span.textContent=useLabel(u);
     el.classList.toggle("on", !!u);
     el.classList.toggle("sel", selGpio===g);
+    const bar=el.querySelector(".adcbar");
+    const fill=bar&&bar.querySelector("i");
+    const raw=adcRaw(u);
+    if(bar){
+      bar.hidden=raw==null;
+      if(fill && raw!=null) fill.style.width=adcPct(raw)+"%";
+    }
   });
-  const live=document.getElementById("plive");
-  if(live && selGpio!=null){
-    const u=ioOf(selGpio);
-    live.textContent=u?useLabel(u):"not configured";
-  }
+  paintAdcGauge(selGpio==null?null:ioOf(selGpio));
   applyPinFilter();
 }
 function boardChrome(){
@@ -366,75 +465,171 @@ function padBtn(p, side, row){
     <span class="silk">${esc(label)}</span>
     <span class="caps">${has?capBadges(info):`<span class="b mute">${esc(p.kind)}</span>`}</span>
     <span class="use"></span>
+    <span class="adcbar" hidden><i></i></span>
   </button>${side==="left"?hole:""}`;
 }
 function selectPad(gpio, kind, silk){
+  if(selGpio!=null && selGpio!==gpio) rememberPin(selGpio);
   selGpio=gpio;
   document.querySelectorAll(".pad").forEach(el=>el.classList.toggle("sel", gpio!=null && el.dataset.gpio!=="" && +el.dataset.gpio===gpio));
   const p=gpio!=null?pinByGpio(gpio):null;
   const meta=document.getElementById("pmeta");
-  const gEl=document.getElementById("pgpio");
-  const name=document.getElementById("pname");
-  const mode=document.getElementById("pmode");
-  const cfg=document.getElementById("pcfg");
-  const on=document.getElementById("pon");
-  const off=document.getElementById("poff");
-  const live=document.getElementById("plive");
+  const form=pinField("pform");
+  const gEl=pinField("pgpio");
   if(!meta) return;
   if(gpio==null){
     meta.innerHTML=`<p><strong>${esc(silk)}</strong> · ${esc(kind)}</p><p class="hint">Not a GPIO — power, ground, or EN.</p>`;
     if(gEl) gEl.value="";
-    if(cfg) cfg.disabled=true;
-    if(on) on.disabled=true;
-    if(off) off.disabled=true;
-    if(live) live.textContent="";
+    if(form) form.hidden=true;
+    paintAdcGauge(null);
+    syncPinExtras();
     return;
   }
-  const modes=allowedModes(p);
-  if(mode){
-    const cur=ioOf(gpio);
-    mode.innerHTML=modes.map(m=>`<option>${m}</option>`).join("");
-    mode.value=(cur&&modes.includes(cur.mode))?cur.mode:(modes[1]||modes[0]);
-  }
+  if(form) form.hidden=false;
   if(gEl) gEl.value=gpio;
-  if(name && document.activeElement!==name) name.value="gpio_"+gpio;
+  const u=ioOf(gpio);
+  const saved=pinCfg[gpio]||{};
+  const modes=allowedModes(p);
+  const locked=!!(p&&p.flash);
+  paintModes(modes, (u&&u.mode)||saved.mode||"", locked);
+  const name=pinField("pname");
+  if(name && document.activeElement!==name) name.value=saved.name||("gpio_"+gpio);
+  const pduty=pinField("pduty");
+  const phz=pinField("phz");
+  if(pduty && document.activeElement!==pduty) pduty.value=(u&&u.duty!=null)?u.duty:(saved.duty??0);
+  if(phz && document.activeElement!==phz) phz.value=(u&&u.hz!=null)?u.hz:(saved.hz??1000);
+  const bootLive=(u&&u.mode==="out"&&u.level!=null)?u.level:saved.boot;
+  setBootUi(bootLive);
+  const pull=pinField("ppull");
+  const inv=pinField("pinvert");
+  if(pull) pull.checked=!!saved.pull;
+  if(inv) inv.checked=(u&&u.invert!=null)?!!u.invert:!!saved.invert;
   const buses=busesFor(gpio);
   const busTxt=buses.map(b=>{
     const role=Object.entries(b.pins||{}).find(([,n])=>+n===gpio);
     return `${esc(b.label)} ${esc(role?role[0].toUpperCase():"")} — ${esc(b.hint)}`;
   }).join("<br>");
+  const adcCh=p&&p.adc1?` · ADC1 ch ${p.adc_channel}`:p&&p.adc2?` · ADC2 ch ${p.adc_channel}`:"";
   meta.innerHTML=`<p><strong>GPIO ${gpio}</strong> ${p&&p.role?`<span class="b role">${esc(p.role)}</span>`:""}</p>
-    <p class="hint">${esc(p&&p.notes||"")}${p&&p.adc_channel>=0?` · ADC ch ${p.adc_channel}`:""}${p&&p.touch?` · touch T${p.touch_channel}`:""}</p>
+    <p class="hint">${esc(p&&p.notes||"")}${adcCh}${p&&p.touch?` · touch T${p.touch_channel}`:""}</p>
+    ${analogHint(p)}
     ${busTxt?`<p class="hint">${busTxt}</p>`:""}`;
+  paintAdcGauge(u);
+  syncPinExtras();
+}
+function syncPinExtras(){
+  const mode=currentMode();
+  const p=selGpio!=null?pinByGpio(selGpio):null;
   const locked=!!(p&&p.flash);
-  if(cfg) cfg.disabled=locked;
-  if(on) on.disabled=locked;
-  if(off) off.disabled=locked;
-  if(live) live.textContent=useLabel(ioOf(gpio))||"not configured";
+  const u=selGpio!=null?ioOf(selGpio):null;
+  const saved=(selGpio!=null&&pinCfg[selGpio])||{};
+  const hint=pinField("pmodehint");
+  if(hint) hint.textContent=MODE_HINT[mode]||"";
+  const show=id=> { const n=pinField(id); if(n) n.hidden=false; };
+  const hide=id=> { const n=pinField(id); if(n) n.hidden=true; };
+  (mode==="in"?show:hide)("prow-deb");
+  (mode==="adc"?show:hide)("padc");
+  (mode==="out"?show:hide)("prow-boot");
+  (mode==="pwm"?show:hide)("prow-pwm");
+  const canPull=!!(p&&p.pull)&&(mode==="in"||mode==="out");
+  (canPull?show:hide)("prow-pull");
+  ((mode==="in"||mode==="out")?show:hide)("prow-inv");
+  const invHint=pinField("pinvhint");
+  if(invHint){
+    invHint.textContent=mode==="out"
+      ?"Logical 1 drives the pin LOW (active-low LED or relay). Logical 0 drives HIGH."
+      :"Report electrical LOW as 1 (active-low button or sensor).";
+  }
+  const fill=(id, live, fallback)=>{
+    const n=pinField(id);
+    if(!n || document.activeElement===n) return;
+    n.value=live!=null?live:fallback;
+  };
+  fill("pdeb", u&&u.debounce_ms, saved.deb??50);
+  fill("psamp", u&&u.sample_ms, saved.samp??50);
+  fill("physt", u&&u.hysteresis_mv, saved.hyst??20);
+  fill("psmooth", u&&u.smooth, saved.smooth??70);
+  const cfg=pinField("pcfg");
+  const on=pinField("pon");
+  const off=pinField("poff");
+  const showSet=mode==="out"||mode==="pwm";
+  if(cfg) cfg.disabled=locked||selGpio==null;
+  if(on){
+    on.hidden=!showSet;
+    on.disabled=locked||!showSet;
+    on.textContent=mode==="pwm"?"Full":"Set HIGH";
+  }
+  if(off){
+    off.hidden=!showSet;
+    off.disabled=locked||!showSet;
+    off.textContent=mode==="pwm"?"Off":"Set LOW";
+  }
 }
 function bindPinEditor(){
-  const cfg=document.getElementById("pcfg");
+  const cfg=pinField("pcfg");
   if(!cfg || cfg.dataset.bound) return;
   cfg.dataset.bound="1";
   const gpioOrMsg=()=>{
-    const raw=document.getElementById("pgpio").value;
-    if(raw===""){showMsg("Pick a GPIO", true);return null;}
-    return +raw;
+    if(selGpio==null){showMsg("Pick a GPIO", true);return null;}
+    return selGpio;
+  };
+  const modes=pinField("pmodes");
+  if(modes) modes.onclick=e=>{
+    const b=e.target.closest("button[data-mode]");
+    if(!b||b.disabled) return;
+    const modeEl=pinField("pmode");
+    if(modeEl) modeEl.value=b.dataset.mode;
+    [...modes.children].forEach(x=>x.classList.toggle("on", x===b));
+    syncPinExtras();
+  };
+  const bootg=pinField("pbootg");
+  if(bootg) bootg.onclick=e=>{
+    const b=e.target.closest("button[data-v]");
+    if(!b) return;
+    setBootUi(+b.dataset.v);
   };
   cfg.onclick=async()=>{
     const gpio=gpioOrMsg();
     if(gpio==null) return;
-    const mode=document.getElementById("pmode").value;
-    const r=await cmd({cmd:"pin.configure",pin:{gpio,mode,name:document.getElementById("pname").value,
-      pull_up:document.getElementById("ppull").checked,invert:document.getElementById("pinvert").checked,
-      boot:+document.getElementById("pboot").value,duty:+document.getElementById("pboot").value,hz:1000,irq:mode==="in"}});
+    const mode=currentMode();
+    const name=pinVal("pname","gpio_"+gpio);
+    const pin={gpio,mode,name};
+    if(mode==="in"||mode==="out"){
+      pin.pull_up=!!(pinField("ppull")&&pinField("ppull").checked);
+      pin.invert=!!(pinField("pinvert")&&pinField("pinvert").checked);
+    }
+    if(mode==="out") pin.boot=+pinVal("pboot",0)?1:0;
+    if(mode==="in"){ pin.debounce_ms=+(pinVal("pdeb",50)); pin.irq=true; }
+    if(mode==="pwm"){
+      pin.duty=+(pinVal("pduty",0));
+      pin.hz=+(pinVal("phz",1000));
+    }
+    if(mode==="adc"){
+      pin.sample_ms=+(pinVal("psamp",50));
+      pin.hysteresis_mv=+(pinVal("physt",20));
+      pin.smooth=+(pinVal("psmooth",70));
+    }
+    const r=await cmd({cmd:"pin.configure",pin});
+    rememberPin(gpio);
     showMsg(r.ok?"Pin applied":(r.error||"failed"), !r.ok); refresh();
   };
-  document.getElementById("pon").onclick=()=>{const g=gpioOrMsg(); if(g==null) return; return cmd({cmd:"pin.set",gpio:g,value:1000,mode:document.getElementById("pmode").value}).then(refresh);};
-  document.getElementById("poff").onclick=()=>{const g=gpioOrMsg(); if(g==null) return; return cmd({cmd:"pin.set",gpio:g,value:0,mode:document.getElementById("pmode").value}).then(refresh);};
+  const setLive=(value)=>{
+    const g=gpioOrMsg();
+    if(g==null) return;
+    const mode=currentMode();
+    if(mode!=="out"&&mode!=="pwm") return;
+    if(mode==="pwm"){
+      const d=pinField("pduty");
+      if(d) d.value=value;
+    }
+    return cmd({cmd:"pin.set",gpio:g,value,mode}).then(refresh);
+  };
+  pinField("pon").onclick=()=>setLive(currentMode()==="pwm"?1000:1);
+  pinField("poff").onclick=()=>setLive(0);
 }
 function tabMeta(){return TABS.find(t=>t.n===tab)||TABS[0];}
 function render(){
+  if(drawn==="Hardware" && tab!=="Hardware") rememberPin(selGpio);
   const tm=tabMeta();
   document.documentElement.style.setProperty("--tab", tm.c);
   [...nav.children].forEach((b,i)=>b.className=TABS[i].n===tab?"on":"");
@@ -468,30 +663,91 @@ function render(){
     const filts=[["all","All"],["io","I/O"],["adc","ADC"],["pwm","PWM"],["touch","Touch"],["spi","SPI"],["i2c","I2C"],["uart","UART"],["strap","Strap"],["flash","Flash"],["on","On"]]
       .concat((hw.buses||[]).map(b=>[b.id,b.label]));
     const pads=left.map((p,i)=>padBtn(p,"left",i)).join("")+boardChrome()+right.map((p,i)=>padBtn(p,"right",i)).join("");
-    main.innerHTML=`<div class="card">
+    main.innerHTML=`<div class="hw-split">
+    <div class="card">
       ${h2("Pinout","hw")}
       <p>${esc(hw.board_name)} · ${esc(hw.chip)} · ${esc(feats)}</p>
       <p>Status LED GPIO ${hw.status_led_gpio} · BOOT GPIO ${hw.boot_gpio} (hold after boot, not during reset)</p>
+      <p class="hint">Analog in: ADC mode on ADC1 (GPIO 32–39, A1). ADC2 pins (A2) cannot analog-read while Wi-Fi is on — this firmware keeps Wi-Fi on.</p>
       <div class="filts" id="pfilts">${filts.map(([id,lab])=>`<button type="button" data-f="${esc(id)}">${esc(lab)}</button>`).join("")}</div>
       <div class="pinwrap"><div class="pinout" style="--n:${n}">${pads}</div></div>
     </div>
-    <div class="card">
+    <div class="card hw-cfg">
       ${h2("Configure","pin")}
-      <div id="pmeta"><p class="hint">Click a pin. Modes come from the chip table; apply uses <code>pin.configure</code>.</p></div>
+      <div id="pmeta"><p class="hint">Click a pin. Analog voltage uses ADC mode (ADC1 only). Modes come from the chip table; apply uses <code>pin.configure</code>.</p></div>
       <p>Live: <code id="plive">—</code></p>
-      <div class="row">
-        <div><label for="pgpio">GPIO</label><input id="pgpio" type="number" inputmode="numeric"></div>
-        <div><label for="pmode">Mode</label><select id="pmode"><option>out</option><option>in</option><option>pwm</option><option>adc</option><option>disabled</option></select></div>
+      <div class="gauge" id="pgauge" hidden><span class="track"><i></i></span><span class="n" id="praw"></span></div>
+      <div id="pform" hidden>
+        <input id="pgpio" type="hidden">
+        <input id="pmode" type="hidden" value="disabled">
+        <label>Mode</label>
+        <div class="modes" id="pmodes" role="group" aria-label="Pin mode"></div>
+        <p class="hint" id="pmodehint"></p>
+        <div class="field">
+          <label for="pname">Name</label>
+          <input id="pname" value="gpio_4" autocomplete="off">
+          <p class="hint">Friendly label for MQTT and logs. The GPIO number stays the one you clicked.</p>
+        </div>
+        <div class="field" id="prow-boot" hidden>
+          <label>Power-on level</label>
+          <div class="modes" id="pbootg" role="group" aria-label="Power-on level">
+            <button type="button" data-v="0" class="on">Low</button>
+            <button type="button" data-v="1">High</button>
+          </div>
+          <input id="pboot" type="hidden" value="0">
+          <p class="hint">Level written when you Apply, and again after reboot. Use Set HIGH/LOW for a live change that is not the saved boot value.</p>
+        </div>
+        <div id="prow-pwm" hidden>
+          <div class="row">
+            <div class="field">
+              <label for="pduty">Duty (0–1000)</label>
+              <input id="pduty" type="number" inputmode="numeric" min="0" max="1000" value="0">
+              <p class="hint">On-time. 0 = off, 500 = 50%, 1000 = full. Apply saves this as the boot duty.</p>
+            </div>
+            <div class="field">
+              <label for="phz">Frequency (Hz)</label>
+              <input id="phz" type="number" inputmode="numeric" min="50" max="20000" value="1000">
+              <p class="hint">50–20000 Hz. Every PWM pin shares one timer — last Apply sets the frequency for all of them.</p>
+            </div>
+          </div>
+        </div>
+        <div class="field" id="prow-deb" hidden>
+          <label for="pdeb">Debounce (ms)</label>
+          <input id="pdeb" type="number" inputmode="numeric" min="0" max="500" value="50">
+          <p class="hint">After an edge, ignore further changes for this many milliseconds (0–500). 0 reports every interrupt. Mechanical buttons: 20–50.</p>
+        </div>
+        <div id="padc" hidden>
+          <div class="row">
+            <div class="field">
+              <label for="psamp">Sample (ms)</label>
+              <input id="psamp" type="number" inputmode="numeric" min="20" max="1000" value="50">
+              <p class="hint">How often to read the pin (20–1000). Faster uses more CPU and can chatter on MQTT if the threshold is low.</p>
+            </div>
+            <div class="field">
+              <label for="physt">Publish threshold (mV)</label>
+              <input id="physt" type="number" inputmode="numeric" min="5" max="500" value="20">
+              <p class="hint">Only publish when the filtered voltage moves this far from the last sent value (5–500). Stops Wi-Fi noise flooding MQTT.</p>
+            </div>
+          </div>
+          <div class="field">
+            <label for="psmooth">Smooth (%)</label>
+            <input id="psmooth" type="number" inputmode="numeric" min="0" max="90" value="70">
+            <p class="hint">How much of the previous filtered millivolt reading to keep (0–90). 70 = 70% old + 30% new. 0 = raw (noisier).</p>
+          </div>
+        </div>
+        <div class="checkfield" id="prow-pull" hidden>
+          <label class="check"><input type="checkbox" id="ppull"> Internal pull-up</label>
+          <p class="hint" id="ppullhint">Holds a floating pin at 3.3 V through an on-chip resistor. Turn off if you already have an external pull or a voltage source. GPIO 34–39 have no internal pull.</p>
+        </div>
+        <div class="checkfield" id="prow-inv" hidden>
+          <label class="check"><input type="checkbox" id="pinvert"> Invert logic</label>
+          <p class="hint" id="pinvhint"></p>
+        </div>
+        <button class="act" type="button" id="pcfg">Apply</button>
+        <button class="act sec" type="button" id="pon" hidden>Set HIGH</button>
+        <button class="act sec" type="button" id="poff" hidden>Set LOW</button>
       </div>
-      <div class="row">
-        <div><label for="pname">Name</label><input id="pname" value="gpio_4" autocomplete="off"></div>
-        <div><label for="pboot">Boot level / PWM duty 0-1000</label><input id="pboot" type="number" inputmode="numeric" value="0"></div>
-      </div>
-      <label class="check"><input type="checkbox" id="ppull"> pull-up</label>
-      <label class="check"><input type="checkbox" id="pinvert"> invert output</label>
-      <button class="act" type="button" id="pcfg">Validate and apply</button>
-      <button class="act sec" type="button" id="pon">Set 1</button>
-      <button class="act sec" type="button" id="poff">Set 0</button>
+    </div>
     </div>`;
     document.getElementById("pfilts").onclick=e=>{
       const b=e.target.closest("button[data-f]");

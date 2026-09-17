@@ -19,7 +19,7 @@ Kconfig (`main/Kconfig.projbuild`):
 - `CONFIG_RUNTIME_WIFI_FAIL_AP_MS` (default 60000)
 - `CONFIG_RUNTIME_HEALTHY_CLEAR_MS` (default 30000)
 
-UART console commands: `status`, `ota`, `name [new_name]`, `reboot`, `factory_reset`, `wifi_clear`, `recovery_ap`. Windows flashing: [flash_tool_README.md](flash_tool_README.md).
+UART console: `status`, `ota`, `name [new_name]`, `reboot`, `factory_reset`, `wifi_clear`, `recovery_ap`, plus `hello` / `bye` / `hydrate` and JSON lines (see [serial_session_README.md](../../components/serial_session/serial_session_README.md)). Windows flashing: [flash_tool_README.md](flash_tool_README.md).
 
 RTC_NOINIT crash counter (`s_rtc_crash`) is not in NVS.
 
@@ -36,6 +36,7 @@ RTC_NOINIT crash counter (`s_rtc_crash`) is not in NVS.
 [mqtt_manager_README.md](../../components/mqtt_manager/mqtt_manager_README.md),
 [provisioning_README.md](../../components/provisioning/provisioning_README.md),
 [ota_manager_README.md](../../components/ota_manager/ota_manager_README.md),
+[serial_session_README.md](../../components/serial_session/serial_session_README.md),
 [io_gpio_README.md](../../components/io_gpio/io_gpio_README.md).
 
 ## Used by

@@ -29,6 +29,7 @@
 #include "runtime_version.hpp"
 #include "security.hpp"
 #include "sdkconfig.h"
+#include "serial_session.hpp"
 #include "state_registry.hpp"
 #include "telemetry.hpp"
 #include "web_server.hpp"
@@ -208,11 +209,10 @@ static int cmd_name(int argc, char** argv) {
 }
 
 static void start_console() {
-    esp_console_repl_t* repl = nullptr;
-    esp_console_repl_config_t repl_cfg = ESP_CONSOLE_REPL_CONFIG_DEFAULT();
-    repl_cfg.prompt = "de-esp32>";
-    esp_console_dev_uart_config_t uart_cfg = ESP_CONSOLE_DEV_UART_CONFIG_DEFAULT();
-    ESP_ERROR_CHECK(esp_console_new_repl_uart(&uart_cfg, &repl_cfg, &repl));
+    esp_console_config_t cfg = ESP_CONSOLE_CONFIG_DEFAULT();
+    cfg.max_cmdline_length = 512;
+    ESP_ERROR_CHECK(esp_console_init(&cfg));
+    esp_console_register_help_command();
     const esp_console_cmd_t cmds[] = {
         {.command = "status", .help = "Print identity and network", .func = cmd_status},
         {.command = "ota", .help = "Print OTA slot status", .func = cmd_ota},
@@ -225,7 +225,8 @@ static void start_console() {
     for (const auto& c : cmds) {
         esp_console_cmd_register(&c);
     }
-    ESP_ERROR_CHECK(esp_console_start_repl(repl));
+    ESP_ERROR_CHECK(runtime::serial_session_init());
+    ESP_ERROR_CHECK(runtime::serial_session_start());
 }
 
 extern "C" void app_main(void) {

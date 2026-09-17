@@ -20,7 +20,7 @@ Unprovisioned boot blinks the onboard LED. Physical recovery uses the BOOT butto
 
 ## Used by
 
-boot orchestrator (LED + button tasks), web hardware tab.
+boot orchestrator (LED + button tasks), web hardware tab, Node-RED pinout ([nodered_README.md](../../docs/features/nodered_README.md)).
 
 ## How to update and maintain
 

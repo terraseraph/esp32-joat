@@ -5,6 +5,7 @@
 
 #include "lwip/ip4_addr.h"
 
+#include "board_profiles.hpp"
 #include "config_manager.hpp"
 #include "device_identity.hpp"
 #include "esp_event.h"
@@ -376,10 +377,15 @@ void network_start_mdns() {
         {"id", device_id()},
         {"name", device_name()},
         {"fw", RUNTIME_VERSION},
+        {"board", board_profile().id},
     };
-    mdns_service_add(nullptr, "_http", "_tcp", 80, txt, sizeof(txt) / sizeof(txt[0]));
+    const size_t ntxt = sizeof(txt) / sizeof(txt[0]);
+    mdns_service_add(nullptr, "_http", "_tcp", 80, txt, ntxt);
+    if (mdns_service_add(nullptr, "_de-esp32", "_tcp", 80, txt, ntxt) != ESP_OK) {
+        ESP_LOGW(TAG, "mDNS _de-esp32._tcp add failed");
+    }
     s_mdns = true;
-    ESP_LOGI(TAG, "mDNS %s.local _http._tcp:80", hostname());
+    ESP_LOGI(TAG, "mDNS %s.local _http._tcp + _de-esp32._tcp:80", hostname());
 }
 
 void network_mdns_refresh_identity() {
@@ -388,6 +394,7 @@ void network_mdns_refresh_identity() {
     }
     mdns_instance_name_set(device_name());
     mdns_service_txt_item_set("_http", "_tcp", "name", device_name());
+    mdns_service_txt_item_set("_de-esp32", "_tcp", "name", device_name());
 }
 
 void on_identity_rename(const char*, cJSON*, void*) { network_mdns_refresh_identity(); }

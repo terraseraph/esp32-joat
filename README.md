@@ -40,6 +40,8 @@ Once the board is on Wi-Fi, find it and OTA without USB:
 
 On first boot join SoftAP `esp32-<last6>` (open, no password). The phone should show **Sign in to network** and open the portal; otherwise go to `http://192.168.4.1`. Set an AP password from the Network tab if you want; factory reset makes it open again.
 
+Node-RED (same LAN as a provisioned board): see [docs/features/nodered_README.md](docs/features/nodered_README.md).
+
 ## Host test (no hardware)
 
 ```powershell
@@ -51,4 +53,5 @@ python test/test_capability_spec.py
 - `main/` — boot orchestrator
 - `components/` — one IDF component per feature (`<name>_README.md` beside the code)
 - `web/dist/index.html` — embedded UI
+- `nodered/node-red-contrib-de-esp32/` — Node-RED palette (not part of the IDF build)
 - `partitions.csv` — A/B OTA slots; apply from the System tab or `ota.apply`

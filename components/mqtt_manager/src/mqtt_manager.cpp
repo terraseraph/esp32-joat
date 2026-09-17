@@ -11,6 +11,7 @@
 #include "event_bus.hpp"
 #include "json_util.hpp"
 #include "mqtt_client.h"
+#include "runtime_status.hpp"
 #include "runtime_version.hpp"
 
 static const char* TAG = "mqtt";
@@ -84,7 +85,8 @@ const MqttTopicDef kMqttTopics[] = {
     {"availability", false, true, true, "LWT retained online / offline"},
     {"status", false, true, true, "Retained identity snapshot"},
     {"telemetry", false, true, false, "Periodic diagnostics"},
-    {"io", false, true, false, "Live GPIO/PWM; same {topic,data} JSON as WebSocket"},
+    {"io", false, true, false,
+     "Live per-pin GPIO/PWM/ADC {topic,data} JSON (QoS 1); hydrate burst on connect"},
     {"events", false, true, false, "Command replies (corr echoed)"},
     {"api", false, true, true, "Retained pointer at OpenAPI + command topic"},
 };
@@ -145,6 +147,7 @@ static void mqtt_event_handler(void*, esp_event_base_t, int32_t event_id, void* 
     switch (static_cast<esp_mqtt_event_id_t>(event_id)) {
         case MQTT_EVENT_CONNECTED: {
             s_connected = true;
+            RuntimeStatus::instance().set_live_mqtt(true);
             s_reconnects++;
             ESP_LOGI(TAG, "connected");
             char t[128];
@@ -162,10 +165,12 @@ static void mqtt_event_handler(void*, esp_event_base_t, int32_t event_id, void* 
             }
             mqtt_publish_status();
             mqtt_publish_discovery();
+            io_emit_snapshot();
             break;
         }
         case MQTT_EVENT_DISCONNECTED:
             s_connected = false;
+            RuntimeStatus::instance().set_live_mqtt(false);
             snprintf(s_last_err, sizeof(s_last_err), "disconnected");
             ESP_LOGW(TAG, "disconnected");
             break;
@@ -223,9 +228,6 @@ void on_io(const char* bus_topic, cJSON* payload, void*) {
     if (!bus_topic || !s_client || !s_connected) {
         return;
     }
-    if (strncmp(bus_topic, "io/adc", 6) == 0) {
-        return;
-    }
     cJSON* wrap = cJSON_CreateObject();
     cJSON_AddStringToObject(wrap, "topic", bus_topic);
     if (payload) {
@@ -238,7 +240,7 @@ void on_io(const char* bus_topic, cJSON* payload, void*) {
     }
     char t[128];
     topic(t, sizeof(t), "io");
-    int msg_id = esp_mqtt_client_publish(s_client, t, printed, 0, 0, 0);
+    int msg_id = esp_mqtt_client_publish(s_client, t, printed, 0, 1, 0);
     cJSON_free(printed);
     if (msg_id < 0) {
         s_pub_fail++;
@@ -323,6 +325,7 @@ void mqtt_stop() {
         s_client = nullptr;
     }
     s_connected = false;
+    RuntimeStatus::instance().set_live_mqtt(false);
 }
 
 bool mqtt_connected() { return s_connected; }

@@ -15,5 +15,8 @@ CMakeFiles/
 *.swp
 .DS_Store
 web/node_modules/
+nodered/**/node_modules/
 tools/flash_state.json
 tools/lan_state.json
+tools/nodered_state.json
+nodered/**/*.tgz

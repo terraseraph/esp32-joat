@@ -18,6 +18,7 @@
 #include "provisioning.hpp"
 #include "runtime_status.hpp"
 #include "runtime_version.hpp"
+#include "state_registry.hpp"
 
 static const char* TAG = "cmd";
 
@@ -93,6 +94,24 @@ esp_err_t persist_pin(cJSON* pin) {
     return err;
 }
 
+int clamp_int(int v, int lo, int hi) {
+    if (v < lo) {
+        return lo;
+    }
+    if (v > hi) {
+        return hi;
+    }
+    return v;
+}
+
+void set_num(cJSON* o, const char* key, int v) {
+    if (!o || !key) {
+        return;
+    }
+    cJSON_DeleteItemFromObjectCaseSensitive(o, key);
+    cJSON_AddNumberToObject(o, key, v);
+}
+
 cJSON* apply_one_pin(cJSON* pin, bool persist) {
     int gpio = json_int(pin, "gpio", -1);
     const char* mode = json_str(pin, "mode", "disabled");
@@ -106,10 +125,17 @@ cJSON* apply_one_pin(cJSON* pin, bool persist) {
     } else if (strcmp(mode, "out") == 0 || strcmp(mode, "in") == 0) {
         io_pwm_release(gpio);
         io_adc_release(gpio);
+        int debounce_ms = 50;
+        if (strcmp(mode, "in") == 0) {
+            debounce_ms = clamp_int(json_int(pin, "debounce_ms", 50), 0, 500);
+            set_num(pin, "debounce_ms", debounce_ms);
+        } else {
+            cJSON_DeleteItemFromObjectCaseSensitive(pin, "debounce_ms");
+        }
         rc = io_gpio_configure(gpio, strcmp(mode, "out") == 0, json_bool(pin, "pull_up", false),
                                json_bool(pin, "pull_down", false), json_bool(pin, "invert", false),
                                json_int(pin, "boot", 0), json_bool(pin, "irq", strcmp(mode, "in") == 0),
-                               err, sizeof(err));
+                               debounce_ms, err, sizeof(err));
     } else if (strcmp(mode, "pwm") == 0) {
         io_gpio_release(gpio);
         io_adc_release(gpio);
@@ -118,7 +144,13 @@ cJSON* apply_one_pin(cJSON* pin, bool persist) {
     } else if (strcmp(mode, "adc") == 0) {
         io_gpio_release(gpio);
         io_pwm_release(gpio);
-        rc = io_adc_configure(gpio, err, sizeof(err));
+        int sample_ms = clamp_int(json_int(pin, "sample_ms", 50), 20, 1000);
+        int hysteresis_mv = clamp_int(json_int(pin, "hysteresis_mv", 20), 5, 500);
+        int smooth = clamp_int(json_int(pin, "smooth", 70), 0, 90);
+        set_num(pin, "sample_ms", sample_ms);
+        set_num(pin, "hysteresis_mv", hysteresis_mv);
+        set_num(pin, "smooth", smooth);
+        rc = io_adc_configure(gpio, sample_ms, hysteresis_mv, smooth, err, sizeof(err));
     } else {
         return err_result(pin, "unknown mode");
     }
@@ -137,6 +169,34 @@ cJSON* apply_one_pin(cJSON* pin, bool persist) {
 esp_err_t command_router_init() {
     ESP_LOGI(TAG, "init");
     return ESP_OK;
+}
+
+int io_emit_snapshot() {
+    cJSON* snap = state_snapshot();
+    if (!snap) {
+        return 0;
+    }
+    int n = 0;
+    for (cJSON* it = snap->child; it; it = it->next) {
+        if (!it->string) {
+            continue;
+        }
+        const char* topic = nullptr;
+        if (strncmp(it->string, "gpio_", 5) == 0) {
+            topic = "io/gpio";
+        } else if (strncmp(it->string, "pwm_", 4) == 0) {
+            topic = "io/pwm";
+        } else if (strncmp(it->string, "adc_", 4) == 0) {
+            topic = "io/adc";
+        }
+        if (!topic) {
+            continue;
+        }
+        event_bus_publish(topic, it);
+        n++;
+    }
+    cJSON_Delete(snap);
+    return n;
 }
 
 namespace {
@@ -170,6 +230,11 @@ const CmdInfo kCmds[] = {
     {"ota.apply", "Pull firmware from URL into the inactive slot",
      "{\"cmd\":\"ota.apply\",\"url\":\"http://192.168.1.10/de_esp32_runtime.bin\"}"},
     {"ota.rollback", "Reboot into the previous OTA slot", "{\"cmd\":\"ota.rollback\"}"},
+    {"io.hydrate", "Re-emit each pin on the event bus (MQTT/WS/serial)",
+     "{\"cmd\":\"io.hydrate\"}"},
+    {"serial.hello", "Start UART IO session; returns identity (no pin dump)",
+     "{\"cmd\":\"serial.hello\"}"},
+    {"serial.bye", "Stop UART IO session", "{\"cmd\":\"serial.bye\"}"},
 };
 
 }  // namespace
@@ -391,6 +456,30 @@ cJSON* command_dispatch(cJSON* req) {
             return err_result(req, err[0] ? err : esp_err_to_name(rc));
         }
         return r;
+    }
+    if (strcmp(cmd, "io.hydrate") == 0) {
+        int n = io_emit_snapshot();
+        cJSON* result = cJSON_CreateObject();
+        cJSON_AddNumberToObject(result, "pins", n);
+        return ok_result(req, result);
+    }
+    if (strcmp(cmd, "serial.hello") == 0) {
+        RuntimeStatus::instance().set_live_serial(true);
+        cJSON* result = cJSON_CreateObject();
+        cJSON_AddNumberToObject(result, "v", 1);
+        cJSON_AddStringToObject(result, "id", device_id());
+        cJSON_AddStringToObject(result, "name", device_name());
+        cJSON_AddStringToObject(result, "topic_id", device_topic_id());
+        cJSON_AddStringToObject(result, "host", hostname());
+        cJSON_AddStringToObject(result, "fw", RUNTIME_VERSION);
+        cJSON_AddNumberToObject(result, "heap", static_cast<double>(esp_get_free_heap_size()));
+        return ok_result(req, result);
+    }
+    if (strcmp(cmd, "serial.bye") == 0) {
+        RuntimeStatus::instance().set_live_serial(false);
+        cJSON* result = cJSON_CreateObject();
+        cJSON_AddBoolToObject(result, "session", false);
+        return ok_result(req, result);
     }
     return err_result(req, "unknown cmd");
 }

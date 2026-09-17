@@ -12,11 +12,11 @@ Find the device, configure pins from the Hardware pinout, provision, view logs, 
 
 - `GET /` `/index.html` — UI
 - Unmatched GET (captive probes) — 302 to `http://192.168.4.1/` with a body (iOS needs the body)
-- `GET /api/v1/openapi.json` — OpenAPI 3.0 generated from `kRoutes` + `command_catalog()` + `mqtt_topics_json()`. CORS `*`. Vendor extensions: `x-commands`, `x-mqtt`, `x-discovery`
+- `GET /api/v1/openapi.json` — OpenAPI 3.0 generated from `kRoutes` + `command_catalog()` + `mqtt_topics_json()`. CORS `*`. Vendor extensions: `x-commands`, `x-mqtt`, `x-discovery` (`mdns`, `service=_http._tcp`, `de_service=_de-esp32._tcp`, `board`, `port`)
 - `GET /api/v1/status|hardware|pins|network|network/scan|mqtt|logs|telemetry|ota`
   - `hardware` — board profile, header pinout, buses, `chip` / `chip_info`, SoC `pins` capabilities
 - `POST /api/v1/command|pins|network/wifi|mqtt|ota|system/reboot|system/factory_reset`
-- `GET /api/v1/ws` — WebSocket; JSON commands in, event bus frames out. No frames (and no ADC live sample) when `live_viewers()==0`. Browser closes the socket on hidden tabs.
+- `GET /api/v1/ws` — WebSocket; JSON commands in, event bus frames out. No frames when `live_viewers()==0`. ADC live-sample runs while `live_sinks()>0` (WS, MQTT, or serial session). Browser closes the socket on hidden tabs.
 
 Assets: `web/dist/index.html` via CMake `EMBED_FILES`.
 
@@ -26,7 +26,7 @@ command_router, identity, network, mqtt, logging, telemetry, ota, capability, bo
 
 ## Used by
 
-Humans (browser). Boot starts the server.
+Humans (browser). Boot starts the server. Node-RED palette (`docs/features/nodered_README.md`) is an HTTP/WS/MQTT client of this API — it does not live in the binary.
 
 ## How to update and maintain
 
@@ -41,4 +41,4 @@ Flash, join AP, open 192.168.4.1, exercise each tab. `GET /api/v1/openapi.json` 
 
 ## Known limits
 
-Unauthenticated on LAN. Max 4 WS clients. `httpd_ws_send_frame_async` sends immediately in this IDF. Captive portal needs extra HTTP sockets (`max_open_sockets` 13, `CONFIG_LWIP_MAX_SOCKETS` 20). OpenAPI is compact (no full JSON Schema per path) so it fits RAM. ADC live samples are not MQTT-flooded.
+Unauthenticated on LAN. Max 4 WS clients. `httpd_ws_send_frame_async` sends immediately in this IDF. Captive portal needs extra HTTP sockets (`max_open_sockets` 13, `CONFIG_LWIP_MAX_SOCKETS` 20). OpenAPI is compact (no full JSON Schema per path) so it fits RAM. Live ADC is hysteresis-gated, not a raw 4 Hz MQTT flood.

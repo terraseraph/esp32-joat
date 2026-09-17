@@ -1,0 +1,501 @@
+<script type="text/javascript">
+(function() {
+  window.DeEsp32 = window.DeEsp32 || {};
+
+  DeEsp32.esc = function(s) {
+    return String(s == null ? "" : s)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/"/g, "&quot;");
+  };
+
+  DeEsp32.pinByGpio = function(hw, gpio) {
+    const pins = (hw && hw.pins) || [];
+    const g = Number(gpio);
+    for (let i = 0; i < pins.length; i++) {
+      if (Number(pins[i].gpio) === g) {
+        return pins[i];
+      }
+    }
+    return null;
+  };
+
+  DeEsp32.padAllowed = function(pin, mode) {
+    if (!pin || pin.flash) {
+      return false;
+    }
+    if (mode === "out") {
+      return !!pin.output && !pin.input_only;
+    }
+    if (mode === "in") {
+      return !!pin.input;
+    }
+    if (mode === "pwm") {
+      return !!pin.pwm && !pin.input_only;
+    }
+    if (mode === "adc") {
+      return !!pin.adc1;
+    }
+    return false;
+  };
+
+  DeEsp32.MODE_LAB = { in: "In", out: "Out", pwm: "PWM", adc: "ADC" };
+
+  DeEsp32.allowedModes = function(pin, family) {
+    if (!pin || pin.flash) {
+      return [];
+    }
+    const m = [];
+    if (pin.input) {
+      m.push("in");
+    }
+    if (pin.output && !pin.input_only) {
+      m.push("out");
+      if (pin.pwm) {
+        m.push("pwm");
+      }
+    }
+    if (pin.adc1) {
+      m.push("adc");
+    }
+    if (family === "in") {
+      return m.filter(function(x) { return x === "in" || x === "adc"; });
+    }
+    if (family === "out") {
+      return m.filter(function(x) { return x === "out" || x === "pwm"; });
+    }
+    return m;
+  };
+
+  DeEsp32.capBadges = function(p) {
+    if (!p) {
+      return "";
+    }
+    const a = [];
+    if (p.flash) {
+      a.push(["mute", "flash", "SPI flash — reserved"]);
+    } else if (p.input_only) {
+      a.push(["in", "in-only", "Input only"]);
+    } else if (p.output) {
+      a.push(["io", "io", "Digital in/out"]);
+    }
+    if (p.adc1) {
+      a.push(["adc", "A1", "ADC1 analog — ADC mode, works with Wi-Fi"]);
+    } else if (p.adc2) {
+      a.push(["warn", "A2", "ADC2 analog unavailable while Wi-Fi is on"]);
+    }
+    if (p.pwm && !p.flash) {
+      a.push(["pwm", "PWM", "LEDC PWM"]);
+    }
+    if (p.touch) {
+      a.push(["touch", "T" + (p.touch_channel >= 0 ? p.touch_channel : ""), "Capacitive touch"]);
+    }
+    if (p.dac) {
+      a.push(["dac", "DAC", "DAC (not driven in this firmware)"]);
+    }
+    if (p.strap) {
+      a.push(["warn", "strap", "Boot strapping pin"]);
+    }
+    if (p.role) {
+      a.push(["role", p.role, p.role]);
+    }
+    return a.map(function(row) {
+      return '<span class="b ' + row[0] + '" title="' + DeEsp32.esc(row[2] || "") + '">' +
+        DeEsp32.esc(row[1]) + "</span>";
+    }).join("");
+  };
+
+  DeEsp32.syncPinForm = function(hw, family) {
+    const gpioRaw = $("#node-input-gpio").val();
+    const gpio = gpioRaw === "" || gpioRaw == null ? null : Number(gpioRaw);
+    const pin = gpio == null ? null : DeEsp32.pinByGpio(hw, gpio);
+    const modes = DeEsp32.allowedModes(pin, family);
+    const $mode = $("#node-input-pinMode");
+    if ($mode.length) {
+      const cur = $mode.val();
+      $mode.empty();
+      if (!modes.length) {
+        $mode.append($("<option>").val(family === "out" ? "out" : "in").text(family === "out" ? "Out" : "In"));
+      } else {
+        modes.forEach(function(m) {
+          $mode.append($("<option>").val(m).text(DeEsp32.MODE_LAB[m] || m));
+        });
+        $mode.val(modes.indexOf(cur) >= 0 ? cur : modes[0]);
+      }
+    }
+    const mode = $mode.length ? $mode.val() : (family === "out" ? "out" : "in");
+    const $meta = $("#de-esp32-pmeta");
+    if ($meta.length) {
+      if (gpio == null) {
+        $meta.html('<p class="de-esp32-hint">Click a pin. Badges are chip capabilities (io, PWM, A1…), not the live assignment.</p>');
+      } else if (!pin) {
+        $meta.html('<p class="de-esp32-hint">GPIO ' + gpio + " — no capability row.</p>");
+      } else {
+        const adcCh = pin.adc1 ? " · ADC1 ch " + pin.adc_channel
+          : (pin.adc2 ? " · ADC2 ch " + pin.adc_channel : "");
+        const analog = pin.adc1
+          ? '<p class="de-esp32-hint">Analog voltage: Mode ADC (ADC1, ~0–3.3 V). Digital In is high/low only.</p>'
+          : (pin.adc2
+            ? '<p class="de-esp32-hint">ADC2 analog is unavailable while Wi-Fi is on. Use GPIO 32–39 (A1).</p>'
+            : "");
+        $meta.html(
+          "<p><strong>GPIO " + gpio + "</strong> " + DeEsp32.capBadges(pin) + "</p>" +
+          '<p class="de-esp32-hint">' + DeEsp32.esc(pin.notes || "") + DeEsp32.esc(adcCh) +
+          (pin.touch ? " · touch T" + pin.touch_channel : "") + "</p>" + analog
+        );
+      }
+    }
+    const show = function(sel, on) { $(sel).toggle(!!on); };
+    show("#de-esp32-row-deb", mode === "in");
+    show("#de-esp32-row-adc", mode === "adc");
+    show("#de-esp32-row-boot", mode === "out");
+    show("#de-esp32-row-pwm", mode === "pwm");
+    show("#de-esp32-row-pull", (mode === "in" || mode === "out") && pin && pin.pull);
+    show("#de-esp32-row-inv", mode === "in" || mode === "out");
+    $("#de-esp32-invhint").text(mode === "out"
+      ? "Logical 1 drives the pin LOW (active-low LED or relay)."
+      : "Report electrical LOW as 1 (active-low button or sensor).");
+  };
+
+  DeEsp32.renderPinout = function($el, hw, opts) {
+    opts = opts || {};
+    const mode = opts.mode || "out";
+    const selected = opts.selected === "" || opts.selected == null ? null : Number(opts.selected);
+    const left = (hw && hw.header && hw.header.left) || [];
+    const right = (hw && hw.header && hw.header.right) || [];
+    const n = Math.max(left.length, right.length, 1);
+
+    function padHtml(p, side) {
+      if (!p) {
+        return '<span class="de-esp32-pad empty"></span>';
+      }
+      const has = p.gpio != null;
+      const g = has ? Number(p.gpio) : null;
+      const info = has ? DeEsp32.pinByGpio(hw, g) : null;
+      const allowed = has && DeEsp32.padAllowed(info, mode);
+      const cls = [
+        "de-esp32-pad",
+        side,
+        p.kind !== "gpio" ? "pwr" : "",
+        allowed ? "ok" : "no",
+        has && selected === g ? "sel" : "",
+      ].join(" ");
+      const label = has ? ("GPIO " + g) : p.silk;
+      const caps = has ? DeEsp32.capBadges(info) : ('<span class="b mute">' + DeEsp32.esc(p.kind || "") + "</span>");
+      const title = has ? ((info && info.notes) || "") : (p.kind || "");
+      return '<button type="button" class="' + cls + '" data-gpio="' + (has ? g : "") +
+        '" data-kind="' + DeEsp32.esc(p.kind) + '" data-silk="' + DeEsp32.esc(p.silk) +
+        '" ' + (allowed ? "" : "disabled ") + 'title="' + DeEsp32.esc(title) + '">' +
+        '<span class="silk">' + DeEsp32.esc(label) + '</span>' +
+        '<span class="caps">' + caps + "</span></button>";
+    }
+
+    let rows = "";
+    for (let i = 0; i < n; i++) {
+      rows += '<div class="de-esp32-row">' + padHtml(left[i], "l") +
+        '<i class="hole"></i><i class="hole"></i>' + padHtml(right[i], "r") + "</div>";
+    }
+    const title = DeEsp32.esc((hw && (hw.board_name || hw.board_id)) || "ESP32");
+    $el.html(
+      '<div class="de-esp32-pinout"><div class="mod">' + title +
+        '</div>' + rows + '<div class="usb">USB</div></div>'
+    );
+    $el.find(".de-esp32-pad.ok").on("click", function() {
+      const raw = this.getAttribute("data-gpio");
+      if (raw === "" || raw == null) {
+        return;
+      }
+      if (opts.onSelect) {
+        opts.onSelect(Number(raw), this.getAttribute("data-silk"), this.getAttribute("data-kind"));
+      }
+    });
+  };
+
+  DeEsp32.loadHardware = function(host, port) {
+    return $.getJSON("de-esp32/hardware", { host: host, port: port || 80 });
+  };
+
+  DeEsp32.bindGpioEditor = function(family, boxId, refreshId) {
+    let hwCache = null;
+    function paint() {
+      const $box = $("#" + boxId);
+      if (!hwCache) {
+        return;
+      }
+      function onSelect(gpio) {
+        $("#node-input-gpio").val(gpio);
+        if (!$("#node-input-pinName").val()) {
+          $("#node-input-pinName").val("gpio_" + gpio);
+        }
+        DeEsp32.syncPinForm(hwCache, family);
+        DeEsp32.renderPinout($box, hwCache, {
+          mode: $("#node-input-pinMode").val() || (family === "out" ? "out" : "in"),
+          selected: gpio,
+          onSelect: onSelect,
+        });
+      }
+      DeEsp32.syncPinForm(hwCache, family);
+      DeEsp32.renderPinout($box, hwCache, {
+        mode: $("#node-input-pinMode").val() || (family === "out" ? "out" : "in"),
+        selected: $("#node-input-gpio").val(),
+        onSelect: onSelect,
+      });
+    }
+    function refresh() {
+      const $box = $("#" + boxId);
+      const dev = RED.nodes.node($("#node-input-device").val());
+      if (!dev || !dev.host) {
+        $box.html('<p class="de-esp32-hint">Pick a device with a host first.</p>');
+        return;
+      }
+      $box.html('<p class="de-esp32-hint">loading pin map…</p>');
+      DeEsp32.loadHardware(dev.host, dev.port).done(function(hw) {
+        hwCache = hw;
+        paint();
+      }).fail(function(xhr) {
+        const err = (xhr.responseJSON && xhr.responseJSON.error) || xhr.statusText || "failed";
+        $box.html('<p class="de-esp32-hint">' + DeEsp32.esc(err) + "</p>");
+      });
+    }
+    $("#node-input-device").on("change", refresh);
+    $("#node-input-pinMode").on("change", paint);
+    $("#" + refreshId).on("click", refresh);
+    setTimeout(refresh, 0);
+  };
+
+  RED.nodes.registerType("de-esp32-device", {
+    category: "config",
+    defaults: {
+      name: { value: "" },
+      host: { value: "", required: true },
+      port: { value: 80, required: true, validate: RED.validators.number() },
+      deviceId: { value: "" },
+      deviceName: { value: "" },
+      topicId: { value: "" },
+      mqttRoot: { value: "devices" },
+      broker: { type: "mqtt-broker", required: false },
+    },
+    label: function() {
+      return this.deviceName || this.name || this.host || "de-esp32";
+    },
+    oneditprepare: function() {
+      const node = this;
+      function fill(d) {
+        if (!d) {
+          return;
+        }
+        if (d.ip) {
+          $("#node-config-input-host").val(d.ip);
+        }
+        if (d.id) {
+          $("#node-config-input-deviceId").val(d.id);
+        }
+        if (d.name) {
+          $("#node-config-input-deviceName").val(d.name);
+        }
+        if (d.topic_id) {
+          $("#node-config-input-topicId").val(d.topic_id);
+        }
+        if (d.mqtt_root) {
+          $("#node-config-input-mqttRoot").val(d.mqtt_root);
+        }
+        $("#de-esp32-scan-msg").text(
+          (d.name || d.id || d.ip) + (d.via ? " (" + d.via + ")" : "")
+        );
+      }
+
+      $("#de-esp32-scan").on("click", function() {
+        const $btn = $(this);
+        $btn.prop("disabled", true);
+        $("#de-esp32-scan-msg").text("scanning…");
+        const broker = $("#node-config-input-broker").val();
+        const q = {
+          timeout: 2500,
+          root: $("#node-config-input-mqttRoot").val() || "devices",
+          host: $("#node-config-input-host").val(),
+        };
+        if (broker && broker !== "_ADD_") {
+          q.broker = broker;
+        }
+        $.getJSON("de-esp32/scan", q)
+          .done(function(res) {
+            const list = (res && res.devices) || [];
+            const $sel = $("#de-esp32-found");
+            $sel.empty();
+            if (!list.length) {
+              $sel.append($("<option>").text("(none found — paste an IP)"));
+              $("#de-esp32-scan-msg").text("none found");
+              return;
+            }
+            $sel.append($("<option>").val("").text("— pick a board —"));
+            list.forEach(function(d, i) {
+              const label = (d.name || d.hostname || d.id || d.ip) +
+                (d.ip ? "  " + d.ip : "") +
+                (d.id ? "  " + d.id : "");
+              $sel.append($("<option>").val(String(i)).text(label));
+            });
+            $sel.data("devices", list);
+            $("#de-esp32-scan-msg").text(list.length + " found");
+            if (list.length === 1) {
+              $sel.val("0");
+              fill(list[0]);
+            }
+          })
+          .fail(function(xhr) {
+            const err = (xhr.responseJSON && xhr.responseJSON.error) || xhr.statusText || "scan failed";
+            $("#de-esp32-scan-msg").text(err);
+          })
+          .always(function() {
+            $btn.prop("disabled", false);
+          });
+      });
+
+      $("#de-esp32-found").on("change", function() {
+        const list = $(this).data("devices") || [];
+        const i = Number($(this).val());
+        if (!Number.isNaN(i) && list[i]) {
+          fill(list[i]);
+        }
+      });
+
+      $("#de-esp32-probe").on("click", function() {
+        const host = $("#node-config-input-host").val();
+        const port = $("#node-config-input-port").val() || 80;
+        $("#de-esp32-scan-msg").text("probing…");
+        $.getJSON("de-esp32/status", { host: host, port: port })
+          .done(function(d) {
+            fill(d);
+          })
+          .fail(function(xhr) {
+            const err = (xhr.responseJSON && xhr.responseJSON.error) || xhr.statusText || "probe failed";
+            $("#de-esp32-scan-msg").text(err);
+          });
+      });
+
+      $("#de-esp32-rename").on("click", function() {
+        const host = $("#node-config-input-host").val();
+        const port = $("#node-config-input-port").val() || 80;
+        const name = ($("#node-config-input-deviceName").val() || "").trim();
+        if (!name) {
+          $("#de-esp32-scan-msg").text("enter a name");
+          return;
+        }
+        $("#de-esp32-scan-msg").text("renaming…");
+        $.ajax({
+          url: "de-esp32/command",
+          method: "POST",
+          contentType: "application/json",
+          data: JSON.stringify({ host: host, port: Number(port), cmd: "identity.set_name", name: name }),
+        })
+          .done(function(res) {
+            if (!res || res.ok === false) {
+              $("#de-esp32-scan-msg").text((res && res.error) || "rename failed");
+              return;
+            }
+            const r = res.result || {};
+            if (r.name) {
+              $("#node-config-input-deviceName").val(r.name);
+            }
+            if (r.topic_id) {
+              $("#node-config-input-topicId").val(r.topic_id);
+            }
+            if (r.id) {
+              $("#node-config-input-deviceId").val(r.id);
+            }
+            $("#de-esp32-scan-msg").text("MQTT topics now " + (r.topic_id || name));
+          })
+          .fail(function(xhr) {
+            const err = (xhr.responseJSON && xhr.responseJSON.error) || xhr.statusText || "rename failed";
+            $("#de-esp32-scan-msg").text(err);
+          });
+      });
+    },
+  });
+})();
+</script>
+
+<style>
+.de-esp32-pinout{font:12px/1.2 system-ui,sans-serif;max-width:420px}
+.de-esp32-pinout .mod,.de-esp32-pinout .usb{
+  text-align:center;padding:4px 0;color:#888;font-weight:600;letter-spacing:.04em
+}
+.de-esp32-row{display:grid;grid-template-columns:1fr 10px 10px 1fr;gap:4px;align-items:center;margin:2px 0}
+.de-esp32-pad{
+  display:flex;flex-direction:column;align-items:flex-start;gap:0;
+  border:1px solid #bbb;border-radius:4px;background:#f7f7f7;padding:3px 6px;cursor:pointer;
+  color:inherit;text-align:left
+}
+.de-esp32-pad.r{align-items:flex-end;text-align:right}
+.de-esp32-pad .silk{font-weight:700;font-size:11px}
+.de-esp32-pad .caps{display:flex;flex-wrap:wrap;gap:2px;margin-top:1px}
+.de-esp32-pad.r .caps{justify-content:flex-end}
+.de-esp32-pad .b{font-size:9px;font-weight:700;border:1px solid #ccc;border-radius:3px;padding:0 3px;line-height:1.45;white-space:nowrap}
+.de-esp32-pad .b.io,.de-esp32-pmeta .b.io{color:#15803d;border-color:#86efac}
+.de-esp32-pad .b.in,.de-esp32-pmeta .b.in{color:#0369a1;border-color:#7dd3fc}
+.de-esp32-pad .b.adc,.de-esp32-pmeta .b.adc{color:#1d4ed8;border-color:#93c5fd}
+.de-esp32-pad .b.pwm,.de-esp32-pmeta .b.pwm{color:#a21caf;border-color:#f0abfc}
+.de-esp32-pad .b.touch,.de-esp32-pmeta .b.touch{color:#0e7490;border-color:#67e8f9}
+.de-esp32-pad .b.dac,.de-esp32-pmeta .b.dac{color:#c2410c;border-color:#fdba74}
+.de-esp32-pad .b.role,.de-esp32-pmeta .b.role{color:#4338ca;border-color:#a5b4fc}
+.de-esp32-pad .b.warn,.de-esp32-pmeta .b.warn{color:#b45309;border-color:#fcd34d}
+.de-esp32-pad .b.mute{color:#6b7280;border-color:#d1d5db}
+.de-esp32-pmeta .b{font-size:10px;font-weight:700;border:1px solid #ccc;border-radius:3px;padding:0 4px;margin-right:3px}
+.de-esp32-pad.pwr{background:#eee;cursor:not-allowed}
+.de-esp32-pad.no{opacity:.45;cursor:not-allowed}
+.de-esp32-pad.ok:hover{border-color:#e67e22}
+.de-esp32-pad.sel{border-color:#e67e22;background:#fdebd0}
+.de-esp32-pinout .hole{width:8px;height:8px;border-radius:50%;background:#333;justify-self:center}
+.de-esp32-hint{color:#888;font-size:12px;margin:6px 0}
+</style>
+
+<script type="text/html" data-template-name="de-esp32-device">
+  <div class="form-row">
+    <label for="node-config-input-host"><i class="fa fa-globe"></i> Host</label>
+    <input type="text" id="node-config-input-host" placeholder="192.168.1.50">
+  </div>
+  <div class="form-row">
+    <label for="node-config-input-port"><i class="fa fa-plug"></i> Port</label>
+    <input type="number" id="node-config-input-port" placeholder="80" style="width:80px">
+    <button type="button" id="de-esp32-probe" class="red-ui-button" style="margin-left:8px">Probe</button>
+    <button type="button" id="de-esp32-scan" class="red-ui-button">Scan</button>
+  </div>
+  <div class="form-row">
+    <label for="de-esp32-found"><i class="fa fa-search"></i> Found</label>
+    <select id="de-esp32-found" style="width:70%">
+      <option>(scan or probe)</option>
+    </select>
+  </div>
+  <div class="form-row">
+    <label for="node-config-input-deviceName"><i class="fa fa-tag"></i> Device name</label>
+    <input type="text" id="node-config-input-deviceName" placeholder="kitchen-relay" maxlength="31">
+    <button type="button" id="de-esp32-rename" class="red-ui-button" style="margin-left:8px">Save on device</button>
+  </div>
+  <div class="form-row">
+    <label for="node-config-input-deviceId"><i class="fa fa-fingerprint"></i> MAC id</label>
+    <input type="text" id="node-config-input-deviceId" placeholder="aabbccddeeff" readonly>
+  </div>
+  <div class="form-row">
+    <label for="node-config-input-topicId"><i class="fa fa-sitemap"></i> Topic id</label>
+    <input type="text" id="node-config-input-topicId" readonly>
+  </div>
+  <div class="form-row">
+    <label for="node-config-input-mqttRoot"><i class="fa fa-folder"></i> MQTT root</label>
+    <input type="text" id="node-config-input-mqttRoot" placeholder="devices">
+  </div>
+  <div class="form-row">
+    <label for="node-config-input-broker"><i class="fa fa-exchange"></i> MQTT broker</label>
+    <input type="text" id="node-config-input-broker">
+  </div>
+  <div class="form-row">
+    <label for="node-config-input-name"><i class="fa fa-tag"></i> Node-RED name</label>
+    <input type="text" id="node-config-input-name" placeholder="optional label">
+  </div>
+  <p class="de-esp32-hint" id="de-esp32-scan-msg">MAC id is stable. Rename changes MQTT topics. Duplicate names collide. MQTT broker is optional — gpio-in uses WebSocket without it. The broker must be deployed before Scan can read retained api topics.</p>
+</script>
+
+<script type="text/html" data-help-name="de-esp32-device">
+  <p>A live de-esp32 board. Identity is the Wi-Fi MAC <code>id</code>, not the name or IP.</p>
+  <p><b>Scan</b> browses mDNS <code>_de-esp32._tcp</code> and <code>_http._tcp</code>, then fingerprints <code>GET /api/v1/status</code>. If an MQTT broker is selected and deployed, retained <code>{root}/+/api</code> is merged in.</p>
+  <p><b>Save on device</b> sends <code>identity.set_name</code>. Two boards with the same name share MQTT topics.</p>
+  <p>Attach an MQTT broker to use <code>{prefix}/io</code> for gpio-in. Otherwise the runtime opens <code>ws://host/api/v1/ws</code>.</p>
+</script>

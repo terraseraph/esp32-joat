@@ -492,6 +492,8 @@ cJSON* openapi_json() {
     cJSON* disc = cJSON_AddObjectToObject(root, "x-discovery");
     cJSON_AddStringToObject(disc, "mdns", hostname());
     cJSON_AddStringToObject(disc, "service", "_http._tcp");
+    cJSON_AddStringToObject(disc, "de_service", "_de-esp32._tcp");
+    cJSON_AddStringToObject(disc, "board", board_profile().id);
     cJSON_AddNumberToObject(disc, "port", 80);
     return root;
 }

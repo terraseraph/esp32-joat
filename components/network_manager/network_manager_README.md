@@ -14,15 +14,15 @@ Unprovisioned boot (AP), provision Wi-Fi, find device (`esp32-xxxxxx.local` or S
 
 SSID = hostname. AP IPv4 192.168.4.1. AP is open until `security.ap_password` is set. DHCP on the AP offers DNS `192.168.4.1` and option 114 captive URI `http://192.168.4.1` so phones show a sign-in sheet.
 
-mDNS: hostname `{hostname}.local`, instance = `device_name()`, service `_http._tcp:80` with TXT `path=/`, `api=/api/v1`, `openapi=/api/v1/openapi.json`, `id={deviceId}`, `name={device_name}`, `fw={version}`. A/AAAA records carry the current STA/AP addresses — do not put IPs in TXT (they go stale). Rename updates instance + `name` TXT via `identity/rename`.
+mDNS: hostname `{hostname}.local`, instance = `device_name()`, services `_http._tcp:80` and `_de-esp32._tcp:80` with TXT `path=/`, `api=/api/v1`, `openapi=/api/v1/openapi.json`, `id={deviceId}`, `name={device_name}`, `fw={version}`, `board={board_profile().id}`. A/AAAA records carry the current STA/AP addresses — do not put IPs in TXT (they go stale). Rename updates instance + `name` TXT on **both** services via `identity/rename`.
 
 ## Depends on
 
-config, identity, security, event_bus, `espressif/mdns`.
+config, identity, security, event_bus, board_profiles, `espressif/mdns`.
 
 ## Used by
 
-boot, command_router, provisioning (DNS is separate), web, telemetry.
+boot, command_router, provisioning (DNS is separate), web, telemetry, Node-RED scan (`docs/features/nodered_README.md`).
 
 ## How to update and maintain
 

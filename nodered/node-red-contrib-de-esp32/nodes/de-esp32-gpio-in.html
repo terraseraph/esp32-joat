@@ -1,0 +1,110 @@
+<script type="text/javascript">
+  RED.nodes.registerType("de-esp32-gpio-in", {
+    category: "de-esp32",
+    color: "#E67E22",
+    defaults: {
+      name: { value: "" },
+      device: { type: "de-esp32-device", required: true },
+      gpio: { value: "", required: true },
+      pinName: { value: "" },
+      pinMode: { value: "in" },
+      configure: { value: true },
+      pullUp: { value: false },
+      invert: { value: false },
+      debounceMs: { value: 50, validate: RED.validators.number() },
+      sampleMs: { value: 50, validate: RED.validators.number() },
+      hysteresisMv: { value: 20, validate: RED.validators.number() },
+      smooth: { value: 70, validate: RED.validators.number() },
+    },
+    inputs: 0,
+    outputs: 1,
+    icon: "font-awesome/fa-sign-in",
+    paletteLabel: "gpio in",
+    label: function() {
+      const d = RED.nodes.node(this.device);
+      const who = d ? (d.deviceName || d.host || "de-esp32") : "de-esp32";
+      const mode = this.pinMode === "adc" ? "ADC" : "GPIO";
+      if (this.gpio === "" || this.gpio == null) {
+        return this.name || ("gpio in " + who);
+      }
+      return this.name || (mode + " " + this.gpio + " ← " + who);
+    },
+    oneditprepare: function() {
+      DeEsp32.bindGpioEditor("in", "de-esp32-pinbox", "de-esp32-pin-refresh");
+    },
+  });
+</script>
+
+<script type="text/html" data-template-name="de-esp32-gpio-in">
+  <div class="form-row">
+    <label for="node-input-device"><i class="fa fa-microchip"></i> Device</label>
+    <input type="text" id="node-input-device">
+  </div>
+  <div class="form-row">
+    <label for="node-input-gpio"><i class="fa fa-circle"></i> GPIO</label>
+    <input type="number" id="node-input-gpio" placeholder="4" style="width:80px">
+    <button type="button" id="de-esp32-pin-refresh" class="red-ui-button" style="margin-left:8px">Reload pinout</button>
+  </div>
+  <div class="form-row">
+    <label for="node-input-pinMode"><i class="fa fa-sliders"></i> Mode</label>
+    <select id="node-input-pinMode" style="width:120px">
+      <option value="in">In</option>
+      <option value="adc">ADC</option>
+    </select>
+  </div>
+  <div class="form-row">
+    <label for="node-input-pinName"><i class="fa fa-tag"></i> Pin name</label>
+    <input type="text" id="node-input-pinName" placeholder="gpio_4">
+  </div>
+  <div class="form-row">
+    <label>&nbsp;</label>
+    <input type="checkbox" id="node-input-configure" style="display:inline-block;width:auto;vertical-align:top">
+    <label for="node-input-configure" style="width:auto">Configure pin on deploy</label>
+  </div>
+  <div id="de-esp32-pmeta"></div>
+  <div class="form-row" id="de-esp32-row-deb">
+    <label for="node-input-debounceMs">Debounce (ms)</label>
+    <input type="number" id="node-input-debounceMs" min="0" max="500" style="width:90px">
+    <p class="de-esp32-hint">After an edge, ignore further changes (0–500). Mechanical buttons: 20–50. 0 reports every interrupt.</p>
+  </div>
+  <div id="de-esp32-row-adc">
+    <div class="form-row">
+      <label for="node-input-sampleMs">Sample (ms)</label>
+      <input type="number" id="node-input-sampleMs" min="20" max="1000" style="width:90px">
+      <p class="de-esp32-hint">How often to read analog (20–1000).</p>
+    </div>
+    <div class="form-row">
+      <label for="node-input-hysteresisMv">Threshold (mV)</label>
+      <input type="number" id="node-input-hysteresisMv" min="5" max="500" style="width:90px">
+      <p class="de-esp32-hint">Only publish when filtered voltage moves this far (5–500).</p>
+    </div>
+    <div class="form-row">
+      <label for="node-input-smooth">Smooth (%)</label>
+      <input type="number" id="node-input-smooth" min="0" max="90" style="width:90px">
+      <p class="de-esp32-hint">Keep this much of the previous mV reading (0–90). 70 = 70% old + 30% new.</p>
+    </div>
+  </div>
+  <div class="form-row" id="de-esp32-row-pull">
+    <label>&nbsp;</label>
+    <input type="checkbox" id="node-input-pullUp" style="display:inline-block;width:auto;vertical-align:top">
+    <label for="node-input-pullUp" style="width:auto">Internal pull-up</label>
+    <p class="de-esp32-hint">Holds a floating pin at 3.3 V. Off if you have an external pull. GPIO 34–39 have no internal pull.</p>
+  </div>
+  <div class="form-row" id="de-esp32-row-inv">
+    <label>&nbsp;</label>
+    <input type="checkbox" id="node-input-invert" style="display:inline-block;width:auto;vertical-align:top">
+    <label for="node-input-invert" style="width:auto">Invert logic</label>
+    <p class="de-esp32-hint" id="de-esp32-invhint"></p>
+  </div>
+  <div id="de-esp32-pinbox"></div>
+  <div class="form-row">
+    <label for="node-input-name"><i class="fa fa-tag"></i> Name</label>
+    <input type="text" id="node-input-name">
+  </div>
+</script>
+
+<script type="text/html" data-help-name="de-esp32-gpio-in">
+  <p>Emits when the selected pad changes. Digital In payload is <code>level</code>; ADC payload is millivolts.</p>
+  <p>Pads show chip capabilities (io, PWM, A1/A2, strap) from <code>GET /api/v1/hardware</code>. Mode In vs ADC is the same as the web Hardware tab; ADC is ADC1 only (GPIO 32–39).</p>
+  <p>On deploy (unless unchecked) sends <code>pin.configure</code> with debounce / pull-up / invert, or sample / threshold / smooth in ADC mode.</p>
+</script>

@@ -53,7 +53,7 @@ Skip OTA for docs-only or host-only changes. Never `idf.py flash` over USB as a 
 
 ## Device fingerprint
 
-A host is ours if `/api/v1/status` JSON has `ota.project == de_esp32_runtime`, or `hostname` starts with `esp32-`. mDNS TXT includes `id`, `name`, `openapi=/api/v1/openapi.json`.
+A host is ours if `/api/v1/status` JSON has `ota.project == de_esp32_runtime`, or `hostname` starts with `esp32-`. mDNS: `_http._tcp` and `_de-esp32._tcp`. TXT includes `id`, `name`, `openapi=/api/v1/openapi.json`, `board`.
 
 ## Details
 

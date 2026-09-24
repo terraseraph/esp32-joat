@@ -1,0 +1,12 @@
+{
+  "name": "de-esp32",
+  "chipFamily": "ESP32",
+  "flashMode": "dio",
+  "flashFreq": "40m",
+  "flashSize": "4MB",
+  "parts": [
+    { "path": "firmware/bootloader.bin", "offset": 4096 },
+    { "path": "firmware/partition-table.bin", "offset": 32768 },
+    { "path": "firmware/de_esp32_runtime.bin", "offset": 131072 }
+  ]
+}

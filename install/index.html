@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>de-esp32 install</title>
+<style>
+  :root { color-scheme: dark; --bg:#121418; --card:#1c2128; --fg:#e7ecf1; --muted:#9aa6b2; --line:#2c3440; --acc:#6aa4ff; --bad:#f08060; --ok:#4ade80; }
+  * { box-sizing: border-box; }
+  body { margin:0; font:16px/1.45 system-ui, sans-serif; background:var(--bg); color:var(--fg); }
+  main { max-width:40rem; margin:0 auto; padding:24px 16px 48px; }
+  h1 { font-size:1.4rem; margin:0 0 8px; }
+  p.lead { color:var(--muted); margin:0 0 20px; }
+  form, .card { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:16px; margin:0 0 16px; }
+  label { display:block; margin:12px 0 4px; font-size:14px; }
+  input[type=text], input[type=password], select { width:100%; padding:10px 12px; border-radius:8px; border:1px solid var(--line); background:#0e1116; color:var(--fg); font:inherit; }
+  .row { display:flex; gap:8px; align-items:center; margin-top:12px; }
+  .check { display:flex; gap:8px; align-items:center; margin-top:14px; font-size:14px; color:var(--muted); }
+  button { padding:12px 14px; min-height:44px; border:0; border-radius:8px; background:var(--acc); color:#041018; font:inherit; font-weight:650; cursor:pointer; }
+  button.sec { background:transparent; border:1px solid var(--line); color:var(--fg); font-weight:500; }
+  button:disabled { opacity:.45; cursor:default; }
+  #log { white-space:pre-wrap; font:12px/1.4 ui-monospace, monospace; color:var(--muted); max-height:16rem; overflow:auto; margin:0; }
+  .ok { color:var(--ok); }
+  .bad { color:var(--bad); }
+  a { color:var(--acc); }
+</style>
+</head>
+<body>
+<main>
+  <h1>de-esp32 install</h1>
+  <p class="lead">Plug in a classic ESP32 DevKitC. Chrome or Edge flashes it over USB, then sets the device name and Wi-Fi on the serial console.</p>
+  <p id="support" class="bad" hidden>This page needs the Web Serial API. Open it in Chrome or Edge over localhost or HTTPS.</p>
+  <form id="form">
+    <label for="name">Device name <span id="namelen"></span></label>
+    <input id="name" name="name" type="text" maxlength="31" autocomplete="off" placeholder="kitchen-relay">
+    <label for="ssid">Wi-Fi network</label>
+    <input id="ssid" name="ssid" type="text" autocomplete="off" placeholder="SSID">
+    <div class="row">
+      <select id="scans" hidden></select>
+      <button class="sec" type="button" id="scan">Scan</button>
+    </div>
+    <label for="pass">Wi-Fi password</label>
+    <input id="pass" name="pass" type="password" autocomplete="off">
+    <label class="check"><input id="erase" type="checkbox" checked> Erase flash first (drops saved Wi-Fi and name)</label>
+    <div class="row">
+      <button type="submit" id="install">Install</button>
+    </div>
+  </form>
+  <div class="card">
+    <p id="status">Waiting.</p>
+    <pre id="log"></pre>
+  </div>
+</main>
+<script src="lib/console.js"></script>
+<script type="module">
+import { ESPLoader, Transport } from "https://cdn.jsdelivr.net/npm/esptool-js@0.6.1/+esm";
+
+const { createParser, replyFromLine, buildCommand } = globalThis.DeEsp32Console;
+const $ = (id) => document.getElementById(id);
+const BAUD = 115200;
+const PROMPT_MS = 25000;
+const WIFI_MS = 25000;
+const SCAN_MS = 12000;
+const NAME_MS = 5000;
+
+const logEl = $("log");
+const statusEl = $("status");
+let port = null;
+let busy = false;
+
+function log(line) {
+  logEl.textContent += (logEl.textContent ? "\n" : "") + line;
+  logEl.scrollTop = logEl.scrollHeight;
+}
+function setStatus(text, kind) {
+  statusEl.textContent = text;
+  statusEl.className = kind || "";
+}
+function setBusy(on) {
+  busy = on;
+  $("install").disabled = on;
+  $("scan").disabled = on;
+}
+
+if (!("serial" in navigator)) {
+  $("support").hidden = false;
+  $("install").disabled = true;
+  $("scan").disabled = true;
+}
+
+$("name").addEventListener("input", () => {
+  const n = $("name").value.length;
+  $("namelen").textContent = n ? `(${n}/31)` : "";
+});
+
+function classicEsp32(chip) {
+  const s = String(chip || "");
+  if (/^ESP32-[A-Z]/.test(s)) return false;
+  return s === "ESP32" || s.startsWith("ESP32 ");
+}
+
+async function readLoop(port, onText, timeoutMs) {
+  const reader = port.readable.getReader();
+  const dec = new TextDecoder();
+  let timer;
+  let timedOut = false;
+  try {
+    return await new Promise((resolve, reject) => {
+      timer = setTimeout(() => {
+        timedOut = true;
+        reader.cancel().catch(() => {});
+        reject(new Error("Timed out waiting for the board."));
+      }, timeoutMs);
+      (async () => {
+        try {
+          while (true) {
+            const { value, done } = await reader.read();
+            if (done) {
+              if (!timedOut) reject(new Error("Serial port closed."));
+              return;
+            }
+            const text = dec.decode(value, { stream: true });
+            if (onText(text)) {
+              resolve();
+              return;
+            }
+          }
+        } catch (err) {
+          reject(err);
+        }
+      })();
+    });
+  } finally {
+    clearTimeout(timer);
+    try { reader.releaseLock(); } catch { /* already released */ }
+  }
+}
+
+async function waitForPrompt(serialPort) {
+  const parser = createParser();
+  await readLoop(serialPort, (text) => {
+    parser.push(text);
+    return parser.promptReady();
+  }, PROMPT_MS);
+  parser.consumePrompt();
+}
+
+async function sendCommand(serialPort, cmd, fields, corr, timeoutMs) {
+  const parser = createParser();
+  const writer = serialPort.writable.getWriter();
+  let reply = null;
+  try {
+    await writer.write(new TextEncoder().encode(buildCommand(cmd, fields, corr)));
+  } finally {
+    writer.releaseLock();
+  }
+  await readLoop(serialPort, (text) => {
+    for (const line of parser.push(text)) {
+      const hit = replyFromLine(line, corr);
+      if (hit) {
+        reply = hit;
+        return true;
+      }
+    }
+    return false;
+  }, timeoutMs);
+  return reply;
+}
+
+async function openConsole(serialPort) {
+  if (serialPort.readable || serialPort.writable) {
+    await serialPort.close();
+  }
+  await serialPort.open({ baudRate: BAUD });
+  await serialPort.setSignals({ dataTerminalReady: false, requestToSend: false });
+  setStatus("Waiting for the console…");
+  await waitForPrompt(serialPort);
+}
+
+async function ensurePort() {
+  if (port) return port;
+  port = await navigator.serial.requestPort();
+  return port;
+}
+
+async function loadImages() {
+  const res = await fetch("manifest.json");
+  if (!res.ok) throw new Error("manifest.json missing.");
+  const manifest = await res.json();
+  const fileArray = [];
+  for (const part of manifest.parts) {
+    const bin = await fetch(part.path);
+    if (!bin.ok) {
+      throw new Error(
+        part.path + " is missing. Run .\\tools\\stage_web_flash.ps1 from the repo, then reload."
+      );
+    }
+    fileArray.push({ data: new Uint8Array(await bin.arrayBuffer()), address: part.offset });
+  }
+  return { manifest, fileArray };
+}
+
+async function flashBoard(serialPort, erase) {
+  if (serialPort.readable || serialPort.writable) {
+    await serialPort.close();
+  }
+  const { manifest, fileArray } = await loadImages();
+  const transport = new Transport(serialPort, false);
+  const loader = new ESPLoader({
+    transport,
+    baudrate: BAUD,
+    terminal: {
+      clean() {},
+      writeLine(data) { log(String(data)); },
+      write(data) { log(String(data)); },
+    },
+  });
+  setStatus("Connecting to the bootloader… Hold BOOT if this stalls.");
+  const chip = await loader.main();
+  log("Chip: " + chip);
+  if (!classicEsp32(chip)) {
+    throw new Error("This page flashes classic ESP32 only. Chip reported: " + chip);
+  }
+  setStatus(erase ? "Erasing and writing…" : "Writing firmware…");
+  await loader.writeFlash({
+    fileArray,
+    flashMode: manifest.flashMode,
+    flashFreq: manifest.flashFreq,
+    flashSize: manifest.flashSize,
+    eraseAll: erase,
+    compress: true,
+    reportProgress(fileIndex, written, total) {
+      const pct = total ? Math.floor((written / total) * 100) : 0;
+      setStatus(`Writing image ${fileIndex + 1}/${fileArray.length}: ${pct}%`);
+    },
+  });
+  await loader.after("hard_reset");
+  await transport.disconnect();
+}
+
+function showWifi(reply) {
+  const result = reply.result || {};
+  const ip = result.sta_ip || "";
+  const host = result.mdns || result.hostname || "";
+  if (reply.ok && ip && ip !== "0.0.0.0") {
+    setStatus("", "ok");
+    statusEl.innerHTML = `On the network at <a href="http://${ip}/">${ip}</a>` +
+      (host ? ` (${host}.local)` : "") + ".";
+    return;
+  }
+  if (!reply.ok) {
+    setStatus(reply.error || "Wi-Fi was not saved.", "bad");
+    return;
+  }
+  setStatus("Credentials saved. The address was not in the reply yet.", "ok");
+}
+
+$("scans").addEventListener("change", () => {
+  const ssid = $("scans").value;
+  if (ssid) $("ssid").value = ssid;
+});
+
+$("scan").addEventListener("click", async () => {
+  if (busy || !("serial" in navigator)) return;
+  setBusy(true);
+  logEl.textContent = "";
+  try {
+    const serialPort = await ensurePort();
+    await openConsole(serialPort);
+    setStatus("Scanning…");
+    const reply = await sendCommand(serialPort, "network.wifi.scan", {}, "scan", SCAN_MS);
+    if (!reply.ok) throw new Error(reply.error || "Scan failed.");
+    const list = Array.isArray(reply.result) ? reply.result : [];
+    const sel = $("scans");
+    sel.innerHTML = "";
+    const blank = document.createElement("option");
+    blank.value = "";
+    blank.textContent = list.length ? "Pick a network" : "No networks heard";
+    sel.appendChild(blank);
+    for (const ap of list) {
+      if (!ap || !ap.ssid) continue;
+      const opt = document.createElement("option");
+      opt.value = ap.ssid;
+      opt.textContent = `${ap.ssid} (${ap.rssi} dBm)`;
+      sel.appendChild(opt);
+    }
+    sel.hidden = false;
+    setStatus(list.length ? "Pick a network, then Install." : "No networks heard. Type an SSID.", list.length ? "ok" : "");
+  } catch (err) {
+    if (err && err.name === "NotFoundError") setStatus("No port selected.", "bad");
+    else setStatus(err.message || String(err), "bad");
+    log(err && err.stack ? err.stack : String(err));
+  } finally {
+    setBusy(false);
+  }
+});
+
+$("form").addEventListener("submit", async (ev) => {
+  ev.preventDefault();
+  if (busy || !("serial" in navigator)) return;
+  const name = $("name").value.trim();
+  const ssid = $("ssid").value.trim();
+  const password = $("pass").value;
+  if (name.length > 31) {
+    setStatus("Device name is longer than 31 characters.", "bad");
+    return;
+  }
+  setBusy(true);
+  logEl.textContent = "";
+  try {
+    const serialPort = await ensurePort();
+    await flashBoard(serialPort, $("erase").checked);
+    setStatus("Firmware written. Waiting for the console…");
+    await openConsole(serialPort);
+    if (name) {
+      setStatus("Setting device name…");
+      const named = await sendCommand(serialPort, "identity.set_name", { name }, "name", NAME_MS);
+      if (!named.ok) throw new Error(named.error || "Name was not saved.");
+      log("name=" + ((named.result && named.result.name) || name));
+    }
+    if (ssid) {
+      setStatus("Joining Wi-Fi (up to 20 seconds)…");
+      const joined = await sendCommand(
+        serialPort,
+        "network.wifi.set",
+        { ssid, password },
+        "wifi",
+        WIFI_MS
+      );
+      showWifi(joined);
+      if (!joined.ok) return;
+    } else if (name) {
+      setStatus("Name saved. Add Wi-Fi above, or join the setup network and open http://192.168.4.1.", "ok");
+    } else {
+      setStatus("Flashed. Join the setup network and open http://192.168.4.1.", "ok");
+    }
+  } catch (err) {
+    if (err && err.name === "NotFoundError") setStatus("No port selected.", "bad");
+    else setStatus(err.message || String(err), "bad");
+    log(err && err.stack ? err.stack : String(err));
+  } finally {
+    setBusy(false);
+  }
+});
+</script>
+</body>
+</html>

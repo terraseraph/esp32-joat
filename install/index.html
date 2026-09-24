@@ -55,7 +55,7 @@
 <script type="module">
 import { ESPLoader, Transport } from "https://cdn.jsdelivr.net/npm/esptool-js@0.6.1/+esm";
 
-const { createParser, replyFromLine, buildCommand } = globalThis.DeEsp32Console;
+const { createParser, replyFromLine, buildCommand, classicEsp32 } = globalThis.DeEsp32Console;
 const $ = (id) => document.getElementById(id);
 const BAUD = 115200;
 const PROMPT_MS = 25000;
@@ -92,12 +92,6 @@ $("name").addEventListener("input", () => {
   const n = $("name").value.length;
   $("namelen").textContent = n ? `(${n}/31)` : "";
 });
-
-function classicEsp32(chip) {
-  const s = String(chip || "");
-  if (/^ESP32-[A-Z]/.test(s)) return false;
-  return s === "ESP32" || s.startsWith("ESP32 ");
-}
 
 async function readLoop(port, onText, timeoutMs) {
   const reader = port.readable.getReader();

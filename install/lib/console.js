@@ -50,7 +50,13 @@ function buildCommand(cmd, fields, corr) {
   return JSON.stringify(Object.assign({ cmd: cmd }, fields || {}, { corr: corr })) + "\n";
 }
 
-const api = { PROMPT, createParser, replyFromLine, buildCommand };
+function classicEsp32(chip) {
+  const s = String(chip || "").trim();
+  if (/^ESP32-(S[2-9]|C\d|H\d|P4)\b/.test(s)) return false;
+  return s === "ESP32" || s.startsWith("ESP32-") || s.startsWith("ESP32 ");
+}
+
+const api = { PROMPT, createParser, replyFromLine, buildCommand, classicEsp32 };
 
 if (typeof module === "object" && module.exports) {
   module.exports = api;

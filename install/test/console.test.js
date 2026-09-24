@@ -2,7 +2,7 @@
 
 const { describe, it } = require("node:test");
 const assert = require("node:assert/strict");
-const { createParser, replyFromLine, buildCommand } = require("../lib/console.js");
+const { createParser, replyFromLine, buildCommand, classicEsp32 } = require("../lib/console.js");
 
 describe("console parser", () => {
   it("pulls the matching corr reply out of mixed boot log", () => {
@@ -33,6 +33,17 @@ describe("console parser", () => {
     );
     assert.equal(wifi.ok, false);
     assert.match(wifi.error, /not saved/);
+  });
+
+  it("accepts a WROOM-32 D0WDQ6 and rejects other ESP32 families", () => {
+    assert.equal(classicEsp32("ESP32-D0WDQ6 (revision 1)"), true);
+    assert.equal(classicEsp32("ESP32"), true);
+    assert.equal(classicEsp32("ESP32-PICO-D4"), true);
+    assert.equal(classicEsp32("ESP32-S0WD"), true);
+    assert.equal(classicEsp32("ESP32-S3"), false);
+    assert.equal(classicEsp32("ESP32-C3"), false);
+    assert.equal(classicEsp32("ESP32-H2"), false);
+    assert.equal(classicEsp32("ESP32-P4"), false);
   });
 
   it("builds a single-line command with corr last", () => {

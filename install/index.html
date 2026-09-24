@@ -54,11 +54,19 @@
     <pre id="log"></pre>
   </div>
 </main>
-<script src="lib/console.js"></script>
+<script src="lib/console.js?v=3"></script>
 <script type="module">
 import { ESPLoader, Transport } from "https://cdn.jsdelivr.net/npm/esptool-js@0.6.1/+esm";
 
-const { createParser, replyFromLine, buildCommand, classicEsp32 } = globalThis.DeEsp32Console;
+const { createParser, replyFromLine, buildCommand } = globalThis.DeEsp32Console;
+function classicEsp32(chip) {
+  if (typeof globalThis.DeEsp32Console.classicEsp32 === "function") {
+    return globalThis.DeEsp32Console.classicEsp32(chip);
+  }
+  const s = String(chip || "").trim();
+  if (/^ESP32-(S[2-9]|C\d|H\d|P4)\b/.test(s)) return false;
+  return s === "ESP32" || s.startsWith("ESP32-") || s.startsWith("ESP32 ");
+}
 const $ = (id) => document.getElementById(id);
 const BAUD = 115200;
 const PROMPT_MS = 25000;

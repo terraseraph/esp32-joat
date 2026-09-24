@@ -41,7 +41,8 @@ RTC_NOINIT crash counter (`s_rtc_crash`) is not in NVS.
 [io_servo_README.md](../../components/io_servo/io_servo_README.md),
 [io_rules_README.md](../../components/io_rules/io_rules_README.md),
 [module_manager_README.md](../../components/module_manager/module_manager_README.md),
-[mod_mfrc522_README.md](../../components/mod_mfrc522/mod_mfrc522_README.md).
+[mod_mfrc522_README.md](../../components/mod_mfrc522/mod_mfrc522_README.md),
+[mod_bme280_README.md](../../components/mod_bme280/mod_bme280_README.md).
 
 ## Used by
 

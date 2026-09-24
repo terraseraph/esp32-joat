@@ -20,8 +20,38 @@
     return null;
   };
 
+  DeEsp32.pinClaimed = function(owner) {
+    const o = owner || "";
+    return o.indexOf("bus_") === 0 || o.indexOf("mod_") === 0 || o.indexOf("servo_") === 0;
+  };
+
+  DeEsp32.ownerBlocks = function(owner, mode) {
+    const o = owner || "";
+    if (o.indexOf("bus_") === 0 || o.indexOf("mod_") === 0) {
+      return true;
+    }
+    if (o.indexOf("servo_") === 0) {
+      return mode !== "servo";
+    }
+    return false;
+  };
+
+  DeEsp32.ownerLabel = function(owner) {
+    const o = owner || "";
+    if (o.indexOf("mod_") === 0) {
+      return "RFID " + o.slice(4);
+    }
+    if (o.indexOf("bus_") === 0) {
+      return o.slice(4).toUpperCase() + " bus";
+    }
+    if (o.indexOf("servo_") === 0) {
+      return "Servo " + o.slice(6);
+    }
+    return o;
+  };
+
   DeEsp32.padAllowed = function(pin, mode) {
-    if (!pin || pin.flash) {
+    if (!pin || pin.flash || DeEsp32.ownerBlocks(pin.owner, mode)) {
       return false;
     }
     if (mode === "out") {
@@ -30,7 +60,7 @@
     if (mode === "in") {
       return !!pin.input;
     }
-    if (mode === "pwm") {
+    if (mode === "pwm" || mode === "servo") {
       return !!pin.pwm && !pin.input_only;
     }
     if (mode === "adc") {
@@ -39,7 +69,7 @@
     return false;
   };
 
-  DeEsp32.MODE_LAB = { in: "In", out: "Out", pwm: "PWM", adc: "ADC" };
+  DeEsp32.MODE_LAB = { in: "In", out: "Out", pwm: "PWM", servo: "Servo", adc: "ADC" };
 
   DeEsp32.allowedModes = function(pin, family) {
     if (!pin || pin.flash) {
@@ -53,6 +83,7 @@
       m.push("out");
       if (pin.pwm) {
         m.push("pwm");
+        m.push("servo");
       }
     }
     if (pin.adc1) {
@@ -62,7 +93,7 @@
       return m.filter(function(x) { return x === "in" || x === "adc"; });
     }
     if (family === "out") {
-      return m.filter(function(x) { return x === "out" || x === "pwm"; });
+      return m.filter(function(x) { return x === "out" || x === "pwm" || x === "servo"; });
     }
     return m;
   };
@@ -99,8 +130,8 @@
     if (p.role) {
       a.push(["role", p.role, p.role]);
     }
-    if (mode === "adc" || mode === "pwm" || mode === "in" || mode === "out") {
-      const want = mode === "adc" ? "adc" : (mode === "pwm" ? "pwm" : (mode === "in" && p.input_only ? "in" : "io"));
+    if (mode === "adc" || mode === "pwm" || mode === "servo" || mode === "in" || mode === "out") {
+      const want = mode === "adc" ? "adc" : ((mode === "pwm" || mode === "servo") ? "pwm" : (mode === "in" && p.input_only ? "in" : "io"));
       a.sort(function(x, y) {
         const xs = x[0] === want ? 0 : 1;
         const ys = y[0] === want ? 0 : 1;
@@ -158,11 +189,23 @@
     show("#de-esp32-row-adc", mode === "adc");
     show("#de-esp32-row-boot", mode === "out");
     show("#de-esp32-row-pwm", mode === "pwm");
-    show("#de-esp32-row-pull", (mode === "in" || mode === "out") && pin && pin.pull);
+    show("#de-esp32-row-servo", mode === "servo");
+    show("#de-esp32-row-pull", (mode === "in" || mode === "out") && (!pin || pin.pull));
     show("#de-esp32-row-inv", mode === "in" || mode === "out");
     $("#de-esp32-invhint").text(mode === "out"
       ? "Logical 1 drives the pin LOW (active-low LED or relay)."
       : "Report electrical LOW as 1 (active-low button or sensor).");
+    const owned = pin && DeEsp32.ownerBlocks(pin.owner, mode);
+    const $cfg = $("#node-input-configure");
+    $("#de-esp32-own").remove();
+    if (owned) {
+      $cfg.prop("checked", false);
+      $meta.after(
+        '<p class="de-esp32-hint" id="de-esp32-own">' +
+          DeEsp32.esc(DeEsp32.ownerLabel(pin.owner)) +
+          " owns GPIO " + gpio + ". Remove that addon before configuring this pin.</p>"
+      );
+    }
   };
 
   DeEsp32.renderPinout = function($el, hw, opts) {
@@ -180,6 +223,8 @@
       const has = p.gpio != null;
       const g = has ? Number(p.gpio) : null;
       const info = has ? DeEsp32.pinByGpio(hw, g) : null;
+      const claimed = has && DeEsp32.ownerBlocks(info && info.owner, mode);
+      const servoOwn = has && info && String(info.owner || "").indexOf("servo_") === 0;
       const allowed = has && DeEsp32.padAllowed(info, mode);
       const cls = [
         "de-esp32-pad",
@@ -190,12 +235,17 @@
       ].join(" ");
       const label = has ? ("GPIO " + g) : p.silk;
       const caps = has ? DeEsp32.capBadges(info, mode) : ('<span class="b mute">' + DeEsp32.esc(p.kind || "") + "</span>");
-      const title = has ? ((info && info.notes) || "") : (p.kind || "");
+      const own = (claimed || (servoOwn && mode === "servo"))
+        ? ('<span class="use">' + DeEsp32.esc(DeEsp32.ownerLabel(info.owner)) + "</span>")
+        : "";
+      const title = claimed
+        ? DeEsp32.ownerLabel(info.owner)
+        : (has ? ((info && info.notes) || "") : (p.kind || ""));
       return '<button type="button" class="' + cls + '" data-gpio="' + (has ? g : "") +
         '" data-kind="' + DeEsp32.esc(p.kind) + '" data-silk="' + DeEsp32.esc(p.silk) +
         '" ' + (allowed ? "" : "disabled ") + 'title="' + DeEsp32.esc(title) + '">' +
         '<span class="silk">' + DeEsp32.esc(label) + '</span>' +
-        '<span class="caps">' + caps + "</span></button>";
+        '<span class="caps">' + caps + "</span>" + own + "</button>";
     }
 
     let rows = "";
@@ -243,14 +293,21 @@
     let hwCache = null;
     function paint(note) {
       const $box = $("#" + boxId);
+      DeEsp32.syncPinForm(hwCache, family);
       if (!hwCache) {
         return;
       }
+      function applyAutoName(gpio) {
+        const mode = $("#node-input-pinMode").val();
+        const auto = mode === "servo" ? ("servo_" + gpio) : ("gpio_" + gpio);
+        const cur = $("#node-input-pinName").val();
+        if (!cur || /^gpio_\d+$/.test(cur) || /^servo_\d+$/.test(cur)) {
+          $("#node-input-pinName").val(auto);
+        }
+      }
       function onSelect(gpio) {
         $("#node-input-gpio").val(gpio);
-        if (!$("#node-input-pinName").val()) {
-          $("#node-input-pinName").val("gpio_" + gpio);
-        }
+        applyAutoName(gpio);
         DeEsp32.syncPinForm(hwCache, family);
         DeEsp32.renderPinout($box, hwCache, {
           mode: $("#node-input-pinMode").val() || (family === "out" ? "out" : "in"),
@@ -309,11 +366,23 @@
             })
             .fail(function(xhr2) {
               $box.html('<p class="de-esp32-hint">' + DeEsp32.esc(DeEsp32.ajaxErr(xhr2 || xhr)) + "</p>");
+              DeEsp32.syncPinForm(null, family);
             });
         });
     }
     $("#node-input-device").on("change", refresh);
-    $("#node-input-pinMode").on("change", function() { paint(); });
+    $("#node-input-pinMode").on("change", function() {
+      const gpio = $("#node-input-gpio").val();
+      if (gpio !== "" && gpio != null) {
+        const mode = $("#node-input-pinMode").val();
+        const auto = mode === "servo" ? ("servo_" + gpio) : ("gpio_" + gpio);
+        const cur = $("#node-input-pinName").val();
+        if (!cur || /^gpio_\d+$/.test(cur) || /^servo_\d+$/.test(cur)) {
+          $("#node-input-pinName").val(auto);
+        }
+      }
+      paint();
+    });
     $("#" + refreshId).on("click", refresh);
     setTimeout(refresh, 0);
   };

@@ -25,8 +25,8 @@ constexpr int kMinUsLo = 500;
 constexpr int kMinUsHi = 1500;
 constexpr int kMaxUsLo = 1500;
 constexpr int kMaxUsHi = 2500;
-constexpr int kMinUsDefault = 1000;
-constexpr int kMaxUsDefault = 2000;
+constexpr int kMinUsDefault = 500;
+constexpr int kMaxUsDefault = 2500;
 
 struct ServoSlot {
     bool used;

@@ -21,6 +21,7 @@
 #include "io_rules.hpp"
 #include "io_servo.hpp"
 #include "logging_service.hpp"
+#include "mod_bme280.hpp"
 #include "mod_mfrc522.hpp"
 #include "module_manager.hpp"
 #include "mqtt_manager.hpp"
@@ -268,6 +269,7 @@ extern "C" void app_main(void) {
     ESP_LOGI(TAG, "device_id=%s hostname=%s.local", runtime::device_id(), runtime::hostname());
     ESP_LOGI(TAG, "recovery SSID=%s  auth=%s", runtime::ap_ssid(),
              runtime::ap_is_open() ? "open" : "WPA2");
+    runtime::memory_boot_mark("boot");
 
     ESP_ERROR_CHECK(runtime::event_bus_init());
     ESP_ERROR_CHECK(runtime::state_registry_init());
@@ -288,6 +290,7 @@ extern "C" void app_main(void) {
     ESP_ERROR_CHECK(runtime::command_router_init());
     ESP_ERROR_CHECK(runtime::module_manager_init());
     ESP_ERROR_CHECK(runtime::mod_mfrc522_init());
+    ESP_ERROR_CHECK(runtime::mod_bme280_init());
     ESP_ERROR_CHECK(runtime::ota_init());
     ESP_ERROR_CHECK(runtime::telemetry_init());
     ESP_ERROR_CHECK(runtime::mqtt_init());
@@ -296,6 +299,7 @@ extern "C" void app_main(void) {
     rt.set_boot_state(runtime::BootState::kNetwork);
     ESP_ERROR_CHECK(runtime::network_init());
     ESP_ERROR_CHECK(runtime::network_start());
+    runtime::memory_boot_mark("wifi");
     if (!runtime::config_has_wifi() || rt.safe_mode()) {
         rt.set_boot_state(runtime::BootState::kProvisioning);
         runtime::provisioning_start_dns();
@@ -304,13 +308,16 @@ extern "C" void app_main(void) {
 
     rt.set_boot_state(runtime::BootState::kManagement);
     ESP_ERROR_CHECK(runtime::web_server_start());
+    runtime::memory_boot_mark("http");
 
     rt.set_boot_state(runtime::BootState::kMqtt);
     ESP_ERROR_CHECK(runtime::mqtt_start());
+    runtime::memory_boot_mark("mqtt");
 
     rt.set_boot_state(runtime::BootState::kComponents);
     runtime::command_apply_saved_io(true);
     runtime::command_apply_saved_modules(true);
+    runtime::memory_boot_mark("modules");
     runtime::command_apply_saved_rules(true);
 
     runtime::telemetry_start_task();

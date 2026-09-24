@@ -1,9 +1,33 @@
 "use strict";
 
 const { toLevel } = require("../lib/level");
+const { toAngle, servoPin } = require("../lib/servo");
+
+function pinModeOf(n) {
+  if (n.pinMode === "pwm") {
+    return "pwm";
+  }
+  if (n.pinMode === "servo") {
+    return "servo";
+  }
+  return "out";
+}
+
+function modeLabel(mode) {
+  if (mode === "pwm") {
+    return "PWM";
+  }
+  if (mode === "servo") {
+    return "Servo";
+  }
+  return "GPIO";
+}
 
 function pinBody(n, gpio) {
-  const mode = n.pinMode === "pwm" ? "pwm" : "out";
+  const mode = pinModeOf(n);
+  if (mode === "servo") {
+    return servoPin(n, gpio);
+  }
   const pin = {
     gpio,
     mode,
@@ -37,7 +61,7 @@ module.exports = function (RED) {
     }
     node.gpio = Number(n.gpio);
     node.configure = n.configure !== false;
-    node.pinMode = n.pinMode === "pwm" ? "pwm" : "out";
+    node.pinMode = pinModeOf(n);
 
     if (!node.device) {
       node.status({ fill: "red", shape: "ring", text: "no device/gpio" });
@@ -59,7 +83,7 @@ module.exports = function (RED) {
           node.status({ fill: "yellow", shape: "ring", text: res.error || "configure failed" });
           return;
         }
-        node.status({ fill: "green", shape: "ring", text: `${node.pinMode === "pwm" ? "PWM" : "GPIO"} ${node.gpio}` });
+        node.status({ fill: "green", shape: "ring", text: `${modeLabel(node.pinMode)} ${node.gpio}` });
       } catch (err) {
         node.warn(err.message || err);
         node.status({ fill: "yellow", shape: "ring", text: err.message || "configure failed" });
@@ -95,6 +119,17 @@ module.exports = function (RED) {
           value = 1000;
         }
         value = Math.round(value);
+      } else if (mode === "servo") {
+        value = toAngle(msg && msg.payload);
+        if (value == null) {
+          const err = new Error("Servo payload must be an angle 0–180");
+          if (done) {
+            done(err);
+          } else {
+            node.error(err, msg);
+          }
+          return;
+        }
       } else {
         value = toLevel(msg.payload);
         if (value == null) {
@@ -117,7 +152,8 @@ module.exports = function (RED) {
         if (res && res.ok === false) {
           throw new Error(res.error || "pin.set failed");
         }
-        node.status({ fill: "green", shape: "dot", text: `${mode === "pwm" ? "PWM" : "GPIO"} ${node.gpio}: ${value}` });
+        const shown = mode === "servo" ? `${value}°` : value;
+        node.status({ fill: "green", shape: "dot", text: `${modeLabel(mode)} ${node.gpio}: ${shown}` });
         if (done) {
           done();
         }
@@ -133,4 +169,8 @@ module.exports = function (RED) {
   }
 
   RED.nodes.registerType("de-esp32-gpio-out", GpioOutNode);
+
+  RED.httpAdmin.get("/de-esp32/palette", RED.auth.needsPermission("de-esp32-device.read"), (req, res) => {
+    res.json({ version: require("../package.json").version, servo: true });
+  });
 };

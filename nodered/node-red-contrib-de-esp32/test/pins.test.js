@@ -2,7 +2,7 @@
 
 const { describe, it } = require("node:test");
 const assert = require("node:assert/strict");
-const { pinByGpio, padAllowed, capBadges, allowedModes } = require("../lib/pins");
+const { pinByGpio, padAllowed, pinClaimed, ownerLabel, capBadges, allowedModes } = require("../lib/pins");
 
 const hardware = {
   header: {
@@ -32,8 +32,26 @@ describe("pins from hardware flags", () => {
     assert.equal(padAllowed(p, "out"), false);
     assert.equal(padAllowed(p, "in"), true);
   });
-  it("allows GPIO4 out", () => {
+  it("allows GPIO4 out and servo, not input-only servo", () => {
     assert.equal(padAllowed(pinByGpio(hardware, 4), "out"), true);
+    assert.equal(padAllowed(pinByGpio(hardware, 4), "servo"), true);
+    assert.equal(padAllowed(pinByGpio(hardware, 34), "servo"), false);
+  });
+  it("lets servo mode retarget a servo owner", () => {
+    const pin = { output: true, pwm: true, input_only: false, owner: "servo_4" };
+    assert.equal(padAllowed(pin, "servo"), true);
+    assert.equal(padAllowed(pin, "out"), false);
+    assert.equal(padAllowed(pin, "pwm"), false);
+    assert.equal(padAllowed({ output: true, pwm: true, owner: "mod_rfid0" }, "servo"), false);
+  });
+  it("blocks module and bus owners", () => {
+    assert.equal(pinClaimed("bus_hspi"), true);
+    assert.equal(pinClaimed("mod_rfid0"), true);
+    assert.equal(pinClaimed("servo_4"), true);
+    assert.equal(pinClaimed("gpio_18"), false);
+    assert.equal(padAllowed({ output: true, input: true, owner: "bus_hspi" }, "out"), false);
+    assert.equal(ownerLabel("bus_hspi"), "HSPI bus");
+    assert.equal(ownerLabel("mod_rfid0"), "RFID rfid0");
   });
   it("does not invent a hardcoded flash set — missing pin is denied", () => {
     assert.equal(padAllowed(null, "out"), false);
@@ -52,8 +70,8 @@ describe("capBadges", () => {
 });
 
 describe("allowedModes", () => {
-  it("limits gpio-in to in/adc and gpio-out to out/pwm", () => {
-    assert.deepEqual(allowedModes(pinByGpio(hardware, 4), "out"), ["out", "pwm"]);
+  it("limits gpio-in to in/adc and gpio-out to out/pwm/servo", () => {
+    assert.deepEqual(allowedModes(pinByGpio(hardware, 4), "out"), ["out", "pwm", "servo"]);
     assert.deepEqual(allowedModes(pinByGpio(hardware, 4), "in"), ["in"]);
     assert.deepEqual(allowedModes(pinByGpio(hardware, 32), "in"), ["in", "adc"]);
     assert.deepEqual(allowedModes(pinByGpio(hardware, 32), "out"), []);

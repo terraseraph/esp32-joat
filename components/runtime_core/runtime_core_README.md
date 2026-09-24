@@ -13,12 +13,13 @@ Overview page and serial banner show firmware, boot state, and safe mode. Every 
 - `runtime_version.hpp` — compile-time constants; bump `RUNTIME_CONFIG_SCHEMA` when NVS layout changes
 - `runtime_status.hpp` — `RuntimeStatus::instance()` including `live_viewers()` (open UI WebSockets), `live_mqtt()`, `live_serial()`, `live_rules()`, and `live_sinks()` (ADC live-sample when any of those is active)
 - `json_util.hpp` — `json_str` / `json_int` / `json_bool`
+- `memory_budget.hpp` — `memory_boot_mark`, `memory_admit`, `memory_status_json`, `memory_hooks_init`. Heap pools, pressure, boot marks, and cached task stacks. Lives here so module admission does not depend on telemetry.
 
 No NVS, REST, or MQTT of its own.
 
 ## Depends on
 
-ESP-IDF `json`, `esp_timer`, FreeRTOS.
+ESP-IDF `json`, `esp_timer`, `heap`, FreeRTOS.
 
 ## Used by
 

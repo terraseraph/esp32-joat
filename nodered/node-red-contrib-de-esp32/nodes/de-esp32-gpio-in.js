@@ -78,10 +78,14 @@ module.exports = function (RED) {
           if (res && res.ok === false) {
             node.warn(res.error || "pin.configure failed");
             node.status({ fill: "yellow", shape: "ring", text: res.error || "configure failed" });
+            node.device.subscribeGpio(node.gpio, node, onEv);
+            return;
           }
         } catch (err) {
           node.warn(err.message || err);
           node.status({ fill: "yellow", shape: "ring", text: err.message || "configure failed" });
+          node.device.subscribeGpio(node.gpio, node, onEv);
+          return;
         }
       }
       node.device.subscribeGpio(node.gpio, node, onEv);

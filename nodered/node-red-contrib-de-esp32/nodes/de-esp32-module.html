@@ -1,0 +1,273 @@
+<style>
+.de-esp32-pick{display:flex;flex-direction:column;gap:6px;margin:8px 0}
+.de-esp32-pickbtn{display:block;width:100%;text-align:left;padding:8px;border:1px solid #999;background:transparent;cursor:pointer}
+.de-esp32-pickbtn.on{border-color:#6aa4ff}
+.de-esp32-pickbtn:disabled{opacity:.55;cursor:default}
+.de-esp32-pickbtn span{display:block;font-size:12px;opacity:.8}
+.de-esp32-cs{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:8px 0}
+.de-esp32-cs span{font-size:12px;opacity:.8}
+.de-esp32-cs button{padding:4px 8px;border:1px solid #999;background:transparent;cursor:pointer}
+.de-esp32-cs button.on{border-color:#6aa4ff}
+</style>
+<script type="text/javascript">
+  RED.nodes.registerType("de-esp32-module", {
+    category: "de-esp32",
+    color: "#6aa4ff",
+    defaults: {
+      name: { value: "" },
+      device: { type: "de-esp32-device", required: true },
+      modType: { value: "" },
+      modId: { value: "" },
+      bus: { value: "" },
+      pins: { value: "{}" },
+      install: { value: true },
+    },
+    inputs: 0,
+    outputs: 1,
+    icon: "font-awesome/fa-rss",
+    paletteLabel: "module",
+    label: function() {
+      if (this.name) {
+        return this.name;
+      }
+      const bus = this.bus ? (" " + String(this.bus).toUpperCase()) : "";
+      return (this.modId || this.modType || "module") + bus;
+    },
+    oneditprepare: function() {
+      const node = this;
+      let catalog = null;
+      let hardware = null;
+
+      function pinsObj() {
+        try {
+          const o = JSON.parse($("#node-input-pins").val() || "{}");
+          return o && typeof o === "object" ? o : {};
+        } catch (e) {
+          return {};
+        }
+      }
+      function savePins(o) {
+        $("#node-input-pins").val(JSON.stringify(o || {}));
+      }
+      function typeById(id) {
+        const types = (catalog && catalog.types) || [];
+        for (let i = 0; i < types.length; i++) {
+          if (types[i].type === id) {
+            return types[i];
+          }
+        }
+        return null;
+      }
+      function pinInfo(g) {
+        return DeEsp32.pinByGpio(hardware, g);
+      }
+      function busBusy(bus) {
+        const pins = (bus && bus.pins) || {};
+        const bits = ["sck", "mosi", "miso"].map(function(k) {
+          const g = pins[k];
+          if (g == null) {
+            return null;
+          }
+          const info = pinInfo(g);
+          const owner = info && info.owner;
+          if (!owner || owner.indexOf("bus_") === 0) {
+            return null;
+          }
+          return "GPIO " + g + " is " + (DeEsp32.ownerLabel(owner) || "in use");
+        }).filter(Boolean);
+        if (!bits.length) {
+          return "";
+        }
+        const mid = bits.length === 1 ? bits[0] : bits.slice(0, -1).join(", ") + " and " + bits[bits.length - 1];
+        return (bus.label || bus.id) + " works. " + mid + ". Set those Off, or pick another bus.";
+      }
+      function busById(id) {
+        return ((hardware && hardware.buses) || []).filter(function(b) { return b.id === id; })[0];
+      }
+      function wiring(t, bus) {
+        const bp = (bus && bus.pins) || {};
+        const parts = [];
+        ((t && t.pins) || []).forEach(function(p) {
+          if (p.share === "bus" && bp[p.role] != null) {
+            parts.push(p.role.toUpperCase() + " " + bp[p.role]);
+          }
+        });
+        if (bp.ss != null) {
+          parts.push("CS " + bp.ss + " (RC522 pad SDA)");
+        }
+        parts.push("tie RST high");
+        return parts.join(" · ");
+      }
+      function applyChoice(t, bus) {
+        $("#node-input-modType").val(t.type);
+        $("#node-input-bus").val(bus.id);
+        if (!$("#node-input-modId").val()) {
+          $("#node-input-modId").val((t.id_prefix || "mod") + "0");
+        }
+        const bp = bus.pins || {};
+        const next = {};
+        (t.pins || []).forEach(function(p) {
+          if (p.share === "bus" && bp[p.role] != null) {
+            next[p.role] = Number(bp[p.role]);
+          }
+        });
+        if (bp.ss != null) {
+          next.cs = Number(bp.ss);
+        }
+        savePins(next);
+      }
+      function csCandidates(bus) {
+        const bp = (bus && bus.pins) || {};
+        const skip = {};
+        ["sck", "mosi", "miso"].forEach(function(k) {
+          if (bp[k] != null) {
+            skip[Number(bp[k])] = 1;
+          }
+        });
+        const id = ($("#node-input-modId").val() || "").trim();
+        const mine = id ? "mod_" + id : "";
+        return ((hardware && hardware.pins) || []).filter(function(p) {
+          if (p.gpio == null || !p.output || p.flash || p.input_only || skip[p.gpio]) {
+            return false;
+          }
+          const owner = p.owner || "";
+          return !owner || owner.indexOf("bus_") === 0 || owner === mine;
+        }).sort(function(a, b) {
+          const ss = bp.ss != null ? Number(bp.ss) : -1;
+          if (a.gpio === ss) return -1;
+          if (b.gpio === ss) return 1;
+          return a.gpio - b.gpio;
+        });
+      }
+      function paint() {
+        const $box = $("#de-esp32-modbox");
+        if (!catalog) {
+          $box.html('<p class="de-esp32-hint">loading catalog…</p>');
+          return;
+        }
+        const curType = $("#node-input-modType").val();
+        const curBus = $("#node-input-bus").val();
+        const types = catalog.types || [];
+        let html = '<div class="de-esp32-pick">';
+        types.forEach(function(row) {
+          const buses = row.bus
+            ? ((hardware && hardware.buses) || []).filter(function(b) { return b.kind === row.bus; })
+            : [null];
+          if (row.bus && !buses.length) {
+            html += '<p class="de-esp32-hint">Loading the pin map for ' + DeEsp32.esc(row.label || row.type) + "…</p>";
+            return;
+          }
+          buses.forEach(function(b) {
+            const warn = b ? busBusy(b) : "";
+            const on = !warn && row.type === curType && (!b || b.id === curBus) ? " on" : "";
+            const title = (row.label || row.type) + (b ? (" · " + (b.label || b.id)) : "");
+            const detail = warn || (b ? wiring(row, b) : (row.summary || ""));
+            html += '<button type="button" class="de-esp32-pickbtn' + on + '" data-type="' + DeEsp32.esc(row.type) + '"' +
+              (b ? (' data-bus="' + DeEsp32.esc(b.id) + '"') : "") + (warn ? " disabled" : "") + ">" +
+              "<strong>" + DeEsp32.esc(title) + "</strong>" +
+              "<span>" + DeEsp32.esc(detail) + "</span></button>";
+          });
+        });
+        html += "</div>";
+        const picked = typeById(curType);
+        const bus = busById(curBus);
+        if (picked && bus && !busBusy(bus)) {
+          const curCs = pinsObj().cs;
+          const ss = bus.pins && bus.pins.ss != null ? Number(bus.pins.ss) : null;
+          html += '<div class="de-esp32-cs"><span>CS</span>';
+          csCandidates(bus).forEach(function(p) {
+            const on = Number(curCs) === Number(p.gpio) ? " on" : "";
+            const mark = ss != null && Number(p.gpio) === ss ? " SS" : "";
+            html += '<button type="button" data-cs="' + p.gpio + '" class="' + on.trim() + '">GPIO ' + p.gpio + mark + "</button>";
+          });
+          html += "</div>";
+          const wire = wiring(picked, bus).replace(/CS \d+ \(RC522 pad SDA\)/, "CS " + (curCs != null ? curCs : "—") + " (RC522 pad SDA)");
+          html += '<p class="de-esp32-hint">Wire ' + DeEsp32.esc(wire) + ".</p>";
+        }
+        $box.html(html);
+        $box.find("[data-cs]").on("click", function() {
+          const pins = pinsObj();
+          pins.cs = Number(this.getAttribute("data-cs"));
+          savePins(pins);
+          paint();
+        });
+        $box.find("[data-type]").on("click", function() {
+          if (this.disabled) {
+            return;
+          }
+          const t = typeById(this.getAttribute("data-type"));
+          const b = busById(this.getAttribute("data-bus"));
+          if (!t) {
+            return;
+          }
+          if (b) {
+            applyChoice(t, b);
+          } else {
+            $("#node-input-modType").val(t.type);
+            if (!$("#node-input-modId").val()) {
+              $("#node-input-modId").val((t.id_prefix || "mod") + "0");
+            }
+          }
+          paint();
+        });
+      }
+
+      function load() {
+        const dev = RED.nodes.node($("#node-input-device").val());
+        $("#de-esp32-modbox").html('<p class="de-esp32-hint">loading catalog…</p>');
+        if (!dev || !dev.host) {
+          $("#de-esp32-modbox").html('<p class="de-esp32-hint">Pick a device with a host first.</p>');
+          return;
+        }
+        $.getJSON("de-esp32/hardware", { host: dev.host, port: dev.port || 80, id: dev.id })
+          .done(function(hw) { hardware = hw; paint(); })
+          .fail(function() { hardware = null; });
+        $.ajax({
+          url: "de-esp32/command",
+          method: "POST",
+          contentType: "application/json",
+          data: JSON.stringify({ host: dev.host, port: dev.port || 80, id: dev.id, cmd: "module.catalog" }),
+        }).done(function(res) {
+          catalog = (res && res.result) || { types: [] };
+          paint();
+        }).fail(function(xhr) {
+          $("#de-esp32-modbox").html('<p class="de-esp32-hint">' + DeEsp32.esc(DeEsp32.ajaxErr(xhr)) + "</p>");
+        });
+      }
+
+      $("#node-input-device").on("change", load);
+      $("#de-esp32-mod-reload").on("click", load);
+      setTimeout(load, 0);
+    },
+  });
+</script>
+
+<script type="text/html" data-template-name="de-esp32-module">
+  <div class="form-row">
+    <label for="node-input-device"><i class="fa fa-microchip"></i> Device</label>
+    <input type="text" id="node-input-device">
+  </div>
+  <div class="form-row">
+    <label for="node-input-modId"><i class="fa fa-tag"></i> Id</label>
+    <input type="text" id="node-input-modId" placeholder="rfid0" maxlength="16">
+    <button type="button" id="de-esp32-mod-reload" class="red-ui-button" style="margin-left:8px">Reload</button>
+  </div>
+  <input type="hidden" id="node-input-modType">
+  <input type="hidden" id="node-input-bus">
+  <input type="hidden" id="node-input-pins">
+  <div class="form-row">
+    <label>&nbsp;</label>
+    <input type="checkbox" id="node-input-install" style="display:inline-block;width:auto;vertical-align:top">
+    <label for="node-input-install" style="width:auto">Install module on deploy</label>
+  </div>
+  <div id="de-esp32-modbox"></div>
+  <div class="form-row">
+    <label for="node-input-name"><i class="fa fa-tag"></i> Name</label>
+    <input type="text" id="node-input-name">
+  </div>
+</script>
+
+<script type="text/html" data-help-name="de-esp32-module">
+  <p>Installs a catalog addon (<code>module.add</code>) and outputs live events for that id. RFID messages are <code>{id, present, uid}</code>.</p>
+  <p>Each SPI addon is one choice per bus, for example RFID · HSPI. CS defaults to that bus SS pin (marked SS; on an RC522 the pad labelled SDA). Pick another free GPIO on the CS row if you wired it elsewhere. A busy bus stays disabled until those GPIOs are Off. The node status shows the tag UID, or “no tag” while it is scanning.</p>
+</script>

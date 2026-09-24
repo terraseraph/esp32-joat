@@ -41,6 +41,7 @@ module.exports = function (RED) {
     this.brokerConn = n.broker ? RED.nodes.getNode(n.broker) : null;
 
     this._gpioListeners = new Map();
+    this._modListeners = new Map();
     this._ws = null;
     this._wsTimer = null;
     this._wsWanted = false;
@@ -104,28 +105,68 @@ module.exports = function (RED) {
           self._gpioListeners.delete(g);
         }
       }
-      if (self._gpioListeners.size === 0) {
+      if (self._gpioListeners.size === 0 && self._modListeners.size === 0) {
+        self._stopLive();
+      }
+    };
+
+    this.subscribeModule = function (id, node, cb) {
+      const key = String(id || "");
+      if (!key) {
+        return;
+      }
+      if (!self._modListeners.has(key)) {
+        self._modListeners.set(key, new Map());
+      }
+      self._modListeners.get(key).set(node.id, cb);
+      self._ensureLive();
+    };
+
+    this.unsubscribeModule = function (id, node) {
+      const key = String(id || "");
+      const m = self._modListeners.get(key);
+      if (m) {
+        m.delete(node.id);
+        if (m.size === 0) {
+          self._modListeners.delete(key);
+        }
+      }
+      if (self._gpioListeners.size === 0 && self._modListeners.size === 0) {
         self._stopLive();
       }
     };
 
     this._dispatchIo = function (raw) {
       const ev = io.parseIoMessage(raw);
-      if (!ev) {
+      const mod = io.parseModuleEvent(raw);
+      if (!ev && !mod) {
         return;
       }
       self._live = true;
-      const m = self._gpioListeners.get(ev.gpio);
-      if (!m) {
-        return;
-      }
-      m.forEach((cb) => {
-        try {
-          cb(ev);
-        } catch (err) {
-          self.warn(err.message || err);
+      if (ev) {
+        const m = self._gpioListeners.get(ev.gpio);
+        if (m) {
+          m.forEach((cb) => {
+            try {
+              cb(ev);
+            } catch (err) {
+              self.warn(err.message || err);
+            }
+          });
         }
-      });
+      }
+      if (mod) {
+        const m = self._modListeners.get(mod.id);
+        if (m) {
+          m.forEach((cb) => {
+            try {
+              cb(mod);
+            } catch (err) {
+              self.warn(err.message || err);
+            }
+          });
+        }
+      }
     };
 
     this._ensureLive = function () {
@@ -245,6 +286,7 @@ module.exports = function (RED) {
 
     this.on("close", (done) => {
       self._gpioListeners.clear();
+      self._modListeners.clear();
       self._stopLive();
       done();
     });

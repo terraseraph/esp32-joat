@@ -143,11 +143,11 @@ cJSON* apply_one_pin(cJSON* pin, bool persist) {
         rc = io_pwm_configure(gpio, json_int(pin, "hz", 1000), json_int(pin, "duty", 0), err,
                               sizeof(err));
     } else if (strcmp(mode, "servo") == 0) {
-        int min_us = clamp_int(json_int(pin, "min_us", 1000), 500, 1500);
-        int max_us = clamp_int(json_int(pin, "max_us", 2000), 1500, 2500);
+        int min_us = clamp_int(json_int(pin, "min_us", 500), 500, 1500);
+        int max_us = clamp_int(json_int(pin, "max_us", 2500), 1500, 2500);
         if (max_us <= min_us) {
-            min_us = 1000;
-            max_us = 2000;
+            min_us = 500;
+            max_us = 2500;
         }
         int angle = clamp_int(json_int(pin, "angle", 90), 0, 180);
         set_num(pin, "min_us", min_us);
@@ -206,6 +206,8 @@ int io_emit_snapshot() {
             const char* typ = json_str(it, "type", "");
             if (strcmp(typ, "mfrc522") == 0) {
                 topic = "io/rfid";
+            } else if (strcmp(typ, "bme280") == 0) {
+                topic = "io/env";
             }
         }
         if (!topic) {
@@ -257,7 +259,7 @@ const CmdInfo kCmds[] = {
     {"module.catalog", "Addon types and pin schemas", "{\"cmd\":\"module.catalog\"}"},
     {"module.list", "Configured module instances plus live state", "{\"cmd\":\"module.list\"}"},
     {"module.add", "Validate, apply, and persist a module instance",
-     "{\"cmd\":\"module.add\",\"type\":\"mfrc522\",\"id\":\"rfid0\",\"bus\":\"vspi\",\"pins\":{\"sck\":18,\"miso\":19,\"mosi\":23,\"cs\":5,\"rst\":4}}"},
+     "{\"cmd\":\"module.add\",\"type\":\"bme280\",\"id\":\"env0\",\"bus\":\"i2c0\",\"pins\":{\"sda\":21,\"scl\":22},\"settings\":{\"addr\":118,\"sample_ms\":1000,\"osrs_t\":1,\"osrs_p\":1,\"osrs_h\":1,\"filter\":0,\"mode\":\"normal\"}}"},
     {"module.configure", "Re-apply pins for an existing module id",
      "{\"cmd\":\"module.configure\",\"id\":\"rfid0\",\"pins\":{\"sck\":18,\"miso\":19,\"mosi\":23,\"cs\":15}}"},
     {"module.remove", "Teardown and forget a module instance",

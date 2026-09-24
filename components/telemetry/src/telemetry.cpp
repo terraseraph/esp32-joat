@@ -1,10 +1,8 @@
 #include "telemetry.hpp"
 
 #include "device_identity.hpp"
-#include "esp_heap_caps.h"
 #include "esp_log.h"
 #include "esp_system.h"
-#include "esp_timer.h"
 #include "event_bus.hpp"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -31,6 +29,7 @@ cJSON* telemetry_snapshot() {
     cJSON_AddNumberToObject(o, "reset_reason", esp_reset_reason());
     cJSON_AddNumberToObject(o, "heap_free", static_cast<double>(esp_get_free_heap_size()));
     cJSON_AddNumberToObject(o, "heap_min", static_cast<double>(esp_get_minimum_free_heap_size()));
+    cJSON_AddItemToObject(o, "memory", memory_status_json());
     cJSON_AddStringToObject(o, "boot_state", boot_state_name(RuntimeStatus::instance().boot_state()));
     cJSON_AddBoolToObject(o, "safe_mode", RuntimeStatus::instance().safe_mode());
     cJSON_AddItemToObject(o, "network", network_status_json());
@@ -52,6 +51,7 @@ static void telemetry_task(void*) {
 }
 
 esp_err_t telemetry_init() {
+    memory_hooks_init();
     ESP_LOGI(TAG, "init");
     return ESP_OK;
 }

@@ -2,6 +2,7 @@
 
 #include "cJSON.h"
 #include "esp_err.h"
+#include "memory_budget.hpp"
 
 namespace runtime {
 

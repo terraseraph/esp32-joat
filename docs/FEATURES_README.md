@@ -27,7 +27,7 @@ Template: [templates/FEATURE_README_TEMPLATE.md](templates/FEATURE_README_TEMPLA
 | state_registry | mvp | [state_registry_README.md](../components/state_registry/state_registry_README.md) | Live I/O and system state |
 | capability_manager | mvp | [capability_manager_README.md](../components/capability_manager/capability_manager_README.md) | ESP32 pin truth; reject before mutate |
 | board_profiles | mvp | [board_profiles_README.md](../components/board_profiles/board_profiles_README.md) | DevKitC LED/BOOT + header pinout / buses |
-| resource_manager | mvp | [resource_manager_README.md](../components/resource_manager/resource_manager_README.md) | One owner per GPIO; SPI host refcount |
+| resource_manager | mvp | [resource_manager_README.md](../components/resource_manager/resource_manager_README.md) | One owner per GPIO; SPI and I2C host refcount |
 | module_manager | mvp | [module_manager_README.md](../components/module_manager/module_manager_README.md) | Catalog + NVS instances; apply/teardown vtable |
 | io_gpio | mvp | [io_gpio_README.md](../components/io_gpio/io_gpio_README.md) | Digital in/out + debounce IRQ |
 | io_pwm | mvp | [io_pwm_README.md](../components/io_pwm/io_pwm_README.md) | LEDC PWM (8 ch, shared Hz) |
@@ -35,17 +35,20 @@ Template: [templates/FEATURE_README_TEMPLATE.md](templates/FEATURE_README_TEMPLA
 | io_adc | mvp | [io_adc_README.md](../components/io_adc/io_adc_README.md) | ADC1 only (Wi-Fi on) |
 | io_rules | mvp | [io_rules_README.md](../components/io_rules/io_rules_README.md) | On-device if-this-then-that (input → output) |
 | mod_mfrc522 | mvp | [mod_mfrc522_README.md](../components/mod_mfrc522/mod_mfrc522_README.md) | SPI RFID; shared bus, unique CS |
+| mod_bme280 | mvp | [mod_bme280_README.md](../components/mod_bme280/mod_bme280_README.md) | I2C env sensor; shared bus, unique addr |
+| Potential modules | later | [potential_modules_README.md](features/potential_modules_README.md) | More I2C chips + WS281x strip; not compiled in |
 | command_router | mvp | [command_router_README.md](../components/command_router/command_router_README.md) | Single command API for HTTP/WS/MQTT |
 | network_manager | mvp | [network_manager_README.md](../components/network_manager/network_manager_README.md) | STA + SoftAP + mDNS |
 | provisioning | mvp | [provisioning_README.md](../components/provisioning/provisioning_README.md) | Captive DNS + test-before-commit Wi-Fi |
 | web_server | mvp | [web_server_README.md](../components/web_server/web_server_README.md) | REST `/api/v1`, OpenAPI, WebSocket, embedded UI |
 | mqtt_manager | mvp | [mqtt_manager_README.md](../components/mqtt_manager/mqtt_manager_README.md) | Remote commands and live `io` events |
-| telemetry | mvp | [telemetry_README.md](../components/telemetry/telemetry_README.md) | 15 s diagnostics snapshot (hydrate) |
+| telemetry | mvp | [telemetry_README.md](../components/telemetry/telemetry_README.md) | 15 s diagnostics snapshot (hydrate), heap pools, module admission |
 | serial_session | mvp | [serial_session_README.md](../components/serial_session/serial_session_README.md) | UART0 REPL + hello/hydrate NDJSON IO stream |
 | ota_manager | mvp | [ota_manager_README.md](../components/ota_manager/ota_manager_README.md) | A/B apply, URL pull, pending confirm, rollback |
 | Flash tool (Windows) | mvp | [flash_tool_README.md](features/flash_tool_README.md) | Lists COM ports, flashes, optional device name |
 | LAN discover / OTA | mvp | [lan_discover_ota_README.md](features/lan_discover_ota_README.md) | mDNS+HTTP scan; Wi-Fi OTA push |
 | Node-RED contrib | mvp | [nodered_README.md](features/nodered_README.md) | Host palette: discover/rename + GPIO in/out pinout |
+| Browser flash installer | mvp | [web_flash_README.md](features/web_flash_README.md) | Chrome/Edge Web Serial flash, then name and Wi-Fi on UART |
 
 ## Dependency sketch
 

@@ -38,6 +38,8 @@ function parseIoMessage(raw) {
     value = data.mv;
   } else if (mode === "pwm" && typeof data.duty === "number") {
     value = data.duty;
+  } else if (mode === "servo" && typeof data.angle === "number") {
+    value = data.angle;
   } else if (typeof data.level === "number") {
     value = data.level;
   } else if (typeof data.duty === "number") {
@@ -57,4 +59,27 @@ function parseIoMessage(raw) {
   };
 }
 
-module.exports = { parseJson, parseIoMessage };
+/** RFID and other module frames have an id and no gpio. */
+function parseModuleEvent(raw) {
+  const msg = parseJson(raw);
+  if (!msg || typeof msg !== "object") {
+    return null;
+  }
+  const topic = String(msg.topic || "");
+  if (topic.indexOf("io/") !== 0) {
+    return null;
+  }
+  const data = msg.data && typeof msg.data === "object" ? msg.data : msg;
+  if (!data.id || typeof data.gpio === "number") {
+    return null;
+  }
+  return {
+    id: String(data.id),
+    present: !!data.present,
+    uid: data.uid ? String(data.uid) : "",
+    topic,
+    data,
+  };
+}
+
+module.exports = { parseJson, parseIoMessage, parseModuleEvent };

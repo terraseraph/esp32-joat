@@ -119,8 +119,35 @@ pre{white-space:pre-wrap;max-height:320px;overflow:auto;background:var(--in);pad
 .gauge .n{color:var(--muted);font-size:12px;font-variant-numeric:tabular-nums;white-space:nowrap}
 .adcbar{height:4px;width:100%;background:var(--in);border:1px solid var(--line);border-radius:99px;overflow:hidden;margin-top:2px}
 .adcbar>i{display:block;height:100%;width:0;background:#c084fc}
-.modrow,.addon{padding:10px 0;border-bottom:1px solid var(--line)}
-.modrow:last-child,.addon:last-child{border-bottom:0}
+.dashh{margin:16px 0 8px;font-size:12px;font-weight:650;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.dashh:first-child{margin-top:0}
+.dash{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px}
+.vcard{--vc:var(--muted);background:var(--in);border:1px solid var(--line);border-top:3px solid var(--vc);border-radius:var(--r);padding:12px;min-height:132px;display:flex;flex-direction:column;gap:6px;color:var(--vc)}
+.vcard.in{--vc:#6aa4ff}.vcard.adc{--vc:#c084fc}.vcard.out{--vc:#e0a84a}.vcard.pwm{--vc:#f0abfc}.vcard.servo{--vc:#fb923c}.vcard.mod{--vc:#3dcec0}
+.vcard .top{display:flex;justify-content:space-between;align-items:flex-start;gap:8px}
+.vcard .kind{display:flex;align-items:center;gap:6px;font-size:12px;font-weight:700;letter-spacing:.04em;text-transform:uppercase}
+.vcard .kind .i{width:16px;height:16px}
+.vcard .pin{color:var(--muted);font-size:12px;text-align:right;font-variant-numeric:tabular-nums}
+.vcard .read{color:var(--fg);font-size:22px;font-weight:650;font-variant-numeric:tabular-nums;line-height:1.15}
+.vcard .subr{color:var(--muted);font-size:12px;font-variant-numeric:tabular-nums}
+.lamp{display:flex;align-items:center;gap:12px;margin-top:auto}
+.led{width:22px;height:22px;border-radius:50%;background:#12181f;box-shadow:inset 0 0 0 2px var(--vc);flex:0 0 auto;opacity:.55}
+.vcard.out .led{width:16px;height:16px;margin:3px;border-radius:3px;transform:rotate(45deg)}
+.led.on{background:var(--vc);opacity:1;box-shadow:0 0 14px var(--vc)}
+.dial{color:var(--vc);margin-top:2px}
+.dial svg{width:100%;height:auto;display:block}
+.dial .track{opacity:.22}
+.meters{display:flex;flex-direction:column;gap:6px;margin-top:4px}
+.meter{display:grid;grid-template-columns:28px 1fr auto;gap:6px;align-items:center;color:var(--muted);font-size:11px}
+.meter .track{height:6px;background:#12181f;border-radius:99px;overflow:hidden;border:1px solid var(--line)}
+.meter .track>i{display:block;height:100%;width:0;background:var(--vc)}
+.meter .n{font-variant-numeric:tabular-nums;color:var(--fg)}
+.modmosaic{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:10px}
+.modmosaic .addon{margin:0;padding:12px;border:1px solid var(--line);border-radius:var(--r);background:var(--in);cursor:pointer}
+.addonhead{display:flex;justify-content:space-between;align-items:flex-start;gap:8px}
+.addonhead .act{margin:0}
+.addon .modes{margin:8px 0 0}
+.addon .live{margin:8px 0 0;font-size:18px}
 .addonhead{display:flex;justify-content:space-between;align-items:flex-start;gap:8px}
 .addonhead .act{margin:0}
 .addon .modes{margin:8px 0 0}
@@ -174,7 +201,13 @@ net:'<path d="M5 12.5a9.5 9.5 0 0114 0M8.5 16a5 5 0 017 0"/><circle cx="12" cy="
 mq:'<path d="M12 20v-9"/><circle cx="12" cy="8" r="2"/><path d="M7 13a7 7 0 0110 0M4 10a11 11 0 0116 0"/>',
 log:'<path d="M8 6h13M8 12h13M8 18h13M4 6h.01M4 12h.01M4 18h.01"/>',
 sys:'<path d="M4 8h16M4 16h16"/><circle cx="9" cy="8" r="2"/><circle cx="15" cy="16" r="2"/>',
-api:'<path d="M9 8l-5 4 5 4M15 8l5 4-5 4"/>'
+api:'<path d="M9 8l-5 4 5 4M15 8l5 4-5 4"/>',
+din:'<path d="M14 12H3M10 8l4 4-4 4"/><rect x="14" y="4" width="6" height="16" rx="1"/>',
+dout:'<path d="M10 12h11M17 8l4 4-4 4"/><rect x="4" y="4" width="6" height="16" rx="1"/>',
+dadc:'<path d="M4 19V5M4 19h16M8 15l3-5 3 3 4-7"/>',
+dpwm:'<path d="M3 12h2l2-6 4 12 3-6h7"/>',
+dservo:'<path d="M12 7a5 5 0 105 5"/><path d="M12 3v4M12 12l4-2"/>',
+dmod:'<rect x="7" y="7" width="10" height="10" rx="1"/><path d="M12 7V4m0 16v-3M7 12H4m16 0h-3"/>'
 };
 const TABS=[
   {n:"Overview",c:"#6aa4ff",k:"ov"},
@@ -185,13 +218,13 @@ const TABS=[
   {n:"System",c:"#f08060",k:"sys"},
   {n:"API",c:"#7dd3fc",k:"api"}
 ];
-let tab="Overview", st=null, hw=null, spec=null, ws, drawn=null, picked=false, pinFilter="all", selGpio=null, wantWs=true, pinCfg={}, mods=null, modCat=null, wiz=null, rules=[], rulePick=false, ruleDest=null;
+let tab="Overview", st=null, hw=null, spec=null, ws, drawn=null, picked=false, pinFilter="all", selGpio=null, wantWs=true, pinCfg={}, mods=null, modCat=null, wiz=null, rules=[], rulePick=false, ruleDest=null, dashKey="", dashWant=false;
 const MODE_LAB={in:"In",out:"Out",pwm:"PWM",servo:"Servo",adc:"ADC",disabled:"Off"};
 const MODE_HINT={
   in:"Digital input. Each stable edge is published over MQTT and the live UI.",
   out:"Digital output. Apply saves the power-on level; Set HIGH/LOW changes it live.",
   pwm:"PWM output. Duty is 0–1000 (0–100%). All PWM pins share one frequency.",
-  servo:"Hobby servo at 50 Hz (8 channels, separate from PWM). Angle 0–180. Apply saves rest position.",
+  servo:"Hobby servo at 50 Hz (8 channels, separate from PWM). Angle 0–180. Default pulse 500–2500 µs; change it if this servo does not match. Apply saves rest position.",
   adc:"Analog input on ADC1 (~0–3.3 V). This mode cannot drive the pin.",
   disabled:"Release the pin (high impedance). Stops sampling and output."
 };
@@ -220,6 +253,38 @@ function heap(n){
   if(n==null||n==="?") return "?";
   n=+n; return n>=1048576?(n/1048576).toFixed(1)+" MB":Math.round(n/1024)+" KB";
 }
+function pressureTone(mem){
+  const p=mem&&mem.pressure;
+  if(p==="ok") return "ok";
+  if(p==="warn") return "warn";
+  if(p==="critical") return "bad";
+  return "";
+}
+function memBar(label, value, total){
+  const v=+value||0, t=+total||0;
+  const pct=t>0?Math.max(0,Math.min(100,Math.round(100*v/t))):0;
+  return `<div class="gauge"><span class="n">${esc(label)}</span><span class="track"><i style="width:${pct}%"></i></span><span class="n">${heap(v)}</span></div>`;
+}
+function memoryBody(){
+  const m=(st&&st.memory)||{};
+  const inn=m.internal||{};
+  const dma=m.dma||{};
+  const boot=(m.boot||[]).map(b=>`<div>${esc(b.stage)} free ${heap(b.free)} · largest ${heap(b.largest)}</div>`).join("")||"—";
+  const tasks=(m.tasks||[]).map(t=>`<div>${esc(t.name)} stack min ${heap(t.stack_min)}</div>`).join("")||"—";
+  const psram=m.psram?`PSRAM free ${heap(m.psram.free)} · largest ${heap(m.psram.largest)}`:"no PSRAM";
+  const failed=m.alloc_failed?`<p class="bad">Allocation failed (${heap(m.alloc_failed_size)}).</p>`:"";
+  return kv([
+    ["Pressure", `<span class="${pressureTone(m)}">${esc(m.pressure||"?")}</span>`],
+    ["Free", heap(inn.free)],
+    ["Low water", heap(inn.min)],
+    ["Largest", heap(inn.largest)],
+    ["Used", `${heap(inn.used)} / ${heap(inn.total)}`],
+    ["DMA", `free ${heap(dma.free)} · largest ${heap(dma.largest)}`],
+    ["PSRAM", psram],
+    ["Reserve", heap(m.reserve)]
+  ])+memBar("free", inn.free, inn.total)+memBar("low", inn.min, inn.total)+memBar("largest", inn.largest, inn.total)+
+    failed+`<p class="hint">Boot</p>${boot}<p class="hint">Stack minimum free${m.tasks_truncated?" (truncated)":""}</p>${tasks}`;
+}
 function rssiBars(rssi){
   if(rssi==null||rssi==="—") return "";
   const n=rssi>=-55?4:rssi>=-65?3:rssi>=-75?2:1;
@@ -240,7 +305,7 @@ function paintChrome(){
   document.getElementById("pills").innerHTML=
     `<span class="pill ${netTone(n.state)}">${esc(n.state||"?")}</span>`+
     `<span class="pill ${mq?"ok":"bad"}">mqtt ${mq?"up":"down"}</span>`+
-    `<span class="pill">heap ${heap(st&&st.heap_free)}</span>`+
+    `<span class="pill ${pressureTone(st&&st.memory)}">heap ${heap(st&&st.heap_free)}</span>`+
     (st&&st.safe_mode?`<span class="pill bad">SAFE MODE</span>`:"");
 }
 function setLive(id, html){
@@ -251,32 +316,199 @@ function setText(id, text){
   const n=document.getElementById(id);
   if(n) n.textContent=text;
 }
-function overviewBody(){
-  const prefix=(st&&st.mqtt&&st.mqtt.prefix)||((st&&st.mqtt&&st.mqtt.root||"devices")+"/"+(st&&st.topic_id||st&&st.id||"{id}"));
-  const n=net();
-  return kv([
-    ["Name", `<code>${esc(st&&st.name)}</code>`],
-    ["Id", `<code>${esc(st&&st.id)}</code>`],
-    ["MQTT", `<code>${esc(prefix)}</code>`],
-    ["Firmware", esc(st&&st.fw)],
-    ["Chip", esc(st&&st.chip)],
-    ["Uptime", (st&&st.uptime_s||0)+"s"],
-    ["Reset", esc(st&&st.reset_reason)],
-    ["Boot", `<code>${esc(st&&st.boot_state)}</code>`],
-    ["Schema", `${st&&st.schema} · gen ${st&&st.generation}`],
-    ["STA", `<code>${esc(n.sta_ip||"—")}</code>`],
-    ["AP", `<code>${esc(n.ap_ip||"—")}</code>`],
-    ["mDNS", `<code>${esc(st&&st.hostname)}.local</code>`],
-    ["RSSI", `${rssiBars(n.rssi)} ${n.rssi??"—"} dBm`],
-    ["AP SSID", `<code>${esc(st&&st.ap_ssid)}</code> · ${n.ap_open!==false?"open":"WPA2"}`]
-  ])+(st&&st.safe_mode?`<p class="bad">Safe mode: ${esc(st.safe_reason)} — I/O config not applied.</p>`:"");
+const ARC=106.8;
+function silkOf(g){
+  const pads=[].concat((hw&&hw.header&&hw.header.left)||[],(hw&&hw.header&&hw.header.right)||[]);
+  const p=pads.find(x=>x.gpio===g);
+  return p&&p.silk&&String(p.silk)!==String(g)?p.silk:"";
+}
+function ioKey(u){
+  const m=u&&u.mode;
+  const p=m==="adc"?"adc_":m==="pwm"?"pwm_":m==="servo"?"servo_":"gpio_";
+  return p+(u&&u.gpio);
+}
+function dashChannels(){
+  const seen={}, ins=[], outs=[];
+  Object.values((st&&st.io)||{}).forEach(u=>{
+    if(!u||u.gpio==null||!u.mode||u.mode==="disabled"||seen[u.gpio]) return;
+    if(u.mode!=="in"&&u.mode!=="out"&&u.mode!=="pwm"&&u.mode!=="adc"&&u.mode!=="servo") return;
+    seen[u.gpio]=1;
+    (u.mode==="in"||u.mode==="adc"?ins:outs).push(u);
+  });
+  const by=(a,b)=>a.gpio-b.gpio;
+  ins.sort(by); outs.sort(by);
+  const list=(mods&&mods.modules)||[];
+  const modItems=list.length?list:Object.keys((st&&st.io)||{}).filter(k=>k.indexOf("mod_")===0).map(k=>{
+    const live=st.io[k]||{};
+    return {id:live.id||k.slice(4), type:live.type||"", pins:{}, state:live};
+  });
+  return {ins, outs, mods:modItems};
+}
+function gaugeSvg(id){
+  const d="M12 46 A34 34 0 0 1 80 46";
+  return `<div class="dial"><svg viewBox="0 0 92 52" aria-hidden="true"><path class="track" d="${d}" fill="none" stroke="currentColor" stroke-width="7" stroke-linecap="round"/><path class="arc" id="arc-${esc(id)}" d="${d}" fill="none" stroke="currentColor" stroke-width="7" stroke-linecap="round" stroke-dasharray="0 ${ARC}"/></svg></div>`;
+}
+function setArc(id, pct){
+  const n=document.getElementById("arc-"+id);
+  if(!n) return;
+  const p=Math.max(0, Math.min(100, +pct||0));
+  n.setAttribute("stroke-dasharray", (ARC*p/100).toFixed(1)+" "+ARC);
+}
+function setBar(id, pct){
+  const n=document.getElementById(id);
+  if(n) n.style.width=Math.max(0, Math.min(100, +pct||0))+"%";
+}
+function vcardIo(u){
+  const mode=u.mode, id=ioKey(u), silk=silkOf(u.gpio);
+  const theme=mode==="adc"?"adc":mode==="pwm"?"pwm":mode==="servo"?"servo":mode==="in"?"in":"out";
+  const icon=mode==="adc"?"dadc":mode==="pwm"?"dpwm":mode==="servo"?"dservo":mode==="in"?"din":"dout";
+  const pin="GPIO "+u.gpio+(silk?" · "+silk:"");
+  const body=(mode==="in"||mode==="out")
+    ?`<div class="lamp"><span class="led" id="led-${esc(id)}"></span><div class="read" id="read-${esc(id)}">—</div></div>`
+    :gaugeSvg(id)+`<div class="read" id="read-${esc(id)}">—</div><div class="subr" id="sub-${esc(id)}"></div>`;
+  return `<article class="vcard ${theme}"><div class="top"><span class="kind">${ico(icon)}${esc(MODE_LAB[mode]||mode)}</span><span class="pin">${esc(pin)}</span></div>${body}</article>`;
+}
+function vcardMod(m){
+  const id="mod_"+m.id;
+  const t=typeById(m.type);
+  const label=(t&&t.label)||m.type||"Module";
+  const pins=pinSummary(m.pins);
+  const env=m.type==="bme280";
+  const body=env
+    ?(gaugeSvg(id+"t")+`<div class="read" id="read-${esc(id)}">—</div><div class="subr" id="sub-${esc(id)}"></div><div class="meters"><div class="meter"><span>RH</span><span class="track"><i id="bar-${esc(id)}-rh"></i></span><span class="n" id="n-${esc(id)}-rh">—</span></div><div class="meter"><span>hPa</span><span class="track"><i id="bar-${esc(id)}-p"></i></span><span class="n" id="n-${esc(id)}-p">—</span></div></div>`)
+    :`<div class="lamp"><span class="led" id="led-${esc(id)}"></span><div><div class="read" id="read-${esc(id)}">—</div><div class="subr" id="sub-${esc(id)}"></div></div></div>`;
+  return `<article class="vcard mod"><div class="top"><span class="kind">${ico("dmod")}${esc(label)}</span><span class="pin">${esc(m.id)}</span></div>${pins?`<div class="subr">${esc(pins)}</div>`:""}${body}</article>`;
+}
+function dashHtml(){
+  const d=dashChannels();
+  const blocks=[];
+  if(d.ins.length) blocks.push(`<h3 class="dashh">Inputs</h3><div class="dash">${d.ins.map(vcardIo).join("")}</div>`);
+  if(d.outs.length) blocks.push(`<h3 class="dashh">Outputs</h3><div class="dash">${d.outs.map(vcardIo).join("")}</div>`);
+  if(d.mods.length) blocks.push(`<h3 class="dashh">Modules</h3><div class="dash">${d.mods.map(vcardMod).join("")}</div>`);
+  if(!blocks.length) return `<p class="hint">Nothing enabled yet. Inputs, outputs, and modules configured on Hardware show up here.</p>`;
+  return blocks.join("");
+}
+function paintIoCard(u){
+  const id=ioKey(u), mode=u.mode;
+  const rd=document.getElementById("read-"+id);
+  if(mode==="in"||mode==="out"){
+    const on=u.level===1;
+    const led=document.getElementById("led-"+id);
+    if(led) led.classList.toggle("on", on);
+    if(rd) rd.textContent=on?"HIGH":u.level===0?"LOW":"—";
+    return;
+  }
+  if(mode==="adc"){
+    const raw=adcRaw(u), mv=u.mv!=null?+u.mv:null;
+    setArc(id, raw==null?0:adcPct(raw));
+    if(rd) rd.textContent=mv==null?"—":(mv/1000).toFixed(2)+" V";
+    const sub=document.getElementById("sub-"+id);
+    if(sub) sub.textContent=raw==null?"":raw+" / 4096"+(mv!=null?" · "+mv+" mV":"");
+    return;
+  }
+  if(mode==="pwm"){
+    const duty=+u.duty||0;
+    setArc(id, duty/10);
+    if(rd) rd.textContent=Math.round(duty/10)+"%";
+    const sub=document.getElementById("sub-"+id);
+    if(sub) sub.textContent=duty+"/1000 · "+(u.hz!=null?u.hz:"?")+" Hz";
+    return;
+  }
+  if(mode==="servo"){
+    const ang=u.angle!=null?+u.angle:null;
+    setArc(id, ang==null?0:(ang/180)*100);
+    if(rd) rd.textContent=ang==null?"—":ang+"°";
+    const sub=document.getElementById("sub-"+id);
+    if(sub) sub.textContent=(u.pulse_us!=null?u.pulse_us+" µs · ":"")+(u.min_us||500)+"–"+(u.max_us||2500)+" µs";
+  }
+}
+function paintModCard(m){
+  const id="mod_"+m.id;
+  const live=(st&&st.io&&st.io[id])||m.state||{};
+  const rd=document.getElementById("read-"+id);
+  const sub=document.getElementById("sub-"+id);
+  if(m.type==="bme280"||live.type==="bme280"){
+    const ok=live.ok!==false && live.t_c!=null;
+    const t=Number(live.t_c), rh=Number(live.rh), p=Number(live.p_hpa);
+    setArc(id+"t", ok?Math.max(0,Math.min(100,((t+10)/60)*100)):0);
+    if(rd) rd.textContent=ok&&Number.isFinite(t)?t.toFixed(1)+" °C":(live.ok===false?"no sensor":"—");
+    if(sub) sub.textContent=ok?"temperature":"";
+    setBar("bar-"+id+"-rh", Number.isFinite(rh)?rh:0);
+    setBar("bar-"+id+"-p", Number.isFinite(p)?Math.max(0,Math.min(100,((p-900)/250)*100)):0);
+    const nr=document.getElementById("n-"+id+"-rh"), np=document.getElementById("n-"+id+"-p");
+    if(nr) nr.textContent=Number.isFinite(rh)?rh.toFixed(0)+"%":"—";
+    if(np) np.textContent=Number.isFinite(p)?p.toFixed(0):"—";
+    return;
+  }
+  const present=!!live.present;
+  const led=document.getElementById("led-"+id);
+  if(led) led.classList.toggle("on", present);
+  const chip=(live.version===0||live.version===255);
+  const field=live.tx!=null && (live.tx&3)!==3;
+  if(rd) rd.textContent=present?(live.uid||"tag"):(chip?"no chip":(field?"no field":(live.id||live.type?"no tag":"starting")));
+  if(sub) sub.textContent=present?"tag present":(chip?"check SPI and RST":(field?"antenna off":(m.type||live.type||"")));
+}
+function paintDash(){
+  const box=document.getElementById("dash");
+  if(!box) return;
+  const d=dashChannels();
+  const key=d.ins.map(ioKey).join(",")+"|"+d.outs.map(ioKey).join(",")+"|"+d.mods.map(m=>m.id+":"+m.type).join(",")+"|"+(hw?"1":"0");
+  if(key!==dashKey){
+    dashKey=key;
+    box.innerHTML=dashHtml();
+  }
+  d.ins.forEach(paintIoCard);
+  d.outs.forEach(paintIoCard);
+  d.mods.forEach(paintModCard);
+  const line=document.getElementById("ovline");
+  if(line){
+    const n=net();
+    line.textContent=((st&&st.name)||"")+" · "+((st&&st.fw)||"")+" · "+((st&&st.uptime_s)||0)+"s · "+(n.sta_ip||"no STA IP");
+  }
+  const safe=document.getElementById("ovsafe");
+  if(safe){
+    safe.hidden=!(st&&st.safe_mode);
+    safe.textContent=st&&st.safe_mode?("Safe mode: "+(st.safe_reason||"")+" — I/O config not applied."):"";
+  }
+}
+function ensureDashData(){
+  if(dashWant||(mods&&modCat&&hw)) return;
+  dashWant=true;
+  const jobs=[];
+  if(!hw) jobs.push(j("/api/v1/hardware").then(h=>{hw=h;}).catch(()=>{}));
+  if(!modCat) jobs.push(cmd({cmd:"module.catalog"}).then(c=>{if(c&&c.ok) modCat=c.result;}).catch(()=>{}));
+  if(!mods) jobs.push(cmd({cmd:"module.list"}).then(l=>{if(l&&l.ok) mods=l.result;}).catch(()=>{}));
+  Promise.all(jobs).then(()=>{ if(tab==="Overview") paintDash(); });
+}
+function addonLiveText(m, live){
+  live=live||{};
+  if((m&&m.type)==="bme280" || live.type==="bme280"){
+    if(live.ok===false) return "no sensor";
+    if(live.t_c==null) return "—";
+    const t=Number(live.t_c), rh=Number(live.rh), p=Number(live.p_hpa);
+    return (Number.isFinite(t)?t.toFixed(1):"—")+" °C · "+
+      (Number.isFinite(rh)?rh.toFixed(0)+"%":"—")+" · "+
+      (Number.isFinite(p)?p.toFixed(0)+" hPa":"—");
+  }
+  if((m&&m.type)==="mfrc522" || live.type==="mfrc522"){
+    if(live.present) return live.uid||"tag";
+    if(live.version===0||live.version===255) return "no chip";
+    if(live.tx!=null && (live.tx&3)!==3) return "no field";
+    if(live.id||live.type) return "no tag";
+    return "starting";
+  }
+  return live.present?live.uid:"—";
+}
+function pinSummary(pins){
+  pins=pins||{};
+  return Object.keys(pins).map(k=>String(k).toUpperCase()+" "+pins[k]).join(" · ");
 }
 function paintAddonLive(){
   ((mods&&mods.modules)||[]).forEach(m=>{
     const n=document.getElementById("modlive-"+m.id);
     if(!n) return;
     const live=(st&&st.io&&st.io["mod_"+m.id])||m.state||{};
-    n.textContent=live.present?live.uid:"—";
+    n.textContent=addonLiveText(m, live);
   });
   document.querySelectorAll("[data-slive]").forEach(n=>{
     const u=ioOf(+n.dataset.slive);
@@ -284,7 +516,7 @@ function paintAddonLive(){
   });
 }
 function paintLive(){
-  if(tab==="Overview") setLive("ov", overviewBody());
+  if(tab==="Overview") paintDash();
   else if(tab==="Hardware"){
     paintPinUses();
     paintAddonLive();
@@ -300,7 +532,10 @@ function paintLive(){
     ]));
     setLive("apmeta", `<p>Recovery AP <code>${esc(st&&st.ap_ssid||n.ap_ssid)}</code> is ${n.ap_open!==false?"open":"WPA2"}.</p>`);
   }else if(tab==="MQTT") setLive("mmeta", mqttMeta());
-  else if(tab==="System") setLive("otameta", otaBody());
+  else if(tab==="System"){
+    setLive("memmeta", memoryBody());
+    setLive("otameta", otaBody());
+  }
 }
 function mqttMeta(){
   const m=(st&&st.mqtt)||{};
@@ -350,7 +585,46 @@ function ownerLabel(o){
   if(!o) return "";
   if(o.indexOf("mod_")==0) return "RFID "+o.slice(4);
   if(o.indexOf("bus_")==0) return o.slice(4).toUpperCase()+" bus";
+  if(o.indexOf("servo_")==0) return "Servo "+o.slice(6);
   return o;
+}
+function claimKind(o){
+  if(!o) return "";
+  if(o.indexOf("bus_")==0) return "bus";
+  if(o.indexOf("mod_")==0) return "mod";
+  if(o.indexOf("servo_")==0) return "servo";
+  return "";
+}
+function modulesUsingGpio(g){
+  return ((mods&&mods.modules)||[]).filter(m=>Object.values(m.pins||{}).some(v=>+v===g));
+}
+function pinRoleName(g){
+  const hit=modulesUsingGpio(g);
+  for(let i=0;i<hit.length;i++){
+    const role=Object.entries(hit[i].pins||{}).find(([,v])=>+v===g);
+    if(role) return role[0].toUpperCase();
+  }
+  const buses=busesFor(g);
+  for(let i=0;i<buses.length;i++){
+    const role=Object.entries(buses[i].pins||{}).find(([,n])=>+n===g);
+    if(role) return role[0].toUpperCase();
+  }
+  return "";
+}
+function modePhrase(u, owner){
+  const m=u&&u.mode;
+  if(m==="in") return "an input";
+  if(m==="out") return "an output";
+  if(m==="pwm") return "PWM";
+  if(m==="adc") return "ADC";
+  if(m==="servo") return "a servo";
+  if(owner) return ownerLabel(owner);
+  return "in use";
+}
+function scrollInto(sel){
+  if(!window.matchMedia("(max-width:1099px)").matches) return;
+  const el=document.querySelector(sel);
+  if(el) el.scrollIntoView({block:"nearest"});
 }
 function useLabel(u){
   if(!u) return "";
@@ -604,8 +878,8 @@ function rememberPin(g){
     duty:+pinVal("pduty",0),
     hz:+pinVal("phz",1000),
     angle:+pinVal("pangle",90),
-    minu:+pinVal("pminu",1000),
-    maxu:+pinVal("pmaxu",2000),
+    minu:+pinVal("pminu",500),
+    maxu:+pinVal("pmaxu",2500),
     deb:+pinVal("pdeb",50),
     samp:+pinVal("psamp",50),
     hyst:+pinVal("physt",20),
@@ -650,6 +924,11 @@ function applyPinFilter(){
     else if(f==="strap") ok=!!(p&&p.strap);
     else if(f==="flash") ok=!!(p&&p.flash);
     else if(f==="on") ok=g!=null&&(!!ioOf(g)||!!pinOwner(g));
+    else if(f.indexOf("mod:")===0){
+      const id=f.slice(4);
+      const m=((mods&&mods.modules)||[]).find(x=>x.id===id);
+      ok=g!=null&&!!(m&&Object.values(m.pins||{}).some(v=>+v===g));
+    }else if(f.indexOf("servo:")===0) ok=g!=null&&+f.slice(6)===g;
     else ok=g!=null&&!!busGpios(f)[g];
     el.classList.toggle("dim", !ok);
     el.classList.toggle("dstpick", destPick && ok);
@@ -727,6 +1006,19 @@ function selectPad(gpio, kind, silk){
     if(form) form.hidden=true;
     paintAdcGauge(null);
     syncPinExtras();
+    scrollInto(".hw-cfg");
+    return;
+  }
+  const own=pinOwner(gpio);
+  const claim=claimKind(own);
+  if(claim){
+    if(gEl) gEl.value="";
+    if(form) form.hidden=true;
+    paintAdcGauge(null);
+    meta.innerHTML=claimCard(gpio, own, claim);
+    const rm=document.getElementById("claimrm");
+    if(rm) rm.onclick=()=>removeClaim(rm.dataset.rm, rm.dataset.servo);
+    scrollInto(".hw-cfg");
     return;
   }
   if(form) form.hidden=false;
@@ -754,18 +1046,54 @@ function selectPad(gpio, kind, silk){
     return `${esc(b.label)} ${esc(role?role[0].toUpperCase():"")} — ${esc(b.hint)}`;
   }).join("<br>");
   const adcCh=p&&p.adc1?` · ADC1 ch ${p.adc_channel}`:p&&p.adc2?` · ADC2 ch ${p.adc_channel}`:"";
-  const own=pinOwner(gpio);
   const linked=ruleOfSrc(gpio);
   const driven=ruleOfDst(gpio);
   meta.innerHTML=`<p><strong>GPIO ${gpio}</strong> ${p&&p.role?`<span class="b role">${esc(p.role)}</span>`:""}</p>
     <p class="hint">${esc(p&&p.notes||"")}${adcCh}${p&&p.touch?` · touch T${p.touch_channel}`:""}</p>
-    ${own?`<p class="hint">Owned by <code>${esc(own)}</code> (${esc(ownerLabel(own))}). Disable or remove that module before using this pin as GPIO.</p>`:""}
     ${linked&&linked.then?`<p class="hint">Rule → GPIO ${linked.then.gpio} ${esc(actLabel(linked.then.gpio, linked.then.value))}.</p>`:""}
     ${driven&&driven.on?`<p class="hint">Driven by GPIO ${driven.on.gpio} rule.</p>`:""}
     ${analogHint(p)}
     ${busTxt?`<p class="hint">${busTxt}</p>`:""}`;
   paintAdcGauge(u);
   syncPinExtras();
+  scrollInto(".hw-cfg");
+}
+function claimCard(gpio, own, kind){
+  const role=pinRoleName(gpio);
+  const roleBit=role?role+" on ":"";
+  if(kind==="servo"){
+    return `<p><strong>GPIO ${gpio}</strong> <span class="b pwm">Servo</span></p>
+      <p class="hint">Hobby servo owns this pin. Remove it before configuring the GPIO.</p>
+      <button class="act sec" type="button" id="claimrm" data-servo="${gpio}">Remove servo</button>`;
+  }
+  const using=kind==="bus"
+    ? ((mods&&mods.modules)||[]).filter(m=>m.bus===own.slice(4))
+    : ((mods&&mods.modules)||[]).filter(m=>m.id===own.slice(4));
+  const names=using.map(m=>m.id);
+  const who=kind==="bus"?ownerLabel(own):ownerLabel(own);
+  let extra="";
+  if(names.length===1){
+    extra=`<p class="hint">${esc(who)} owns ${esc(roleBit)}GPIO ${gpio}, used by ${esc(names[0])}. Remove ${esc(names[0])} before configuring this pin.</p>
+      <button class="act sec" type="button" id="claimrm" data-rm="${esc(names[0])}">Remove ${esc(names[0])}</button>`;
+  }else if(names.length>1){
+    extra=`<p class="hint">${esc(who)} owns ${esc(roleBit)}GPIO ${gpio}, used by ${esc(names.join(" and "))}. Remove each addon before configuring this pin.</p>`;
+  }else{
+    extra=`<p class="hint">${esc(who)} owns ${esc(roleBit)}GPIO ${gpio}. Remove that addon before configuring this pin.</p>`;
+  }
+  return `<p><strong>GPIO ${gpio}</strong></p>${extra}`;
+}
+async function removeClaim(id, servo){
+  if(servo!=null && servo!==""){
+    const gpio=+servo;
+    const r=await cmd({cmd:"pin.configure",pin:{gpio,mode:"disabled",name:"gpio_"+gpio}});
+    showMsg(r.ok?"Servo released":(r.error||"failed"), !r.ok);
+    if(r.ok){ hw=null; drawn=null; refresh(); }
+    return;
+  }
+  if(!id) return;
+  const r=await cmd({cmd:"module.remove",id});
+  showMsg(r.ok?"Removed":(r.error||"failed"), !r.ok);
+  if(r.ok){ mods=r.result; hw=null; drawn=null; if(pinFilter==="mod:"+id) pinFilter="all"; refresh(); }
 }
 function syncPinExtras(){
   const mode=currentMode();
@@ -801,8 +1129,8 @@ function syncPinExtras(){
   fill("physt", u&&u.hysteresis_mv, saved.hyst??20);
   fill("psmooth", u&&u.smooth, saved.smooth??70);
   fill("pangle", u&&u.angle, saved.angle??90);
-  fill("pminu", u&&u.min_us, saved.minu??1000);
-  fill("pmaxu", u&&u.max_us, saved.maxu??2000);
+  fill("pminu", u&&u.min_us, saved.minu??500);
+  fill("pmaxu", u&&u.max_us, saved.maxu??2500);
   const cfg=pinField("pcfg");
   const on=pinField("pon");
   const off=pinField("poff");
@@ -863,8 +1191,8 @@ function bindPinEditor(){
     }
     if(mode==="servo"){
       pin.angle=+(pinVal("pangle",90));
-      pin.min_us=+(pinVal("pminu",1000));
-      pin.max_us=+(pinVal("pmaxu",2000));
+      pin.min_us=+(pinVal("pminu",500));
+      pin.max_us=+(pinVal("pmaxu",2500));
     }
     if(mode==="adc"){
       pin.sample_ms=+(pinVal("psamp",50));
@@ -1013,9 +1341,11 @@ function instRoles(t){return (t&&t.pins||[]).filter(p=>p.share!=="bus");}
 function busRoles(t){return (t&&t.pins||[]).filter(p=>p.share==="bus");}
 function roleHint(role){
   if(!role) return "";
-  if(role.share==="bus") return "Taken from the SPI bus and shared with other devices on it.";
+  if(role.share==="bus") return "Taken from the bus and shared with other devices on it.";
   if(role.role==="cs") return "Chip-select. On an RC522 the pad labelled SDA is CS, not I2C. Click it on the pinout.";
   if(role.role==="rst") return "Reset. Skip if RST is tied high on the module.";
+  if(role.role==="sda") return "I2C data. Default GPIO 21. Shared with every device on this bus.";
+  if(role.role==="scl") return "I2C clock. Default GPIO 22. Shared with every device on this bus.";
   return role.required?"Click a free GPIO on the pinout, or a button below.":"Optional. Skip if unused.";
 }
 function wizCurrentGpio(){
@@ -1049,11 +1379,38 @@ function wizPinButtons(selected){
     return `<button type="button" data-gpio="${g}" class="${g===selected?"on":""}">GPIO ${g}</button>`;
   }).join("");
 }
+function busShareKeys(busId){
+  return Object.keys(busPins(busId)).filter(k=>k!=="ss");
+}
+function busConflicts(busId){
+  const p=busPins(busId);
+  return busShareKeys(busId).map(k=>{
+    const g=p[k];
+    if(g==null||!pinTaken(+g)) return null;
+    return "GPIO "+g+" is "+modePhrase(ioOf(+g), pinOwner(+g));
+  }).filter(Boolean);
+}
+function busConflictText(b){
+  const p=(b&&b.pins)||busPins(b&&b.id);
+  const bits=Object.keys(p).filter(k=>k!=="ss").map(k=>{
+    const g=p[k];
+    if(g==null||!pinTaken(+g)) return null;
+    return "GPIO "+g+" is "+modePhrase(ioOf(+g), pinOwner(+g));
+  }).filter(Boolean);
+  if(!bits.length) return "";
+  const mid=bits.length===1?bits[0]:bits.slice(0,-1).join(", ")+" and "+bits[bits.length-1];
+  return (b.label||b.id)+" works. "+mid+". Set those Off, or pick another bus.";
+}
 function fillBusPins(t, busId){
   const bp=busPins(busId);
+  const live=((mods&&mods.modules)||[]).find(m=>m.bus===busId);
+  const src=(live&&live.pins)||bp;
   const next={};
   (t.pins||[]).forEach(p=>{
-    if(p.share==="bus" && bp[p.role]!=null) next[p.role]=+bp[p.role];
+    if(p.share==="bus"){
+      const g=src[p.role]!=null?src[p.role]:bp[p.role];
+      if(g!=null) next[p.role]=+g;
+    }
   });
   if(bp.ss!=null && !pinTaken(+bp.ss)) next.cs=+bp.ss;
   else if(wiz.pins && wiz.pins.cs!=null) next.cs=wiz.pins.cs;
@@ -1087,8 +1444,42 @@ function wizActs(nextLabel, nextId, extra){
     ${nextId?`<button class="act" type="button" id="${nextId}">${esc(nextLabel)}</button>`:""}
   </div>`;
 }
-function pinSummary(pins){
-  return Object.keys(pins||{}).map(k=>k.toUpperCase()+" "+pins[k]).join(" · ")||"—";
+function settingFields(t, vals){
+  return ((t&&t.settings)||[]).map(s=>{
+    const cur=vals[s.key]!=null?vals[s.key]:s.def;
+    if(s.kind==="enum"){
+      const choices=s.choices||[];
+      return `<div class="field"><label>${esc(s.label||s.key)}</label>
+        <div class="modes" data-set="${esc(s.key)}" role="group">
+          ${choices.map(c=>`<button type="button" data-v="${esc(c.value)}"${String(c.value)===String(cur)?" class=\"on\"":""}>${esc(c.label||c.value)}</button>`).join("")}
+        </div></div>`;
+    }
+    return `<div class="field"><label for="set-${esc(s.key)}">${esc(s.label||s.key)}</label>
+      <input id="set-${esc(s.key)}" data-set="${esc(s.key)}" type="number" inputmode="numeric" value="${esc(cur)}"
+        ${s.min!=null?`min="${s.min}"`:""} ${s.max!=null?`max="${s.max}"`:""}></div>`;
+  }).join("");
+}
+function readSettings(t){
+  const o={};
+  ((t&&t.settings)||[]).forEach(s=>{
+    if(s.kind==="enum"){
+      const on=document.querySelector(`[data-set="${s.key}"] button.on`);
+      const v=on?on.dataset.v:s.def;
+      o[s.key]=/^-?\d+$/.test(String(v))?+v:v;
+    }else{
+      const n=document.getElementById("set-"+s.key);
+      o[s.key]=n?+n.value:(s.def!=null?+s.def:0);
+    }
+  });
+  return o;
+}
+function defaultSettings(t){
+  const o={};
+  ((t&&t.settings)||[]).forEach(s=>{
+    const v=s.def;
+    o[s.key]=/^-?\d+$/.test(String(v))?+v:v;
+  });
+  return o;
 }
 function paintModList(){
   const box=document.getElementById("modlist");
@@ -1101,26 +1492,27 @@ function paintModList(){
   }
   const modsHtml=items.map(m=>{
     const live=(st&&st.io&&st.io["mod_"+m.id])||m.state||{};
-    const uid=live.present?live.uid:"—";
+    const uid=addonLiveText(m, live);
     const t=typeById(m.type);
-    return `<div class="addon">
+    const set=m.settings?Object.keys(m.settings).map(k=>k+" "+m.settings[k]).join(" · "):"";
+    return `<div class="addon" data-mod="${esc(m.id)}">
       <div class="addonhead">
         <div>
           <strong>${esc(m.id)}</strong> <span class="b io">${esc((t&&t.label)||m.type)}</span>
-          <p class="hint">${esc(m.bus||"")} · ${esc(pinSummary(m.pins))}</p>
+          <p class="hint">${esc(m.bus||"")} · ${esc(pinSummary(m.pins))}${set?" · "+esc(set):""}</p>
         </div>
         <button type="button" class="act sec" data-rm="${esc(m.id)}">Remove</button>
       </div>
-      <p>Tag <code id="modlive-${esc(m.id)}">${esc(uid||"—")}</code></p>
+      <p class="live"><code id="modlive-${esc(m.id)}">${esc(uid||"—")}</code></p>
     </div>`;
   }).join("");
   const servoHtml=servos.map(u=>{
     const g=u.gpio;
-    return `<div class="addon">
+    return `<div class="addon" data-servo="${g}">
       <div class="addonhead">
         <div>
           <strong>GPIO ${g}</strong> <span class="b pwm">Servo</span>
-          <p class="hint">${u.min_us||1000}–${u.max_us||2000} µs · 50 Hz</p>
+          <p class="hint">${u.min_us||500}–${u.max_us||2500} µs · 50 Hz</p>
         </div>
         <button type="button" class="act sec" data-unservo="${g}">Remove</button>
       </div>
@@ -1146,6 +1538,15 @@ function paintModList(){
       const r=await cmd({cmd:"pin.configure",pin:{gpio,mode:"disabled",name:"gpio_"+gpio}});
       showMsg(r.ok?"Servo released":(r.error||"failed"), !r.ok);
       if(r.ok){ hw=null; drawn=null; refresh(); }
+    };
+  });
+  box.querySelectorAll(".addon").forEach(card=>{
+    card.onclick=e=>{
+      if(e.target.closest("button")) return;
+      if(card.dataset.mod) pinFilter="mod:"+card.dataset.mod;
+      else if(card.dataset.servo!=null) pinFilter="servo:"+card.dataset.servo;
+      applyPinFilter();
+      scrollInto(".pinwrap");
     };
   });
   box.querySelectorAll("[data-sgpio]").forEach(g=>{
@@ -1216,12 +1617,12 @@ function paintWizard(){
         </div>
         <div class="field"><label for="wizangle">Angle (0–180)</label>
           <input id="wizangle" type="number" inputmode="numeric" min="0" max="180" value="${ang}"></div>
-        <details class="adv"><summary>Pulse range (optional)</summary>
+        <details class="adv"><summary>Pulse range</summary>
           <div class="row">
             <div class="field"><label for="wizminu">Min µs at 0°</label>
-              <input id="wizminu" type="number" inputmode="numeric" min="500" max="1500" value="${wiz.minu||1000}"></div>
+              <input id="wizminu" type="number" inputmode="numeric" min="500" max="1500" value="${wiz.minu||500}"></div>
             <div class="field"><label for="wizmaxu">Max µs at 180°</label>
-              <input id="wizmaxu" type="number" inputmode="numeric" min="1500" max="2500" value="${wiz.maxu||2000}"></div>
+              <input id="wizmaxu" type="number" inputmode="numeric" min="1500" max="2500" value="${wiz.maxu||2500}"></div>
           </div>
         </details>
         <p class="hint">GPIO ${wiz.gpio} · rest ${ang}°.</p>
@@ -1240,9 +1641,11 @@ function paintWizard(){
         <p>${esc(t.summary||"Choose the bus this addon shares.")}</p>
         <div class="pick">${buses.map(b=>{
           const p=b.pins||{};
-          const txt=["sck","mosi","miso","ss"].filter(k=>p[k]!=null).map(k=>k.toUpperCase()+" "+p[k]).join(" · ");
+          const txt=Object.keys(p).map(k=>k.toUpperCase()+" "+p[k]).join(" · ");
+          const hit=busConflicts(b.id);
           return `<button type="button" class="pickbtn${wiz.bus===b.id?" on":""}" data-bus="${esc(b.id)}">
-            <div><strong>${esc(b.label)}</strong><span>${esc(txt)}</span><span>${esc(b.hint||"")}</span></div>
+            <div><strong>${esc(b.label)}</strong><span>${esc(txt)}</span>
+            ${hit.length?`<span class="warn">${esc(busConflictText(b))}</span>`:`<span>${esc(b.hint||"")}</span>`}</div>
           </button>`;
         }).join("")}</div>
         ${wizActs("Next","wiznext")}`;
@@ -1267,10 +1670,13 @@ function paintWizard(){
     }else{
       wiz.picking=null;
       const id=wiz.id||nextModId((t&&t.id_prefix)||"mod");
+      const vals=wiz.settings||{};
+      const setHtml=settingFields(t, vals);
       body=`${stepper(names,3)}
         <p>Check the wiring, then add. The id is for MQTT and the list.</p>
         <div class="field"><label for="wizid">Id</label>
           <input id="wizid" value="${esc(id)}" autocomplete="off" maxlength="16"></div>
+        ${setHtml}
         <p class="hint">${esc((t&&t.label)||wiz.type)} on ${esc(wiz.bus)} · ${esc(pinSummary(wiz.pins))}</p>
         ${wizActs("Add "+((t&&t.label)||"addon"),"wizgo")}`;
     }
@@ -1311,6 +1717,16 @@ function paintWizard(){
   if(next) next.onclick=wizNext;
   const go=document.getElementById("wizgo");
   if(go) go.onclick=wizCommit;
+  box.querySelectorAll("[data-set]").forEach(g=>{
+    g.onclick=e=>{
+      const b=e.target.closest("button[data-v]");
+      if(!b) return;
+      [...g.querySelectorAll("button")].forEach(x=>x.classList.toggle("on", x===b));
+      wiz.settings=wiz.settings||{};
+      const v=b.dataset.v;
+      wiz.settings[g.dataset.set]=/^-?\d+$/.test(v)?+v:v;
+    };
+  });
 }
 function wizPickType(type){
   const t=typeById(type);
@@ -1319,6 +1735,7 @@ function wizPickType(type){
   wiz.type=type;
   wiz.bus=t.default_bus||"";
   wiz.pins={};
+  wiz.settings=defaultSettings(t);
   wiz.roleIdx=0;
   wiz.id=nextModId(t.id_prefix||"mod");
   fillBusPins(t, wiz.bus);
@@ -1329,8 +1746,8 @@ function wizPickServo(){
   wiz.kind="servo";
   wiz.step=1;
   wiz.angle=90;
-  wiz.minu=1000;
-  wiz.maxu=2000;
+  wiz.minu=500;
+  wiz.maxu=2500;
   wiz.gpio=null;
   paintWizard();
 }
@@ -1346,8 +1763,9 @@ function wizBack(){
   if(wiz.step<=0){ cancelWiz(); return; }
   wiz.step--;
   if(wiz.kind==="mod" && wiz.step===2){
-    const n=instRoles(typeById(wiz.type)).length;
-    wiz.roleIdx=Math.max(0, n-1);
+    const inst=instRoles(typeById(wiz.type));
+    if(!inst.length){ wiz.step=1; paintWizard(); return; }
+    wiz.roleIdx=Math.max(0, inst.length-1);
   }
   paintWizard();
 }
@@ -1368,9 +1786,12 @@ function wizNext(){
   const t=typeById(wiz.type);
   if(wiz.step===1){
     if(!wiz.bus){ showMsg("Pick a bus", true); return; }
+    const hit=busConflicts(wiz.bus);
+    if(hit.length){ const b=busById(wiz.bus); showMsg(busConflictText(b||{id:wiz.bus,label:wiz.bus,pins:busPins(wiz.bus)}), true); return; }
     fillBusPins(t, wiz.bus);
-    wiz.step=2;
-    wiz.roleIdx=0;
+    const inst=instRoles(t);
+    if(!inst.length){ wiz.step=3; wiz.roleIdx=0; }
+    else { wiz.step=2; wiz.roleIdx=0; }
     paintWizard();
     return;
   }
@@ -1392,7 +1813,7 @@ async function wizCommit(){
     if(mi) wiz.minu=+mi.value;
     if(ma) wiz.maxu=+ma.value;
     if(wiz.gpio==null){ showMsg("Pick a GPIO for the servo", true); return; }
-    const r=await cmd({cmd:"pin.configure",pin:{gpio:wiz.gpio,mode:"servo",name:"servo_"+wiz.gpio,angle:wiz.angle||90,min_us:wiz.minu||1000,max_us:wiz.maxu||2000}});
+    const r=await cmd({cmd:"pin.configure",pin:{gpio:wiz.gpio,mode:"servo",name:"servo_"+wiz.gpio,angle:wiz.angle||90,min_us:wiz.minu||500,max_us:wiz.maxu||2500}});
     showMsg(r.ok?"Servo added on GPIO "+wiz.gpio:(r.error||"failed"), !r.ok);
     if(r.ok){ wiz=null; hw=null; drawn=null; refresh(); }
     return;
@@ -1400,7 +1821,9 @@ async function wizCommit(){
   const t=typeById(wiz.type);
   const idEl=document.getElementById("wizid");
   const id=((idEl&&idEl.value)||wiz.id||"").trim();
-  const r=await cmd({cmd:"module.add",type:t.type,id,bus:wiz.bus,pins:wiz.pins||{}});
+  const bus=wiz.bus||(t&&t.default_bus)||"";
+  const settings=readSettings(t);
+  const r=await cmd({cmd:"module.add",type:t.type,id,bus,pins:wiz.pins||{},settings});
   showMsg(r.ok?"Added "+((t&&t.label)||id):(r.error||"failed"), !r.ok);
   if(r.ok){ wiz=null; mods=r.result; hw=null; drawn=null; refresh(); }
 }
@@ -1430,22 +1853,14 @@ function render(){
   drawn=tab;
   const main=document.getElementById("main");
   if(tab==="Overview"){
-    main.innerHTML=`<div class="card">${h2("Status","ov")}<div id="ov">${overviewBody()}</div></div>
-    <div class="card">
-      ${h2("Identity","ov")}
-      <label for="dname">Name</label>
-      <input id="dname" maxlength="31" autocomplete="off" value="${esc(st&&st.name||"")}">
-      <button class="act" type="button" id="dsave">Save name</button>
-      <p>MAC id stays <code>${esc(st&&st.id)}</code>. MQTT topics become <code>devices/&lt;name&gt;/…</code> (letters, numbers, _ and -). Duplicate names collide.</p>
+    dashKey="";
+    main.innerHTML=`<div class="card">${h2("Live","ov")}
+      <p class="hint" id="ovline"></p>
+      <p class="bad" id="ovsafe" hidden></p>
+      <div id="dash"></div>
     </div>`;
-    document.getElementById("dsave").onclick=async()=>{
-      const name=document.getElementById("dname").value.trim();
-      if(!name){showMsg("Enter a name", true);return;}
-      const r=await cmd({cmd:"identity.set_name",name});
-      showMsg(r.ok?"MQTT topics now "+(((r.result&&r.result.topic_id)||name)):(r.error||"failed"), !r.ok);
-      spec=null;
-      refresh();
-    };
+    ensureDashData();
+    paintDash();
   }else if(tab==="Hardware"){
     if(!hw){
       main.innerHTML=`<div class="card"><p class="wait">loading pin map…</p></div>`;
@@ -1464,9 +1879,18 @@ function render(){
     const info=hw.chip_info||{};
     const feats=(info.features||[]).join(", ")||"—";
     const filts=[["all","All"],["io","I/O"],["adc","ADC"],["pwm","PWM"],["touch","Touch"],["spi","SPI"],["i2c","I2C"],["uart","UART"],["strap","Strap"],["flash","Flash"],["on","On"]]
-      .concat((hw.buses||[]).map(b=>[b.id,b.label]));
+      .concat((hw.buses||[]).map(b=>[b.id,b.label]))
+      .concat(((mods&&mods.modules)||[]).map(m=>["mod:"+m.id, m.id]))
+      .concat(addonServos().map(u=>["servo:"+u.gpio, "servo "+u.gpio]));
     const pads=left.map((p,i)=>padBtn(p,"left",i)).join("")+boardChrome()+right.map((p,i)=>padBtn(p,"right",i)).join("");
-    main.innerHTML=`<div class="hw-split">
+    main.innerHTML=`<div class="card">
+      ${h2("Addons","hw")}
+      <p class="hint">Installed modules. A reader shows the tag UID, or “no tag” once it is scanning.</p>
+      <div id="modlist" class="modmosaic"></div>
+      <div id="modwiz"></div>
+      <button class="act" type="button" id="maddstart">Add addon</button>
+    </div>
+    <div class="hw-split">
     <div class="card">
       ${h2("Pinout","hw")}
       <p>${esc(hw.board_name)} · ${esc(hw.chip)} · ${esc(feats)}</p>
@@ -1527,17 +1951,17 @@ function render(){
             <button type="button" data-angle="180">180°</button>
           </div>
           <details class="adv">
-            <summary>Pulse range (optional)</summary>
+            <summary>Pulse range</summary>
             <div class="row">
               <div class="field">
                 <label for="pminu">Min pulse (µs)</label>
-                <input id="pminu" type="number" inputmode="numeric" min="500" max="1500" value="1000">
-                <p class="hint">Pulse at 0°. 1000 µs is typical; some servos want 500.</p>
+                <input id="pminu" type="number" inputmode="numeric" min="500" max="1500" value="500">
+                <p class="hint">Pulse at 0°. Default 500 µs. Raise it if this servo does not reach the stop.</p>
               </div>
               <div class="field">
                 <label for="pmaxu">Max pulse (µs)</label>
-                <input id="pmaxu" type="number" inputmode="numeric" min="1500" max="2500" value="2000">
-                <p class="hint">Pulse at 180°. 2000 µs is typical. 8 servos max, 50 Hz, not shared with PWM.</p>
+                <input id="pmaxu" type="number" inputmode="numeric" min="1500" max="2500" value="2500">
+                <p class="hint">Pulse at 180°. Default 2500 µs. Lower it if 180° over-travels.</p>
               </div>
             </div>
           </details>
@@ -1626,13 +2050,6 @@ function render(){
         <button class="act sec" type="button" id="poff" hidden>Set LOW</button>
       </div>
     </div>
-    </div>
-    <div class="card">
-      ${h2("Addons","hw")}
-      <p class="hint">RFID readers and servos. Add addon is a short wizard — pick the type, then pins. Nothing is saved until the last step. Pin roles still come from <code>module.catalog</code>.</p>
-      <div id="modlist"></div>
-      <div id="modwiz"></div>
-      <button class="act" type="button" id="maddstart">Add addon</button>
     </div>`;
     document.getElementById("pfilts").onclick=e=>{
       const b=e.target.closest("button[data-f]");
@@ -1734,6 +2151,18 @@ function render(){
   }else if(tab==="System"){
     const o=(st&&st.ota)||{};
     main.innerHTML=`<div class="card">
+      ${h2("Identity","ov")}
+      <label for="dname">Name</label>
+      <input id="dname" maxlength="31" autocomplete="off" value="${esc(st&&st.name||"")}">
+      <button class="act" type="button" id="dsave">Save name</button>
+      <p>MAC id stays <code>${esc(st&&st.id)}</code>. MQTT topics become <code>devices/&lt;name&gt;/…</code> (letters, numbers, _ and -). Duplicate names collide.</p>
+    </div>
+    <div class="card">
+      ${h2("Memory","sys")}
+      <div id="memmeta">${memoryBody()}</div>
+      <p class="hint">Largest is the biggest contiguous block. A module is refused when pressure is critical or the allocation would leave under ${heap((st&&st.memory&&st.memory.reserve)||24576)} free.</p>
+    </div>
+    <div class="card">
       ${h2("Firmware","sys")}
       <div id="otameta">${otaBody()}</div>
       <label for="otaf">Firmware image (.bin)</label>
@@ -1752,6 +2181,14 @@ function render(){
       <p>Factory reset clears Wi-Fi, pins, rules, MQTT, and the AP password (recovery AP is open again).</p>
       <p>Physical recovery (press BOOT <em>after</em> the app is running, not while resetting): 5s recovery AP, 10s clear Wi-Fi, 20s factory reset.</p>
     </div>`;
+    document.getElementById("dsave").onclick=async()=>{
+      const name=document.getElementById("dname").value.trim();
+      if(!name){showMsg("Enter a name", true);return;}
+      const r=await cmd({cmd:"identity.set_name",name});
+      showMsg(r.ok?"MQTT topics now "+(((r.result&&r.result.topic_id)||name)):(r.error||"failed"), !r.ok);
+      spec=null;
+      refresh();
+    };
     document.getElementById("otaup").onclick=async()=>{
       const f=document.getElementById("otaf").files[0];
       if(!f){showMsg("Choose a .bin first", true);return;}
@@ -1837,13 +2274,14 @@ function render(){
   }
 }
 function applyIoEvent(d){
-  if(d && d.type==="mfrc522" && d.id){
+  if(d && d.id && (d.type==="mfrc522" || d.type==="bme280")){
     if(!st) st={};
     if(!st.io) st.io={};
     st.io["mod_"+d.id]=d;
     const n=document.getElementById("modlive-"+d.id);
-    if(n) n.textContent=d.present?d.uid:"—";
+    if(n) n.textContent=addonLiveText({type:d.type,id:d.id}, d);
     if(tab==="Hardware") paintPinUses();
+    if(tab==="Overview") paintDash();
     return;
   }
   if(!d || d.gpio==null) return;
@@ -1853,6 +2291,7 @@ function applyIoEvent(d){
   ["gpio_","pwm_","adc_","servo_"].forEach(p=>{ const k=p+d.gpio; if(k!==id) delete st.io[k]; });
   st.io[id]=d;
   if(tab==="Hardware"){ paintPinUses(); paintAddonLive(); }
+  if(tab==="Overview") paintDash();
 }
 function connectWs(){
   if(!wantWs) return;

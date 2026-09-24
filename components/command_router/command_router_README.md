@@ -32,7 +32,7 @@ New user actions = new `cmd` string in `command_dispatch` **and** a row in `kCmd
 
 ## How to test
 
-POST `{"cmd":"pin.configure","pin":{"gpio":6,"mode":"out"}}` → error. `module.add` with flash SCK → error. Provision with wrong PSK → credentials not saved.
+POST `{"cmd":"pin.configure","pin":{"gpio":6,"mode":"out"}}` → error. `module.add` with flash SCK → error. `module.add` BME280 with SDA 34 → error. Provision with wrong PSK → credentials not saved.
 
 ## Known limits
 

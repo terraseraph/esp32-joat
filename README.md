@@ -1,6 +1,6 @@
 # de-esp32 — managed device runtime
 
-Native **ESP-IDF 5.4.2** firmware for classic ESP32 (WROOM-32 DevKitC, 4 MB, no PSRAM). Flash once, then configure GPIO/PWM/ADC1, hobby servos, optional RFID (MFRC522), Wi-Fi, and MQTT from a local UI. **Not Arduino.**
+Native **ESP-IDF 5.4.2** firmware for classic ESP32 (WROOM-32 DevKitC, 4 MB, no PSRAM). Flash once, then configure GPIO/PWM/ADC1, hobby servos, optional RFID (MFRC522) and BME280, Wi-Fi, and MQTT from a local UI. **Not Arduino.**
 
 Feature index (start here): **[docs/FEATURES_README.md](docs/FEATURES_README.md)**
 
@@ -42,6 +42,8 @@ On first boot join SoftAP `esp32-<last6>` (open, no password). The phone should 
 
 Node-RED (same LAN as a provisioned board): see [docs/features/nodered_README.md](docs/features/nodered_README.md).
 
+Browser install (Chrome or Edge, USB serial): see [install/README.md](install/README.md).
+
 ## Host test (no hardware)
 
 ```powershell
@@ -56,4 +58,5 @@ python test/test_rule_spec.py
 - `components/` — one IDF component per feature (`<name>_README.md` beside the code)
 - `web/dist/index.html` — embedded UI
 - `nodered/node-red-contrib-de-esp32/` — Node-RED palette (not part of the IDF build)
+- `install/` — browser flash page (Web Serial; stage bins with `tools/stage_web_flash.ps1`)
 - `partitions.csv` — A/B OTA slots; apply from the System tab or `ota.apply`

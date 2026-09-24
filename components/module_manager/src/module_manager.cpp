@@ -1,6 +1,7 @@
 #include "module_manager.hpp"
 
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 
 #include "capability_manager.hpp"
@@ -9,6 +10,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
 #include "json_util.hpp"
+#include "memory_budget.hpp"
 #include "state_registry.hpp"
 
 static const char* TAG = "modules";
@@ -16,7 +18,7 @@ static const char* TAG = "modules";
 namespace runtime {
 namespace {
 
-constexpr int kMaxTypes = 8;
+constexpr int kMaxTypes = 16;
 constexpr size_t kBlob = 2048;
 
 const ModuleTypeOps* s_types[kMaxTypes];
@@ -124,6 +126,113 @@ bool pin_gpio(cJSON* pins, const char* role, int* out) {
     return true;
 }
 
+cJSON* spec_setting(cJSON* spec, const char* key) {
+    cJSON* settings = cJSON_GetObjectItemCaseSensitive(spec, "settings");
+    if (!cJSON_IsObject(settings) || !key) {
+        return nullptr;
+    }
+    return cJSON_GetObjectItemCaseSensitive(settings, key);
+}
+
+bool choice_matches(const char* choice, cJSON* item) {
+    if (!choice || !item) {
+        return false;
+    }
+    if (cJSON_IsNumber(item)) {
+        char buf[16];
+        snprintf(buf, sizeof(buf), "%d", item->valueint);
+        return strcmp(buf, choice) == 0;
+    }
+    if (cJSON_IsString(item) && item->valuestring) {
+        return strcmp(item->valuestring, choice) == 0;
+    }
+    return false;
+}
+
+bool looks_int(const char* s) {
+    if (!s || !s[0]) {
+        return false;
+    }
+    const char* p = s;
+    if (*p == '-' || *p == '+') {
+        p++;
+    }
+    if (!*p) {
+        return false;
+    }
+    for (; *p; p++) {
+        if (*p < '0' || *p > '9') {
+            return false;
+        }
+    }
+    return true;
+}
+
+void add_setting_value(cJSON* out, const char* key, const char* raw) {
+    if (!out || !key || !raw) {
+        return;
+    }
+    if (looks_int(raw)) {
+        cJSON_AddNumberToObject(out, key, atoi(raw));
+    } else {
+        cJSON_AddStringToObject(out, key, raw);
+    }
+}
+
+bool apply_settings(cJSON* spec, const ModuleTypeOps* ops, char* err, size_t err_len) {
+    if (!ops || ops->setting_count <= 0 || !ops->settings) {
+        return true;
+    }
+    cJSON* out = cJSON_CreateObject();
+    for (int i = 0; i < ops->setting_count; ++i) {
+        const ModuleSettingDesc& d = ops->settings[i];
+        cJSON* item = spec_setting(spec, d.key);
+        const char* kind = d.kind ? d.kind : "int";
+        if (strcmp(kind, "enum") == 0) {
+            const char* picked = nullptr;
+            if (item) {
+                for (int c = 0; c < d.choice_count; ++c) {
+                    if (choice_matches(d.choices[c].value, item)) {
+                        picked = d.choices[c].value;
+                        break;
+                    }
+                }
+                if (!picked) {
+                    cJSON_Delete(out);
+                    char buf[80];
+                    snprintf(buf, sizeof(buf), "settings.%s invalid", d.key);
+                    return fail(err, err_len, buf);
+                }
+            } else {
+                picked = d.def;
+            }
+            add_setting_value(out, d.key, picked);
+            continue;
+        }
+        int v = d.def ? atoi(d.def) : 0;
+        if (cJSON_IsNumber(item)) {
+            v = item->valueint;
+        } else if (cJSON_IsString(item) && item->valuestring && looks_int(item->valuestring)) {
+            v = atoi(item->valuestring);
+        } else if (item) {
+            cJSON_Delete(out);
+            char buf[80];
+            snprintf(buf, sizeof(buf), "settings.%s must be a number", d.key);
+            return fail(err, err_len, buf);
+        }
+        if (v < d.min || v > d.max) {
+            cJSON_Delete(out);
+            char buf[80];
+            snprintf(buf, sizeof(buf), "settings.%s out of range", d.key);
+            return fail(err, err_len, buf);
+        }
+        cJSON_AddNumberToObject(out, d.key, v);
+    }
+    cJSON_DeleteItemFromObjectCaseSensitive(spec, "settings");
+    cJSON_AddItemToObject(spec, "settings", out);
+    return true;
+}
+
 bool validate_spec(cJSON* spec, cJSON* existing, bool is_add, char* err, size_t err_len) {
     const char* id = json_str(spec, "id", "");
     const char* type = json_str(spec, "type", "");
@@ -147,14 +256,20 @@ bool validate_spec(cJSON* spec, cJSON* existing, bool is_add, char* err, size_t 
         snprintf(buf, sizeof(buf), "%s limited to %d instances", type, ops->max_instances);
         return fail(err, err_len, buf);
     }
-    const char* bus = json_str(spec, "bus", ops->default_bus);
+    // Copy first: json_str points into spec, and the next delete frees it.
+    char busbuf[12];
+    snprintf(busbuf, sizeof(busbuf), "%s", json_str(spec, "bus", ops->default_bus ? ops->default_bus : "vspi"));
     if (ops->bus_kind && strcmp(ops->bus_kind, "spi") == 0) {
-        if (strcmp(bus, "vspi") != 0 && strcmp(bus, "hspi") != 0) {
+        if (strcmp(busbuf, "vspi") != 0 && strcmp(busbuf, "hspi") != 0) {
             return fail(err, err_len, "bus must be vspi or hspi");
+        }
+    } else if (ops->bus_kind && strcmp(ops->bus_kind, "i2c") == 0) {
+        if (strcmp(busbuf, "i2c0") != 0 && strcmp(busbuf, "i2c1") != 0) {
+            return fail(err, err_len, "bus must be i2c0 or i2c1");
         }
     }
     cJSON_DeleteItemFromObjectCaseSensitive(spec, "bus");
-    cJSON_AddStringToObject(spec, "bus", bus);
+    cJSON_AddStringToObject(spec, "bus", busbuf);
 
     cJSON* pins = cJSON_GetObjectItemCaseSensitive(spec, "pins");
     if (!cJSON_IsObject(pins)) {
@@ -163,7 +278,6 @@ bool validate_spec(cJSON* spec, cJSON* existing, bool is_add, char* err, size_t 
 
     int used[12];
     int nused = 0;
-    int bus_sck = -1, bus_miso = -1, bus_mosi = -1, inst_cs = -1;
     for (int i = 0; i < ops->pin_count; ++i) {
         const ModulePinRole& role = ops->pins[i];
         int gpio = -1;
@@ -187,43 +301,55 @@ bool validate_spec(cJSON* spec, cJSON* existing, bool is_add, char* err, size_t 
         if (nused < 12) {
             used[nused++] = gpio;
         }
-        if (role.share && strcmp(role.share, "bus") == 0) {
-            if (strcmp(role.role, "sck") == 0) {
-                bus_sck = gpio;
-            } else if (strcmp(role.role, "miso") == 0) {
-                bus_miso = gpio;
-            } else if (strcmp(role.role, "mosi") == 0) {
-                bus_mosi = gpio;
-            }
-        }
-        if (strcmp(role.role, "cs") == 0) {
-            inst_cs = gpio;
-        }
     }
+
+    if (!apply_settings(spec, ops, err, err_len)) {
+        return false;
+    }
+    int addr = json_int(cJSON_GetObjectItemCaseSensitive(spec, "settings"), "addr", -1);
 
     cJSON* it = nullptr;
     cJSON_ArrayForEach(it, existing) {
         if (strcmp(json_str(it, "id", ""), id) == 0) {
             continue;
         }
-        if (strcmp(json_str(it, "type", ""), type) != 0) {
+        const ModuleTypeOps* other = find_type(json_str(it, "type", ""));
+        if (!other || !ops->bus_kind || !other->bus_kind ||
+            strcmp(other->bus_kind, ops->bus_kind) != 0) {
             continue;
         }
-        if (strcmp(json_str(it, "bus", ""), bus) != 0) {
+        if (strcmp(json_str(it, "bus", ""), busbuf) != 0) {
             continue;
         }
         cJSON* op = cJSON_GetObjectItemCaseSensitive(it, "pins");
-        int osck = -1, omiso = -1, omosi = -1, ocs = -1;
-        pin_gpio(op, "sck", &osck);
-        pin_gpio(op, "miso", &omiso);
-        pin_gpio(op, "mosi", &omosi);
-        pin_gpio(op, "cs", &ocs);
-        if (bus_sck >= 0 && osck >= 0 &&
-            (bus_sck != osck || bus_miso != omiso || bus_mosi != omosi)) {
-            return fail(err, err_len, "shared spi bus pins must match");
+        for (int i = 0; i < ops->pin_count; ++i) {
+            const ModulePinRole& role = ops->pins[i];
+            if (!role.share || strcmp(role.share, "bus") != 0) {
+                continue;
+            }
+            int g = -1, og = -1;
+            if (!pin_gpio(pins, role.role, &g) || !pin_gpio(op, role.role, &og)) {
+                continue;
+            }
+            if (g != og) {
+                char buf[64];
+                snprintf(buf, sizeof(buf), "shared %s bus pins must match", ops->bus_kind);
+                return fail(err, err_len, buf);
+            }
         }
-        if (inst_cs >= 0 && ocs >= 0 && inst_cs == ocs) {
-            return fail(err, err_len, "cs must be unique per reader");
+        if (strcmp(ops->bus_kind, "spi") == 0) {
+            int cs = -1, ocs = -1;
+            pin_gpio(pins, "cs", &cs);
+            pin_gpio(op, "cs", &ocs);
+            if (cs >= 0 && ocs >= 0 && cs == ocs) {
+                return fail(err, err_len, "cs must be unique per reader");
+            }
+        }
+        if (strcmp(ops->bus_kind, "i2c") == 0) {
+            int oaddr = json_int(cJSON_GetObjectItemCaseSensitive(it, "settings"), "addr", -1);
+            if (addr >= 0 && oaddr >= 0 && addr == oaddr) {
+                return fail(err, err_len, "i2c address must be unique on this bus");
+            }
         }
     }
     return true;
@@ -260,7 +386,24 @@ cJSON* normalize_copy(cJSON* spec, const ModuleTypeOps* ops) {
             cJSON_AddNumberToObject(pins, ops->pins[i].role, gpio);
         }
     }
+    cJSON* settings = cJSON_GetObjectItemCaseSensitive(spec, "settings");
+    if (cJSON_IsObject(settings)) {
+        cJSON_AddItemToObject(copy, "settings", cJSON_Duplicate(settings, 1));
+    }
     return copy;
+}
+
+esp_err_t admit_one(cJSON* inst, char* err, size_t err_len) {
+    const ModuleTypeOps* ops = find_type(json_str(inst, "type", ""));
+    if (!ops) {
+        fail(err, err_len, "unknown module type");
+        return ESP_ERR_NOT_FOUND;
+    }
+    if (!json_bool(inst, "enabled", true)) {
+        return ESP_OK;
+    }
+    size_t bytes = ops->memory_bytes ? ops->memory_bytes(inst) : 0;
+    return memory_admit(bytes, 0, err, err_len);
 }
 
 esp_err_t apply_one(cJSON* inst, char* err, size_t err_len) {
@@ -350,6 +493,30 @@ cJSON* module_catalog_json() {
             cJSON_AddStringToObject(pr, "cap", ops->pins[p].cap ? ops->pins[p].cap : "out");
             cJSON_AddItemToArray(pins, pr);
         }
+        cJSON* settings = cJSON_AddArrayToObject(o, "settings");
+        for (int s = 0; s < ops->setting_count; ++s) {
+            const ModuleSettingDesc& d = ops->settings[s];
+            cJSON* so = cJSON_CreateObject();
+            cJSON_AddStringToObject(so, "key", d.key);
+            cJSON_AddStringToObject(so, "label", d.label ? d.label : d.key);
+            cJSON_AddStringToObject(so, "kind", d.kind ? d.kind : "int");
+            cJSON_AddStringToObject(so, "def", d.def ? d.def : "0");
+            if (d.kind && strcmp(d.kind, "int") == 0) {
+                cJSON_AddNumberToObject(so, "min", d.min);
+                cJSON_AddNumberToObject(so, "max", d.max);
+            }
+            if (d.choices && d.choice_count > 0) {
+                cJSON* ch = cJSON_AddArrayToObject(so, "choices");
+                for (int c = 0; c < d.choice_count; ++c) {
+                    cJSON* co = cJSON_CreateObject();
+                    cJSON_AddStringToObject(co, "value", d.choices[c].value);
+                    cJSON_AddStringToObject(co, "label",
+                                           d.choices[c].label ? d.choices[c].label : d.choices[c].value);
+                    cJSON_AddItemToArray(ch, co);
+                }
+            }
+            cJSON_AddItemToArray(settings, so);
+        }
         cJSON_AddItemToArray(types, o);
     }
     return root;
@@ -394,7 +561,14 @@ esp_err_t module_add(cJSON* spec, char* err, size_t err_len) {
         return ESP_ERR_INVALID_ARG;
     }
     cJSON* copy = normalize_copy(spec, ops);
-    esp_err_t rc = apply_one(copy, err, err_len);
+    esp_err_t rc = admit_one(copy, err, err_len);
+    if (rc != ESP_OK) {
+        cJSON_Delete(copy);
+        cJSON_Delete(root);
+        xSemaphoreGive(s_mu);
+        return rc;
+    }
+    rc = apply_one(copy, err, err_len);
     if (rc != ESP_OK) {
         cJSON_Delete(copy);
         cJSON_Delete(root);
@@ -441,15 +615,28 @@ esp_err_t module_configure(cJSON* spec, char* err, size_t err_len) {
             cJSON_AddItemToObject(spec, "pins", cJSON_Duplicate(pins, 1));
         }
     }
+    if (!cJSON_GetObjectItemCaseSensitive(spec, "settings")) {
+        cJSON* settings = cJSON_GetObjectItemCaseSensitive(existing, "settings");
+        if (settings) {
+            cJSON_AddItemToObject(spec, "settings", cJSON_Duplicate(settings, 1));
+        }
+    }
     const ModuleTypeOps* ops = find_type(json_str(spec, "type", ""));
     if (!ops || !validate_spec(spec, arr, false, err, err_len)) {
         cJSON_Delete(root);
         xSemaphoreGive(s_mu);
         return ESP_ERR_INVALID_ARG;
     }
+    cJSON* copy = normalize_copy(spec, ops);
+    esp_err_t admitted = admit_one(copy, err, err_len);
+    if (admitted != ESP_OK) {
+        cJSON_Delete(copy);
+        cJSON_Delete(root);
+        xSemaphoreGive(s_mu);
+        return admitted;
+    }
     cJSON* old = cJSON_Duplicate(existing, 1);
     teardown_one(existing);
-    cJSON* copy = normalize_copy(spec, ops);
     esp_err_t rc = apply_one(copy, err, err_len);
     if (rc != ESP_OK) {
         apply_one(old, nullptr, 0);
@@ -530,7 +717,12 @@ esp_err_t module_apply_saved() {
     cJSON_ArrayForEach(it, arr) {
         char err[96];
         err[0] = '\0';
-        esp_err_t rc = apply_one(it, err, sizeof(err));
+        esp_err_t rc = admit_one(it, err, sizeof(err));
+        if (rc != ESP_OK) {
+            ESP_LOGW(TAG, "admit %s skipped: %s", json_str(it, "id", "?"), err);
+            continue;
+        }
+        rc = apply_one(it, err, sizeof(err));
         if (rc != ESP_OK) {
             ESP_LOGW(TAG, "apply %s failed: %s", json_str(it, "id", "?"), err);
         }

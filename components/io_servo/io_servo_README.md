@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Hobby-servo pulses on classic ESP32 **low-speed LEDC timer 0** at a fixed **50 Hz**. Eight channels, independent of [io_pwm_README.md](../io_pwm/io_pwm_README.md) (high-speed timer 0). Angle 0–180 maps to a pulse window (default 1000–2000 µs).
+Hobby-servo pulses on classic ESP32 **low-speed LEDC timer 0** at a fixed **50 Hz**. Eight channels, independent of [io_pwm_README.md](../io_pwm/io_pwm_README.md) (high-speed timer 0). Angle 0–180 maps to a pulse window (default 500–2500 µs).
 
 ## User story
 
@@ -12,7 +12,7 @@ Live control: configure a header pin as Servo, Apply a rest angle, then 0° / 90
 
 `io_servo_init()`, `io_servo_configure(gpio, angle, min_us, max_us, err, len)`, `io_servo_set(gpio, angle)`, `io_servo_get`, `io_servo_release`.
 
-`pin.configure` mode `servo` with `angle` (0–180, default 90), `min_us` (500–1500, default 1000), `max_us` (1500–2500, default 2000). `pin.set` `mode=servo` uses `value` as angle. Publishes `io/servo` `{id,mode,gpio,angle,pulse_us,min_us,max_us,hz}`.
+`pin.configure` mode `servo` with `angle` (0–180, default 90), `min_us` (500–1500, default 500), `max_us` (1500–2500, default 2500). `pin.set` `mode=servo` uses `value` as angle. Publishes `io/servo` `{id,mode,gpio,angle,pulse_us,min_us,max_us,hz}`.
 
 Owner / state key: `servo_N`.
 

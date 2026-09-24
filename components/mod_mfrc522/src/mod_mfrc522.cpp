@@ -37,8 +37,12 @@ enum {
     BitFramingReg = 0x0D,
     CollReg = 0x0E,
     ModeReg = 0x11,
+    TxModeReg = 0x12,
+    RxModeReg = 0x13,
     TxControlReg = 0x14,
     TxASKReg = 0x15,
+    RFCfgReg = 0x26,
+    ModWidthReg = 0x24,
     CRCResultRegL = 0x22,
     CRCResultRegM = 0x21,
     TModeReg = 0x2A,
@@ -82,6 +86,8 @@ struct Slot {
     spi_device_handle_t dev;
     bool present;
     char uid[21];
+    uint8_t version;
+    uint8_t tx;
 };
 
 Slot s_slots[kMax];
@@ -228,6 +234,7 @@ esp_err_t pcd_transceive(spi_device_handle_t dev, const uint8_t* tx, size_t tx_n
         }
         *rx_n = n;
     }
+    wr(dev, CommandReg, PCD_Idle);
     if ((irq & 0x20) == 0 && n == 0) {
         return ESP_ERR_TIMEOUT;
     }
@@ -258,14 +265,6 @@ esp_err_t pcd_crc(spi_device_handle_t dev, const uint8_t* data, size_t n, uint8_
     return ESP_OK;
 }
 
-void picc_halt(spi_device_handle_t dev) {
-    uint8_t tx[4] = {0x50, 0x00, 0, 0};
-    pcd_crc(dev, tx, 2, &tx[2], &tx[3]);
-    size_t rxn = 0;
-    pcd_transceive(dev, tx, 4, 0x00, nullptr, &rxn);
-    wr(dev, Status2Reg, 0x00);
-}
-
 void uid_hex(const uint8_t* uid, int len, char* out, size_t n) {
     size_t j = 0;
     for (int i = 0; i < len && j + 2 < n; ++i) {
@@ -277,14 +276,14 @@ void uid_hex(const uint8_t* uid, int len, char* out, size_t n) {
 }
 
 bool picc_reqa(spi_device_handle_t dev) {
-    wr(dev, CollReg, 0x80);
+    clr_bits(dev, CollReg, 0x80);  // ValuesAfterColl=0, ISO 14443 anticollision
     uint8_t tx = PICC_REQA;
     uint8_t rx[2] = {};
     size_t rxn = sizeof(rx);
     if (pcd_transceive(dev, &tx, 1, 0x07, rx, &rxn) == ESP_OK && rxn >= 2) {
         return true;
     }
-    wr(dev, CollReg, 0x80);
+    clr_bits(dev, CollReg, 0x80);
     tx = 0x52;  // WUPA — also sees a PICC left in HALT
     rxn = sizeof(rx);
     return pcd_transceive(dev, &tx, 1, 0x07, rx, &rxn) == ESP_OK && rxn >= 2;
@@ -294,7 +293,7 @@ bool picc_anticoll(spi_device_handle_t dev, uint8_t cascade, uint8_t* uid4) {
     uint8_t tx[2] = {cascade, 0x20};
     uint8_t rx[5] = {};
     size_t rxn = sizeof(rx);
-    wr(dev, CollReg, 0x80);
+    clr_bits(dev, CollReg, 0x80);
     if (pcd_transceive(dev, tx, 2, 0x00, rx, &rxn) != ESP_OK || rxn < 5) {
         return false;
     }
@@ -306,6 +305,17 @@ bool picc_anticoll(spi_device_handle_t dev, uint8_t cascade, uint8_t* uid4) {
     return true;
 }
 
+bool picc_select(spi_device_handle_t dev, uint8_t cascade, const uint8_t uid4[4]) {
+    uint8_t tx[9] = {cascade, 0x70, uid4[0], uid4[1], uid4[2], uid4[3], 0, 0, 0};
+    tx[6] = static_cast<uint8_t>(uid4[0] ^ uid4[1] ^ uid4[2] ^ uid4[3]);
+    if (pcd_crc(dev, tx, 7, &tx[7], &tx[8]) != ESP_OK) {
+        return false;
+    }
+    uint8_t rx[3] = {};
+    size_t rxn = sizeof(rx);
+    return pcd_transceive(dev, tx, 9, 0x00, rx, &rxn) == ESP_OK && rxn >= 1;
+}
+
 int picc_uid(spi_device_handle_t dev, uint8_t* uid, int maxn) {
     static const uint8_t cascades[] = {PICC_SEL_CL1, PICC_SEL_CL2, PICC_SEL_CL3};
     int n = 0;
@@ -315,7 +325,7 @@ int picc_uid(spi_device_handle_t dev, uint8_t* uid, int maxn) {
             return 0;
         }
         if (uid4[0] == 0x88) {
-            if (n + 3 > maxn) {
+            if (!picc_select(dev, c, uid4) || n + 3 > maxn) {
                 return 0;
             }
             memcpy(uid + n, uid4 + 1, 3);
@@ -325,27 +335,45 @@ int picc_uid(spi_device_handle_t dev, uint8_t* uid, int maxn) {
                 return 0;
             }
             memcpy(uid + n, uid4, 4);
-            n += 4;
-            return n;
+            return n + 4;
         }
     }
     return n;
 }
 
-esp_err_t pcd_init(spi_device_handle_t dev) {
+void pcd_init(spi_device_handle_t dev, uint8_t* version, uint8_t* txctl) {
     wr(dev, CommandReg, PCD_SoftReset);
     vTaskDelay(pdMS_TO_TICKS(50));
+    wr(dev, TxModeReg, 0x00);
+    wr(dev, RxModeReg, 0x00);
+    wr(dev, ModWidthReg, 0x26);
     wr(dev, TModeReg, 0x80);
     wr(dev, TPrescalerReg, 0xA9);
     wr(dev, TReloadRegH, 0x03);
     wr(dev, TReloadRegL, 0xE8);
     wr(dev, TxASKReg, 0x40);
     wr(dev, ModeReg, 0x3D);
+    wr(dev, RFCfgReg, 0x48);
+    clr_bits(dev, TxControlReg, 0x03);
+    vTaskDelay(pdMS_TO_TICKS(2));
     set_bits(dev, TxControlReg, 0x03);
     uint8_t ver = 0;
+    uint8_t tx = 0;
     rd(dev, VersionReg, &ver);
-    ESP_LOGI(TAG, "version 0x%02x", ver);
-    return ESP_OK;
+    rd(dev, TxControlReg, &tx);
+    if (ver == 0x00 || ver == 0xFF) {
+        ESP_LOGW(TAG, "version 0x%02x — chip not answering", ver);
+    } else if ((tx & 0x03) != 0x03) {
+        ESP_LOGW(TAG, "version 0x%02x tx 0x%02x — antenna off", ver, tx);
+    } else {
+        ESP_LOGI(TAG, "version 0x%02x tx 0x%02x", ver, tx);
+    }
+    if (version) {
+        *version = ver;
+    }
+    if (txctl) {
+        *txctl = tx;
+    }
 }
 
 void publish(Slot& s) {
@@ -356,16 +384,27 @@ void publish(Slot& s) {
     cJSON_AddStringToObject(st, "type", "mfrc522");
     cJSON_AddBoolToObject(st, "present", s.present);
     cJSON_AddStringToObject(st, "uid", s.present ? s.uid : "");
+    cJSON_AddNumberToObject(st, "version", s.version);
+    cJSON_AddNumberToObject(st, "tx", s.tx);
     state_set(key, st);
     event_bus_publish("io/rfid", st);
     cJSON_Delete(st);
+}
+
+void field_cycle(spi_device_handle_t dev) {
+    clr_bits(dev, TxControlReg, 0x03);
+    vTaskDelay(pdMS_TO_TICKS(2));
+    set_bits(dev, TxControlReg, 0x03);
+    vTaskDelay(pdMS_TO_TICKS(5));
 }
 
 void poll_one(Slot& s) {
     if (!s.dev) {
         return;
     }
+    wr(s.dev, CommandReg, PCD_Idle);
     wr(s.dev, Status2Reg, 0x00);
+    field_cycle(s.dev);
     bool present = picc_reqa(s.dev);
     char uid[21] = "";
     if (present) {
@@ -375,7 +414,6 @@ void poll_one(Slot& s) {
             present = false;
         } else {
             uid_hex(raw, n, uid, sizeof(uid));
-            picc_halt(s.dev);
         }
     }
     if (present == s.present && strcmp(uid, s.uid) == 0) {
@@ -460,6 +498,9 @@ esp_err_t hw_bus_add(const char* bus, int sck, int miso, int mosi, int cs,
         cfg.quadhd_io_num = -1;
         cfg.max_transfer_sz = 64;
         esp_err_t rc = spi_bus_initialize(static_cast<spi_host_device_t>(host), &cfg, SPI_DMA_DISABLED);
+        if (rc == ESP_OK) {
+            gpio_set_pull_mode(static_cast<gpio_num_t>(miso), GPIO_FLOATING);
+        }
         if (rc != ESP_OK) {
             char buf[96];
             snprintf(buf, sizeof(buf), "spi_bus_initialize %s", esp_err_to_name(rc));
@@ -576,7 +617,9 @@ esp_err_t apply(cJSON* inst, char* err, size_t err_len) {
         return rc;
     }
     pulse_rst(rst);
-    pcd_init(dev);
+    uint8_t ver = 0;
+    uint8_t tx = 0;
+    pcd_init(dev, &ver, &tx);
     memset(slot, 0, sizeof(*slot));
     slot->used = true;
     snprintf(slot->id, sizeof(slot->id), "%s", id);
@@ -587,6 +630,8 @@ esp_err_t apply(cJSON* inst, char* err, size_t err_len) {
     slot->cs = cs;
     slot->rst = rst;
     slot->dev = dev;
+    slot->version = ver;
+    slot->tx = tx;
     ensure_poll();
     publish(*slot);
     xSemaphoreGive(s_mu);
@@ -627,6 +672,9 @@ const ModuleTypeOps kOps = {
     static_cast<int>(sizeof(kPins) / sizeof(kPins[0])),
     apply,
     teardown,
+    nullptr,
+    nullptr,
+    0,
     nullptr,
 };
 

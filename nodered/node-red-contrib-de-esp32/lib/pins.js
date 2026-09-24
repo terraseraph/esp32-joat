@@ -11,9 +11,41 @@ function pinByGpio(hardware, gpio) {
   return null;
 }
 
+/** bus_, mod_, and servo_ owners block pin.configure. gpio_ stays editable. */
+function pinClaimed(owner) {
+  const o = owner || "";
+  return o.indexOf("bus_") === 0 || o.indexOf("mod_") === 0 || o.indexOf("servo_") === 0;
+}
+
+/** Servo mode may retarget a servo_ owner. Bus and module claims stay blocked. */
+function ownerBlocks(owner, mode) {
+  const o = owner || "";
+  if (o.indexOf("bus_") === 0 || o.indexOf("mod_") === 0) {
+    return true;
+  }
+  if (o.indexOf("servo_") === 0) {
+    return mode !== "servo";
+  }
+  return false;
+}
+
+function ownerLabel(owner) {
+  const o = owner || "";
+  if (o.indexOf("mod_") === 0) {
+    return "RFID " + o.slice(4);
+  }
+  if (o.indexOf("bus_") === 0) {
+    return o.slice(4).toUpperCase() + " bus";
+  }
+  if (o.indexOf("servo_") === 0) {
+    return "Servo " + o.slice(6);
+  }
+  return o;
+}
+
 /** Use capability flags from GET /api/v1/hardware. Do not hardcode flash/input-only sets. */
 function padAllowed(pin, mode) {
-  if (!pin || pin.flash) {
+  if (!pin || pin.flash || ownerBlocks(pin.owner, mode)) {
     return false;
   }
   if (mode === "out") {
@@ -22,7 +54,7 @@ function padAllowed(pin, mode) {
   if (mode === "in") {
     return !!pin.input;
   }
-  if (mode === "pwm") {
+  if (mode === "pwm" || mode === "servo") {
     return !!pin.pwm && !pin.input_only;
   }
   if (mode === "adc") {
@@ -84,6 +116,7 @@ function allowedModes(p, family) {
     m.push("out");
     if (p.pwm) {
       m.push("pwm");
+      m.push("servo");
     }
   }
   if (p.adc1) {
@@ -93,9 +126,9 @@ function allowedModes(p, family) {
     return m.filter((x) => x === "in" || x === "adc");
   }
   if (family === "out") {
-    return m.filter((x) => x === "out" || x === "pwm");
+    return m.filter((x) => x === "out" || x === "pwm" || x === "servo");
   }
   return m;
 }
 
-module.exports = { pinByGpio, padAllowed, headerPads, capBadges, allowedModes };
+module.exports = { pinByGpio, padAllowed, pinClaimed, ownerBlocks, ownerLabel, headerPads, capBadges, allowedModes };

@@ -34,4 +34,4 @@ When adding a board that routes GPIO 37/38, keep the SoC flags and put routing n
 
 ## Known limits
 
-GPIO 1/3 are UART0; allowed by the table but noted. GPIO 37/38 often unbonded on WROOM modules. `role` is documentation (including RFID-style SPI names). GPIO modes are `in`/`out`/`pwm`/`servo`/`adc`; SPI devices are claimed through [module_manager_README.md](../module_manager/module_manager_README.md). DAC is flagged, not driven.
+GPIO 1/3 are UART0; allowed by the table but noted. GPIO 37/38 often unbonded on WROOM modules. `role` is documentation (including RFID-style SPI names). GPIO modes are `in`/`out`/`pwm`/`servo`/`adc`; SPI and I2C devices are claimed through [module_manager_README.md](../module_manager/module_manager_README.md). DAC is flagged, not driven.

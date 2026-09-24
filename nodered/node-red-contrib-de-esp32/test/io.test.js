@@ -2,7 +2,7 @@
 
 const { describe, it } = require("node:test");
 const assert = require("node:assert/strict");
-const { parseIoMessage } = require("../lib/io");
+const { parseIoMessage, parseModuleEvent } = require("../lib/io");
 const { toLevel } = require("../lib/level");
 
 describe("parseIoMessage", () => {
@@ -20,8 +20,24 @@ describe("parseIoMessage", () => {
     assert.equal(ev.value, 1774);
     assert.equal(ev.mode, "adc");
   });
+  it("reads servo angle", () => {
+    const ev = parseIoMessage({
+      topic: "io/servo",
+      data: { gpio: 4, mode: "servo", angle: 90, pulse_us: 1500, id: "servo_4" },
+    });
+    assert.equal(ev.value, 90);
+    assert.equal(ev.mode, "servo");
+  });
   it("ignores telemetry frames", () => {
     assert.equal(parseIoMessage({ topic: "telemetry", data: { heap_free: 1 } }), null);
+  });
+  it("reads RFID frames without a gpio", () => {
+    const ev = parseModuleEvent({ topic: "io/rfid", data: { id: "rfid0", present: true, uid: "AB" } });
+    assert.equal(ev.id, "rfid0");
+    assert.equal(ev.present, true);
+    assert.equal(ev.uid, "AB");
+    assert.equal(parseModuleEvent({ topic: "io/gpio", data: { gpio: 4, level: 1, id: "gpio_4" } }), null);
+    assert.equal(parseIoMessage({ topic: "io/rfid", data: { id: "rfid0", present: true, uid: "AB" } }), null);
   });
   it("accepts Buffer JSON", () => {
     const ev = parseIoMessage(Buffer.from('{"topic":"io/gpio","data":{"gpio":0,"level":0}}'));

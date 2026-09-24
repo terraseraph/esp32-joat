@@ -14,6 +14,9 @@
       boot: { value: 0, validate: RED.validators.number() },
       duty: { value: 0, validate: RED.validators.number() },
       hz: { value: 1000, validate: RED.validators.number() },
+      angle: { value: 90, validate: RED.validators.number() },
+      minUs: { value: 500, validate: RED.validators.number() },
+      maxUs: { value: 2500, validate: RED.validators.number() },
     },
     inputs: 1,
     outputs: 0,
@@ -23,13 +26,22 @@
     label: function() {
       const d = RED.nodes.node(this.device);
       const who = d ? (d.deviceName || d.host || "de-esp32") : "de-esp32";
-      const mode = this.pinMode === "pwm" ? "PWM" : "GPIO";
+      const mode = this.pinMode === "pwm" ? "PWM" : (this.pinMode === "servo" ? "Servo" : "GPIO");
       if (this.gpio === "" || this.gpio == null) {
         return this.name || ("gpio out " + who);
       }
       return this.name || (mode + " " + this.gpio + " → " + who);
     },
     oneditprepare: function() {
+      function fill(id, fallback) {
+        const $el = $("#" + id);
+        if ($el.val() === "" || $el.val() == null) {
+          $el.val(fallback);
+        }
+      }
+      fill("node-input-angle", 90);
+      fill("node-input-minUs", 500);
+      fill("node-input-maxUs", 2500);
       DeEsp32.bindGpioEditor("out", "de-esp32-pinbox-out", "de-esp32-pin-refresh-out");
     },
   });
@@ -50,6 +62,7 @@
     <select id="node-input-pinMode" style="width:120px">
       <option value="out">Out</option>
       <option value="pwm">PWM</option>
+      <option value="servo">Servo</option>
     </select>
   </div>
   <div class="form-row">
@@ -70,7 +83,7 @@
     </select>
     <p class="de-esp32-hint">Level written on Apply and after reboot. Incoming messages still use pin.set for live changes.</p>
   </div>
-  <div id="de-esp32-row-pwm">
+  <div id="de-esp32-row-pwm" style="display:none">
     <div class="form-row">
       <label for="node-input-duty">Duty (0–1000)</label>
       <input type="number" id="node-input-duty" min="0" max="1000" style="width:90px">
@@ -80,6 +93,29 @@
       <label for="node-input-hz">Frequency (Hz)</label>
       <input type="number" id="node-input-hz" min="50" max="20000" style="width:90px">
       <p class="de-esp32-hint">50–20000 Hz. Every PWM pin shares one timer — last configure sets frequency for all of them.</p>
+    </div>
+  </div>
+  <div id="de-esp32-row-servo" style="display:none">
+    <div class="form-row">
+      <label for="node-input-angle">Angle (0–180)</label>
+      <input type="number" id="node-input-angle" min="0" max="180" style="width:90px">
+      <p class="de-esp32-hint">Rest position saved on deploy. Incoming messages are angles for pin.set.</p>
+    </div>
+    <div class="form-row">
+      <label>&nbsp;</label>
+      <details id="de-esp32-servo-adv">
+        <summary>Advanced</summary>
+        <div class="form-row">
+          <label for="node-input-minUs">Pulse at 0° (µs)</label>
+          <input type="number" id="node-input-minUs" min="500" max="1500" placeholder="500" style="width:90px">
+          <p class="de-esp32-hint">0° is 500 µs. Raise it only if this servo does not reach the stop.</p>
+        </div>
+        <div class="form-row">
+          <label for="node-input-maxUs">Pulse at 180° (µs)</label>
+          <input type="number" id="node-input-maxUs" min="1500" max="2500" placeholder="2500" style="width:90px">
+          <p class="de-esp32-hint">180° is 2500 µs. Lower it only if this servo over-travels.</p>
+        </div>
+      </details>
     </div>
   </div>
   <div class="form-row" id="de-esp32-row-pull">
@@ -102,7 +138,7 @@
 </script>
 
 <script type="text/html" data-help-name="de-esp32-gpio-out">
-  <p>Drives a digital output or PWM. <code>msg.payload</code> is 0/1 (or on/off) for Out; 0–1000 duty for PWM.</p>
-  <p>Pads show chip capabilities from <code>GET /api/v1/hardware</code>. Input-only and flash pads cannot be selected for Out/PWM.</p>
-  <p>On deploy (unless unchecked) sends <code>pin.configure</code> with pull-up / invert / power-on level, or duty / Hz in PWM mode. Each message sends <code>pin.set</code>.</p>
+  <p>Drives a digital output, PWM, or hobby servo. <code>msg.payload</code> is 0/1 (or on/off) for Out, 0–1000 duty for PWM, or an angle 0–180 for Servo.</p>
+  <p>Pads show chip capabilities from <code>GET /api/v1/hardware</code>. Servo uses the same pins as PWM. Input-only and flash pads cannot be selected.</p>
+  <p>On deploy (unless unchecked) sends <code>pin.configure</code>. Servo maps 0° to 500 µs and 180° to 2500 µs. Open Advanced on the node to change that window. Each message sends <code>pin.set</code> with <code>mode</code> <code>servo</code>.</p>
 </script>

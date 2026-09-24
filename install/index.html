@@ -14,12 +14,14 @@
   form, .card { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:16px; margin:0 0 16px; }
   label { display:block; margin:12px 0 4px; font-size:14px; }
   input[type=text], input[type=password], select { width:100%; padding:10px 12px; border-radius:8px; border:1px solid var(--line); background:#0e1116; color:var(--fg); font:inherit; }
+  #scans { margin-top:8px; }
   .row { display:flex; gap:8px; align-items:center; margin-top:12px; }
   .check { display:flex; gap:8px; align-items:center; margin-top:14px; font-size:14px; color:var(--muted); }
   button { padding:12px 14px; min-height:44px; border:0; border-radius:8px; background:var(--acc); color:#041018; font:inherit; font-weight:650; cursor:pointer; }
   button.sec { background:transparent; border:1px solid var(--line); color:var(--fg); font-weight:500; }
   button:disabled { opacity:.45; cursor:default; }
   #log { white-space:pre-wrap; font:12px/1.4 ui-monospace, monospace; color:var(--muted); max-height:16rem; overflow:auto; margin:0; }
+  p.hint { margin:8px 0 0; color:var(--muted); font-size:14px; }
   .ok { color:var(--ok); }
   .bad { color:var(--bad); }
   a { color:var(--acc); }
@@ -35,12 +37,13 @@
     <input id="name" name="name" type="text" maxlength="31" autocomplete="off" placeholder="kitchen-relay">
     <label for="ssid">Wi-Fi network</label>
     <input id="ssid" name="ssid" type="text" autocomplete="off" placeholder="SSID">
-    <div class="row">
-      <select id="scans" hidden></select>
-      <button class="sec" type="button" id="scan">Scan</button>
-    </div>
     <label for="pass">Wi-Fi password</label>
     <input id="pass" name="pass" type="password" autocomplete="off">
+    <p class="hint">Or ask the board. This does not scan Wi-Fi from this computer. It talks to the plugged-in ESP over USB and fills the network name above. The board must already be running this firmware.</p>
+    <div class="row">
+      <button class="sec" type="button" id="scan">List networks from the board</button>
+    </div>
+    <select id="scans" hidden></select>
     <label class="check"><input id="erase" type="checkbox" checked> Erase flash first (drops saved Wi-Fi and name)</label>
     <div class="row">
       <button type="submit" id="install">Install</button>
@@ -232,14 +235,21 @@ async function flashBoard(serialPort, erase) {
   await transport.disconnect();
 }
 
+function deviceUrl(ip) {
+  return "http://" + ip + "/";
+}
+
 function showWifi(reply) {
   const result = reply.result || {};
   const ip = result.sta_ip || "";
   const host = result.mdns || result.hostname || "";
   if (reply.ok && ip && ip !== "0.0.0.0") {
+    const url = deviceUrl(ip);
+    const opened = window.open(url, "_blank", "noopener");
     setStatus("", "ok");
-    statusEl.innerHTML = `On the network at <a href="http://${ip}/">${ip}</a>` +
-      (host ? ` (${host}.local)` : "") + ".";
+    statusEl.innerHTML = `On the network. <a href="${url}" target="_blank" rel="noopener">${ip}</a>` +
+      (host ? ` (${host}.local)` : "") +
+      (opened ? " Opened the device page." : " If a new tab did not open, use that link.");
     return;
   }
   if (!reply.ok) {
@@ -261,7 +271,7 @@ $("scan").addEventListener("click", async () => {
   try {
     const serialPort = await ensurePort();
     await openConsole(serialPort);
-    setStatus("Scanning…");
+    setStatus("Asking the board which networks it can hear…");
     const reply = await sendCommand(serialPort, "network.wifi.scan", {}, "scan", SCAN_MS);
     if (!reply.ok) throw new Error(reply.error || "Scan failed.");
     const list = Array.isArray(reply.result) ? reply.result : [];
@@ -279,7 +289,7 @@ $("scan").addEventListener("click", async () => {
       sel.appendChild(opt);
     }
     sel.hidden = false;
-    setStatus(list.length ? "Pick a network, then Install." : "No networks heard. Type an SSID.", list.length ? "ok" : "");
+    setStatus(list.length ? "Pick a network the board heard, then Install." : "The board heard no networks. Type an SSID.", list.length ? "ok" : "");
   } catch (err) {
     if (err && err.name === "NotFoundError") setStatus("No port selected.", "bad");
     else setStatus(err.message || String(err), "bad");
@@ -324,9 +334,11 @@ $("form").addEventListener("submit", async (ev) => {
       showWifi(joined);
       if (!joined.ok) return;
     } else if (name) {
-      setStatus("Name saved. Add Wi-Fi above, or join the setup network and open http://192.168.4.1.", "ok");
+      setStatus("", "ok");
+      statusEl.innerHTML = 'Name saved. Add Wi-Fi above, or join the setup network and open <a href="http://192.168.4.1/" target="_blank" rel="noopener">192.168.4.1</a>.';
     } else {
-      setStatus("Flashed. Join the setup network and open http://192.168.4.1.", "ok");
+      setStatus("", "ok");
+      statusEl.innerHTML = 'Flashed. Join the setup network and open <a href="http://192.168.4.1/" target="_blank" rel="noopener">192.168.4.1</a>.';
     }
   } catch (err) {
     if (err && err.name === "NotFoundError") setStatus("No port selected.", "bad");

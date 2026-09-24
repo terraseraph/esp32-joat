@@ -38,6 +38,7 @@ People installing a DevKit from a browser. Already-provisioned boards still upda
 2. Keep manifest offsets aligned with `partitions.csv` (`ota_0` at `0x20000`). Empty `otadata` boots that slot, which is why erase defaults on.
 3. Classic ESP32 only. Reject chip names that look like S2, S3, C3, and the rest.
 4. Console baud stays 115200 (`CONFIG_ESP_CONSOLE_UART_BAUDRATE`).
+5. `.github/workflows/install.yml` builds on push to `main` when firmware sources change, commits `install/firmware/`, and deploys GitHub Pages from `install/`. A bin-only bot commit does not start another run.
 
 ## How to test
 

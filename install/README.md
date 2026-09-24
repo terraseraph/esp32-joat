@@ -13,9 +13,15 @@ From a normal IDF build (`D:\esp\de-esp32-build` by default):
 .\tools\stage_web_flash.ps1 -BuildDir D:\esp\de-esp32-build
 ```
 
-That copies `bootloader.bin`, `partition-table.bin`, and `de_esp32_runtime.bin` into `install/firmware/`. Those three images are committed so a GitHub-hosted copy of this folder can flash a board. Re-run the script after a firmware build and commit the new bins. Offsets live in `manifest.json`: bootloader `0x1000`, partition table `0x8000`, app `0x20000` (`ota_0`).
+That copies `bootloader.bin`, `partition-table.bin`, and `de_esp32_runtime.bin` into `install/firmware/`. A push to `main` that changes firmware sources builds the same three images in GitHub Actions and commits them. Offsets live in `manifest.json`: bootloader `0x1000`, partition table `0x8000`, app `0x20000` (`ota_0`).
 
-## Serve
+## GitHub Pages
+
+The workflow publishes this folder as the site root (HTTPS, so Web Serial works). After the first successful deploy the page is:
+
+`https://terraseraph.github.io/esp32-joat/`
+
+## Serve locally
 
 ```powershell
 cd install

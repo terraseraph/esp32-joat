@@ -64,7 +64,25 @@ jobs:
         run: npm run typecheck
 
       - name: Test
-        run: npm test
+        shell: bash
+        run: |
+          set -o pipefail
+          npm test 2>&1 | tee test.log
+
+      # Put the failing lines on the run page, so a failure can be read without downloading the log.
+      - name: Report failing tests
+        if: failure()
+        shell: bash
+        run: |
+          [ -f test.log ] || exit 0
+          {
+            grep -nE '(✖|not ok|FAIL|×|Error|ERR_|expected|actual)' test.log | grep -v '^\s*$' | head -45
+            echo '--- last lines ---'
+            tail -25 test.log
+          } | sed 's/\x1b\[[0-9;]*m//g' > failures.txt
+          MSG="$(sed -e 's/%/%25/g' failures.txt | awk '{printf "%s%%0A", $0}')"
+          echo "::error title=Manager tests (Node ${{ matrix.node }})::${MSG}"
+          { echo '```'; cat failures.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Build
         run: npm run build

@@ -1,0 +1,2 @@
+# Byte-exact test fixtures: never convert line endings (the netsh samples are CRLF on purpose).
+*.bin binary

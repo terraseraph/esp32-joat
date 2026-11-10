@@ -5,7 +5,7 @@
   "description": "Local manager for de-esp32 devices: fleet, discovery, firmware, backups",
   "type": "module",
   "engines": {
-    "node": ">=20"
+    "node": ">=22"
   },
   "scripts": {
     "dev": "node scripts/dev.mjs",

@@ -479,7 +479,14 @@ describe("close()", () => {
     const j = jobs.create(spec(), () => new Promise<void>(() => {}));
     await waitUntil(() => jobs.get(j.id)?.state === "running");
     const t0 = Date.now();
-    await jobs.close({ timeoutMs: 60 });
+    // close() waits on an unref'd timer, and nothing else here holds the event loop open: without this the loop
+    // drains, node:test cancels this test and every test after it in the file.
+    const keepAlive = setInterval(() => {}, 20);
+    try {
+      await jobs.close({ timeoutMs: 60 });
+    } finally {
+      clearInterval(keepAlive);
+    }
     assert.ok(Date.now() - t0 < 1000);
     assert.equal(jobs.get(j.id)?.state, "cancelled");
     assert.ok(logs.some((l) => l.includes("did not stop")));

@@ -66,7 +66,7 @@ Deviations made while building M0–M3:
 - **Restore/clone**: neither includes the device name by default any more; `include.name: true` opts in ("Also copy the device name"; the plan shows the name line).
 - **Change IP failure**: when the device is not reached at the new address the job waits in a visible `revert` step with a countdown and polls the old address, then ends `failed` with `reverted` (device back, nothing changed) or `not_reachable`; `not_reachable_new_address` is gone.
 - **Device page** no longer remounts its tab (closing dialogs) when a device returns from a restart; `revalidateDevice(id)` re-reads data in place. **Fleet table** fits 1280 px with the nav expanded (fixed layout; columns hide by container width: Uptime < 1240 px, RSSI < 1050, Memory < 910, MQTT < 780).
-- **M13 CI** `.github/workflows/manager.yml`: `check` (Node 20 and 22: `npm ci` with `ELECTRON_SKIP_BINARY_DOWNLOAD=1`, lint, typecheck incl. electron, test, build, smoke start + `GET /api/health`, dist artifact) and on `manager-v*` tags: tag = version check, Node zip, Windows portable exe, `gh release create` with SHA256SUMS. Parsed and structure-checked only; never run on GitHub.
+- **M13 CI** `.github/workflows/manager.yml`: `check` (Node 22 and 24: `npm ci` with `ELECTRON_SKIP_BINARY_DOWNLOAD=1`, lint, typecheck incl. electron, test, build, smoke start + `GET /api/health`, dist artifact) and on `manager-v*` tags: tag = version check, Node zip, Windows portable exe, `gh release create` with SHA256SUMS. Parsed and structure-checked only; never run on GitHub.
 - **M14 Electron** (`manager/electron/`, `scripts/electron.mjs`, `electron/electron-builder.yml`): server in-process on 127.0.0.1:0 with `lanToggle: false`, sandboxed window, single-instance lock, only the Manager origin stays in-app (http(s) links open in the browser), graceful quit awaits `close()` up to 25 s. Test overrides: `DE_ESP32_MANAGER_DATA_DIR` (also moves Electron's userData), `DE_ESP32_MANAGER_WIFI_ADAPTER`, `DE_ESP32_MANAGER_NO_NETWORK_SCAN=1`, `DE_ESP32_MANAGER_READY_FILE`. The app is staged outside `manager/` with a dependency-free package.json, so no node_modules is shipped. Portable exe 102.7 MB (over the 90 MB target), unsigned, default icon, no exe metadata (`signAndEditExecutable: false`).
 
 ---
@@ -79,7 +79,7 @@ Deviations made while building M0–M3:
 2. **Do everything the device API allows, per device**: live I/O with manual control, pin configuration on a DevKitC pinout, add-ons (MFRC522, BME280), on-device rules, Wi-Fi / SoftAP password / MQTT, rename, logs, telemetry and memory, OTA (upload, pull-by-URL, rollback), reboot, factory reset.
 3. **Fleet operations a single-device UI cannot do**: bulk firmware update with per-device progress, one-click "update to latest CI build" (GitHub Pages), configuration backup / restore / clone between devices.
 4. **Local and private by default, reachable on the LAN on purpose** (Amendment 2): a Node server bound to `127.0.0.1` by default; one `--lan` flag makes it reachable from other LAN machines behind an access token; no cloud, no account.
-5. **Runs anywhere Node 20+ runs**: `npx`/`node` opens the browser; Electron is an optional thin shell around the same server.
+5. **Runs anywhere Node 22+ runs**: `npx`/`node` opens the browser; Electron is an optional thin shell around the same server.
 
 ### Non-goals (v1)
 
@@ -803,7 +803,7 @@ Costs / rules:
 ## 7. CI workflow outline (`.github/workflows/manager.yml`, written in batch 4, not yet run on GitHub)
 
 - **Triggers**: `push` and `pull_request` with `paths: [manager/**, nodered/node-red-contrib-de-esp32/lib/**, nodered/node-red-contrib-de-esp32/package.json, .github/workflows/manager.yml]`; `push` of tags `manager-v*` (tags ignore path filters).
-- **Job `check`** (ubuntu-latest, Node 20 and 22 matrix): `npm ci` in `manager/` → `npm run lint` (eslint + `tsc --noEmit` for server/web/electron) → `npm test` (node:test against the fake device; vitest for web hooks/components) → `npm run build` (vite + esbuild) → smoke: start `node dist/server.cjs --no-open --port 0`, `GET /api/health`, kill. Upload `manager/dist` as a workflow artifact (7 days).
+- **Job `check`** (ubuntu-latest, Node 22 and 24 matrix): `npm ci` in `manager/` → `npm run lint` (eslint + `tsc --noEmit` for server/web/electron) → `npm test` (node:test against the fake device; vitest for web hooks/components) → `npm run build` (vite + esbuild) → smoke: start `node dist/server.cjs --no-open --port 0`, `GET /api/health`, kill. Upload `manager/dist` as a workflow artifact (7 days).
 - **Job `release`** (only on `manager-v*` tag, needs `check`):
   - `bundle` (ubuntu): build → `de-esp32-manager-<ver>-node.zip` (`dist/` + `README` + `LICENSE`; run with `node server.cjs`).
   - `win` (windows-latest): build → `electron-builder --win portable` → `de-esp32-manager-<ver>-portable.exe`. Unsigned in v1 (SmartScreen warning documented).

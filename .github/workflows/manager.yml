@@ -40,7 +40,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        node: [20, 22]
+        node: [22, 24]
     defaults:
       run:
         working-directory: manager
@@ -76,7 +76,7 @@ jobs:
         run: |
           [ -f test.log ] || exit 0
           {
-            grep -nE '(✖|not ok|FAIL|×|Error|ERR_|expected|actual)' test.log | grep -v '^\s*$' | head -45
+            grep -nE '(✖|not ok|FAIL|×|Error|ERR_|expected|actual)' test.log | head -45 || true
             echo '--- last lines ---'
             tail -25 test.log
           } | sed 's/\x1b\[[0-9;]*m//g' > failures.txt

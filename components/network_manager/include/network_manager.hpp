@@ -36,5 +36,7 @@ void network_note_sta_lost_for_recovery();
 // SoftAP after fail_ap_ms without it, drops an auto-raised SoftAP once the STA is stable.
 // Returns true when it has just raised the SoftAP (caller starts the captive DNS).
 bool network_watch_tick(uint32_t fail_ap_ms);
+// network.ip.set / network.ip.confirm. Returns a status object, or nullptr with *err set.
+cJSON* network_ip_command(const char* cmd, cJSON* req, const char** err);
 
 }  // namespace runtime

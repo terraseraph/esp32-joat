@@ -12,7 +12,7 @@ Live control and provision Wi-Fi: the same `cmd` works from the UI and `{root}/{
 
 `command_dispatch(cJSON*)` → response object (caller deletes). `command_apply_saved_io(skip_if_safe_mode)`. `command_apply_saved_modules(skip_if_safe_mode)`. `command_apply_saved_rules(skip_if_safe_mode)`. `io_emit_snapshot()` republishes each pin and `mod_*` key on the event bus. `command_catalog()` → array of `{cmd, summary, example}` (OpenAPI `x-commands`; keep `kCmds` in sync with `command_dispatch`).
 
-Commands: `pin.configure` (optional `debounce_ms` on `in`; `sample_ms`, `hysteresis_mv`, `smooth` on `adc`; `angle`, `min_us`, `max_us` on `servo`), `pin.set`, `io.hydrate`, `serial.hello`, `serial.bye`, `module.catalog|list|add|configure|remove|cmd`, `rule.set|remove|list`, `network.wifi.set|scan|clear`, `network.recovery_ap`, `network.ap.set_password`, `mqtt.configure`, `identity.set_name`, `system.reboot`, `system.factory_reset`, `ota.apply`, `ota.rollback`.
+Commands: `pin.configure` (optional `debounce_ms` on `in`; `sample_ms`, `hysteresis_mv`, `smooth` on `adc`; `angle`, `min_us`, `max_us` on `servo`), `pin.set`, `io.hydrate`, `serial.hello`, `serial.bye`, `module.catalog|list|add|configure|remove|cmd`, `rule.set|remove|list`, `network.wifi.set|scan|clear`, `network.recovery_ap`, `network.ap.set_password`, `network.ip.set|confirm` (handled by `network_ip_command` in network_manager, see "Static IP" there), `mqtt.configure`, `identity.set_name`, `system.reboot`, `system.factory_reset`, `ota.apply`, `ota.rollback`.
 
 Payload `v` / `corr` echoed. REST `POST /api/v1/command`.
 

@@ -16,6 +16,7 @@ Keys (MVP):
 
 - `system.schema` u8, `system.generation` u32, `system.provisioned` u8, `system.device_name` str
 - `network.ssid` / `network.password` str
+- `network.ip_mode` u8 (1 = static, missing = DHCP) / `network.ip_static` blob (16 B), written only after a static IP is confirmed (network_manager "Static IP")
 - `security.ap_password` str (empty / missing = open recovery AP)
 - `mqtt.uri` / `mqtt.user` / `mqtt.password` / `mqtt.root` str (root default `devices`), `mqtt.enabled` u8
 - `io.pins` blob (JSON). Pin objects may include `debounce_ms` (`in`), `sample_ms` / `hysteresis_mv` / `smooth` (`adc`), `angle` / `min_us` / `max_us` (`servo`); missing keys use firmware defaults.

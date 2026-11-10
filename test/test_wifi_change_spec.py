@@ -362,5 +362,284 @@ class LostNetworkTest(unittest.TestCase):
         self.assertEqual(w.attempts, [])
 
 
+# --- Static IP (parse_ip4, validate_static, confirm-or-revert) ---
+AP_NET = 0xC0A80400  # 192.168.4.0/24
+IP_CONFIRM_MS = 90000
+IP_APPLY_DELAY_MS = 1500
+
+
+def parse_ip4(s):
+    if not isinstance(s, str):
+        return None
+    parts = s.split(".")
+    if len(parts) != 4:
+        return None
+    v = 0
+    for p in parts:
+        if not p or len(p) > 3 or not all("0" <= ch <= "9" for ch in p):
+            return None
+        if len(p) > 1 and p[0] == "0":
+            return None
+        n = int(p)
+        if n > 255:
+            return None
+        v = (v << 8) | n
+    return v
+
+
+def host_ok(a):
+    top = a >> 24
+    return top != 0 and top != 127 and top < 224
+
+
+def validate_static(ip, mask, gw, dns=0):
+    inv = ~mask & 0xFFFFFFFF
+    if mask == 0 or (inv & (inv + 1)) & 0xFFFFFFFF:
+        return "netmask must be contiguous"
+    if inv < 3:
+        return "netmask too long (max /30)"
+    if not host_ok(ip):
+        return "ip must be a unicast host address"
+    if ip & inv in (0, inv):
+        return "ip is the network or broadcast address"
+    if gw & mask != ip & mask:
+        return "gateway outside the subnet"
+    if gw == ip or gw & inv in (0, inv):
+        return "gateway must be another host in the subnet"
+    both = mask & 0xFFFFFF00
+    if ip & both == AP_NET & both:
+        return "subnet overlaps the SoftAP 192.168.4.0/24"
+    if dns and not host_ok(dns):
+        return "dns must be a unicast address"
+    return None
+
+
+def v(ip, mask="255.255.255.0", gw="192.168.1.1", dns=None):
+    return validate_static(parse_ip4(ip), parse_ip4(mask), parse_ip4(gw), parse_ip4(dns) if dns else 0)
+
+
+DHCP = ("dhcp",)
+
+
+class IpModel:
+    """network_ip_command + ip_tick + the Wi-Fi change hooks. Times in ms."""
+
+    def __init__(self, saved=DHCP, connected=True):
+        self.nvs = saved
+        self.active = saved
+        self.connected = connected
+        self.pend = None  # None | "apply_due" | "wait"
+        self.new = None
+        self.prev = None
+        self.at = 0
+        self.lease = False
+        self.result = "none"
+        self.reason = ""
+        self.seq = 0
+
+    def set(self, cfg, now):
+        if self.pend:
+            return "ip change pending; confirm it or wait for it to revert"
+        if cfg == self.nvs:
+            return None
+        if not self.connected:
+            if cfg != DHCP:
+                return "station not connected; a static IP can only be set while connected"
+            self.seq += 1
+            self.nvs = self.active = cfg
+            self.result, self.reason = "ok", "offline"
+            return None
+        self.prev, self.new, self.at, self.pend = self.nvs, cfg, now, "apply_due"
+        self.seq += 1
+        self.result, self.reason = "pending", ""
+        return None
+
+    def confirm(self, seq=None):
+        if not self.pend:
+            return "no ip change pending"
+        if self.pend == "apply_due":
+            return "ip change not applied yet; confirm over the new address"
+        if seq is not None and seq != self.seq:
+            return "seq does not match the pending ip change"
+        self.pend = None
+        self.nvs = self.new
+        self.result, self.reason = "ok", "confirmed"
+        return None
+
+    def tick(self, now):
+        if self.pend == "apply_due" and now - self.at >= IP_APPLY_DELAY_MS:
+            self.active, self.at, self.pend, self.lease = self.new, now, "wait", False
+        elif self.pend == "wait":
+            if self.new == DHCP and self.lease:
+                self.pend = None
+                self.nvs = self.new
+                self.result, self.reason = "ok", "dhcp_lease"
+            elif now - self.at >= IP_CONFIRM_MS:
+                self.pend = None
+                self.active = self.prev
+                self.result = "reverted"
+                self.reason = "not_confirmed" if self.new != DHCP else "no_dhcp_lease"
+
+    def reboot(self):
+        self.pend = None
+        self.active = self.nvs
+
+    def wifi_change(self, ok):
+        """network_try_sta (+ network_commit_wifi on success)."""
+        if self.pend:
+            self.pend = None
+            self.result, self.reason = "reverted", "wifi_change"
+        prev = self.nvs
+        self.active = DHCP  # the test runs on DHCP
+        if ok:
+            if prev != DHCP:
+                self.seq += 1
+                self.result, self.reason = "reset", "wifi_change"
+            self.nvs = DHCP
+        else:
+            self.active = prev  # rollback_sta brings the saved mode back
+
+
+STATIC = ("static", "192.168.1.50", "255.255.255.0", "192.168.1.1")
+OTHER = ("static", "192.168.1.60", "255.255.255.0", "192.168.1.1")
+
+
+class ParseTest(unittest.TestCase):
+    def test_good(self):
+        self.assertEqual(parse_ip4("192.168.1.50"), 0xC0A80132)
+        self.assertEqual(parse_ip4("0.0.0.0"), 0)
+        self.assertEqual(parse_ip4("255.255.255.255"), 0xFFFFFFFF)
+
+    def test_bad(self):
+        for s in ["", "1.2.3", "1.2.3.4.5", "256.1.1.1", "01.2.3.4", "1..3.4", "1.2.3.4 ",
+                  " 1.2.3.4", "a.b.c.d", "1.2.3.-4", "1234.1.1.1", None, 5]:
+            self.assertIsNone(parse_ip4(s), s)
+
+
+class ValidateTest(unittest.TestCase):
+    def test_ok(self):
+        self.assertIsNone(v("192.168.1.50"))
+        self.assertIsNone(v("10.0.0.5", "255.0.0.0", "10.0.0.1", "8.8.8.8"))
+        self.assertIsNone(v("192.168.1.2", "255.255.255.252", "192.168.1.1"))
+
+    def test_mask(self):
+        self.assertEqual(v("192.168.1.50", "255.0.255.0"), "netmask must be contiguous")
+        self.assertEqual(v("192.168.1.50", "0.0.0.0"), "netmask must be contiguous")
+        self.assertEqual(v("192.168.1.50", "255.255.255.255"), "netmask too long (max /30)")
+        self.assertEqual(v("192.168.1.50", "255.255.255.254"), "netmask too long (max /30)")
+
+    def test_network_broadcast(self):
+        self.assertEqual(v("192.168.1.0"), "ip is the network or broadcast address")
+        self.assertEqual(v("192.168.1.255"), "ip is the network or broadcast address")
+
+    def test_gateway(self):
+        self.assertEqual(v("192.168.1.50", gw="192.168.2.1"), "gateway outside the subnet")
+        self.assertEqual(v("192.168.1.50", gw="192.168.1.50"), "gateway must be another host in the subnet")
+        self.assertEqual(v("192.168.1.50", gw="192.168.1.255"), "gateway must be another host in the subnet")
+
+    def test_not_unicast(self):
+        self.assertEqual(v("127.0.0.5", "255.0.0.0", "127.0.0.1"), "ip must be a unicast host address")
+        self.assertEqual(v("224.0.0.5", "255.255.255.0", "224.0.0.1"), "ip must be a unicast host address")
+        self.assertEqual(v("192.168.1.50", dns="224.0.0.1"), "dns must be a unicast address")
+
+    def test_softap_overlap(self):
+        self.assertEqual(v("192.168.4.50", gw="192.168.4.2"), "subnet overlaps the SoftAP 192.168.4.0/24")
+        self.assertEqual(v("192.168.10.5", "255.255.0.0", "192.168.0.1"),
+                         "subnet overlaps the SoftAP 192.168.4.0/24")
+        self.assertIsNone(v("192.168.5.5", gw="192.168.5.1"))
+
+
+class ConfirmRevertTest(unittest.TestCase):
+    def test_confirmed_static_is_saved(self):
+        m = IpModel()
+        self.assertIsNone(m.set(STATIC, 0))
+        self.assertEqual(m.confirm(), "ip change not applied yet; confirm over the new address")
+        m.tick(2000)
+        self.assertEqual(m.active, STATIC)
+        self.assertEqual(m.nvs, DHCP)  # not saved yet
+        self.assertIsNone(m.confirm(seq=m.seq))
+        self.assertEqual(m.nvs, STATIC)
+        m.reboot()
+        self.assertEqual(m.active, STATIC)
+
+    def test_unconfirmed_reverts(self):
+        m = IpModel()
+        m.set(STATIC, 0)
+        m.tick(2000)
+        m.tick(2000 + IP_CONFIRM_MS - 1)
+        self.assertEqual(m.active, STATIC)
+        m.tick(2000 + IP_CONFIRM_MS)
+        self.assertEqual(m.active, DHCP)
+        self.assertEqual((m.result, m.reason), ("reverted", "not_confirmed"))
+        self.assertEqual(m.nvs, DHCP)
+
+    def test_power_loss_in_window(self):
+        m = IpModel()
+        m.set(STATIC, 0)
+        m.tick(2000)
+        m.reboot()
+        self.assertEqual(m.active, DHCP)
+
+    def test_wrong_seq(self):
+        m = IpModel()
+        m.set(STATIC, 0)
+        m.tick(2000)
+        self.assertEqual(m.confirm(seq=m.seq + 1), "seq does not match the pending ip change")
+
+    def test_one_at_a_time(self):
+        m = IpModel()
+        m.set(STATIC, 0)
+        self.assertEqual(m.set(OTHER, 10), "ip change pending; confirm it or wait for it to revert")
+
+    def test_dhcp_auto_confirms_on_lease(self):
+        m = IpModel(saved=STATIC)
+        m.set(DHCP, 0)
+        m.tick(2000)
+        m.lease = True
+        m.tick(4000)
+        self.assertEqual(m.nvs, DHCP)
+        self.assertEqual(m.reason, "dhcp_lease")
+
+    def test_dhcp_without_lease_reverts_to_static(self):
+        m = IpModel(saved=STATIC)
+        m.set(DHCP, 0)
+        m.tick(2000)
+        m.tick(2000 + IP_CONFIRM_MS)
+        self.assertEqual(m.active, STATIC)
+        self.assertEqual(m.reason, "no_dhcp_lease")
+
+    def test_static_needs_connection(self):
+        m = IpModel(connected=False)
+        self.assertEqual(m.set(STATIC, 0),
+                         "station not connected; a static IP can only be set while connected")
+
+    def test_dhcp_offline_saved_at_once(self):
+        m = IpModel(saved=STATIC, connected=False)
+        self.assertIsNone(m.set(DHCP, 0))
+        self.assertEqual(m.nvs, DHCP)
+
+
+class IpWifiChangeTest(unittest.TestCase):
+    def test_new_network_resets_to_dhcp(self):
+        m = IpModel(saved=STATIC)
+        m.wifi_change(ok=True)
+        self.assertEqual((m.nvs, m.active), (DHCP, DHCP))
+        self.assertEqual((m.result, m.reason), ("reset", "wifi_change"))
+
+    def test_failed_change_restores_static(self):
+        m = IpModel(saved=STATIC)
+        m.wifi_change(ok=False)
+        self.assertEqual((m.nvs, m.active), (STATIC, STATIC))
+
+    def test_wifi_change_cancels_pending(self):
+        m = IpModel()
+        m.set(STATIC, 0)
+        m.tick(2000)
+        m.wifi_change(ok=False)
+        self.assertIsNone(m.pend)
+        self.assertEqual(m.active, DHCP)
+        self.assertEqual(m.nvs, DHCP)
+
+
 if __name__ == "__main__":
     unittest.main()

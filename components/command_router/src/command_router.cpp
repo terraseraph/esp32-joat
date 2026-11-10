@@ -241,6 +241,10 @@ const CmdInfo kCmds[] = {
     {"network.recovery_ap", "Bring up the recovery SoftAP", "{\"cmd\":\"network.recovery_ap\"}"},
     {"network.ap.set_password", "Blank = open AP; 8-63 chars = WPA2",
      "{\"cmd\":\"network.ap.set_password\",\"password\":\"\"}"},
+    {"network.ip.set", "DHCP or static STA IP; static reverts unless confirmed within 90 s",
+     "{\"cmd\":\"network.ip.set\",\"mode\":\"static\",\"ip\":\"192.168.1.50\",\"netmask\":\"255.255.255.0\",\"gateway\":\"192.168.1.1\"}"},
+    {"network.ip.confirm", "Keep the IP change made by network.ip.set (send over the new address)",
+     "{\"cmd\":\"network.ip.confirm\"}"},
     {"mqtt.configure", "Broker URI, optional topic root (default devices), reconnect",
      "{\"cmd\":\"mqtt.configure\",\"uri\":\"mqtt://192.168.1.10:1883\",\"root\":\"devices\"}"},
     {"identity.set_name", "Set display name; MQTT topics become devices/{name}/...",
@@ -382,6 +386,11 @@ cJSON* command_dispatch(cJSON* req) {
         cJSON* result = network_status_json();
         cJSON_AddStringToObject(result, "mdns", hostname());
         return ok_result(req, result);
+    }
+    if (strncmp(cmd, "network.ip.", 11) == 0) {
+        const char* why = "unknown cmd";
+        cJSON* result = network_ip_command(cmd, req, &why);
+        return result ? ok_result(req, result) : err_result(req, why);
     }
     if (strcmp(cmd, "network.wifi.scan") == 0) {
         return ok_result(req, network_scan());

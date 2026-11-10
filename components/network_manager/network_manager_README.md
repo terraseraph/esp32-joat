@@ -61,6 +61,47 @@ Saved credentials are never cleared by any of this. The SoftAP uses the AP passw
 
 AP and STA share one radio, so the SoftAP follows the STA's channel. A scan while retrying takes the radio off-channel briefly, and a successful join moves the SoftAP to the router's channel, which drops its clients. That is why the background retry pauses while any client is on the SoftAP, and why the auto SoftAP is only dropped when it is empty. `ap_clients` in `GET /api/v1/network` shows the count.
 
+## Static IP
+
+The STA uses DHCP by default. Factory reset, `wifi_clear` and every Wi-Fi credential change go back to DHCP. A static address is set with `network.ip.set` and only kept once it is confirmed. SoftAP addressing (`192.168.4.1`, its DHCP server) is never touched.
+
+**Commands** (through `command_dispatch`, so HTTP `POST /api/v1/command`, WebSocket, MQTT and serial all work):
+
+- `{"cmd":"network.ip.set","mode":"static","ip":"192.168.1.50","netmask":"255.255.255.0","gateway":"192.168.1.1","dns":"1.1.1.1"}`. `dns` is optional and defaults to the gateway.
+- `{"cmd":"network.ip.set","mode":"dhcp"}`
+- `{"cmd":"network.ip.confirm","seq":3}`. `seq` is optional; if given it must match `ip_change.seq`.
+
+Both reply `{"v":1,"ok":true,"result":<network status>}` or `{"v":1,"ok":false,"error":"..."}`.
+
+**Validation** (`parse_ip4`, `validate_static`): strict dotted quads (no leading zeros); a contiguous netmask from /1 to /30; `ip` and `gateway` both unicast hosts in the same subnet, different from each other, and not the network or broadcast address; the subnet must not overlap `192.168.4.0/24`; `dns` must be unicast. It also refuses: no saved Wi-Fi network, a Wi-Fi change test running, another IP change still pending, and a static IP while the STA is not connected.
+
+**Confirm or revert:**
+
+1. `network.ip.set` replies first (`ip_change.result` is `pending`, `applied` false). About 1.5 s later `net_watch` applies the new config.
+2. The client reconnects at the new address within 90 s (`kIpConfirmMs`), shown as `ip_change.confirm_left_s`, and sends `network.ip.confirm`. Only then is the config written to NVS. A confirm sent before the change has been applied is refused, so it cannot be confirmed over the old address.
+3. With no confirm, the previous mode is restored (`result` `reverted`, `reason` `not_confirmed`). A switch to DHCP confirms itself when a lease arrives (`reason` `dhcp_lease`) and reverts with `no_dhcp_lease` if none comes.
+4. Power loss at any point before the confirm boots with the previous mode, because nothing was saved.
+5. Switching to DHCP while the STA is offline is saved at once (`reason` `offline`): there is nothing to confirm against, and DHCP is the safe default.
+
+A confirm is accepted from any transport once the new config is applied. Over the LAN that can only arrive at the new address, since the old one no longer exists. Serial, the SoftAP, or MQTT through a broker the device reached on the new address are also accepted: each is either physical presence or proof that the new config routes.
+
+**Wi-Fi changes:** `network_try_sta` cancels any unconfirmed IP change (`reverted`, `wifi_change`) and tests the new network on DHCP. On success `network_commit_wifi` saves DHCP for it (`ip_change.result` `reset`, `reason` `wifi_change`, when a static config was dropped). On failure `rollback_sta` restores the saved network together with its saved IP mode, static included.
+
+**Status** (`GET /api/v1/network`, `status.network`): `sta_ip` keeps its meaning. New fields: `ip_mode` (`dhcp`|`static`, what the STA uses now), `netmask`, `gateway`, `dns` (live values, `""` while not connected), and `ip_change`:
+
+| Field | Meaning |
+|---|---|
+| `result` | `none`, `pending`, `ok`, `reverted`, `reset`, `failed` |
+| `reason` | `confirmed`, `dhcp_lease`, `offline`, `not_confirmed`, `no_dhcp_lease`, `wifi_change`, `save_failed` |
+| `mode`, `ip`, `netmask`, `gateway`, `dns` | the config that was tried (address fields only for static) |
+| `applied` | true while the change is live and waiting for a confirm |
+| `confirm_left_s` | seconds left to confirm (only while `applied`) |
+| `uptime_s`, `time`, `seq` | as in `wifi_change` |
+
+NVS (`network` namespace): `ip_mode` u8 (1 = static, missing = DHCP) and `ip_static` blob (ip, mask, gw, dns as host-order u32). `ip_static` is written before `ip_mode` = 1 and dropped after `ip_mode` = 0.
+
+**mDNS:** the A record follows the netif. Applying a static address while associated calls `mdns_netif_action(..., MDNS_EVENT_ANNOUNCE_IP4)`, and a DHCP lease raises `GOT_IP`, which mDNS handles. TXT records carry no address. A `GOT_IP` while the STA is not associated is ignored: `esp_netif_set_ip_info` can post one for a static address during a config swap.
+
 ## Depends on
 
 config, identity, security, event_bus, board_profiles, `espressif/mdns`.
@@ -75,7 +116,7 @@ Keep Wi-Fi credentials in our NVS (`network` namespace), not only the IDF Wi-Fi 
 
 ## How to test
 
-No creds → AP. Portal test with good SSID → GOT_IP and commit. On a board already on Wi-Fi, send a wrong password from the LAN: the board must be back on the old network within about 30 s, still STA-only, with `wifi_change.result` `failed`, `reason` `auth` and `restored_previous` true. Repeat with an unknown SSID (`no_ap`) and a good SSID (`ok`). Host spec: `python test/test_wifi_change_spec.py`. Router off at boot or mid-run → recovery AP `WIFI_FAIL_AP_MS` after the drop. Router back → STA rejoins within about 30 s, SoftAP off about 60 s later. Wrong password sent over the SoftAP → `wifi_change` readable at `http://192.168.4.1/api/v1/network`, SoftAP stays up.
+No creds → AP. Portal test with good SSID → GOT_IP and commit. On a board already on Wi-Fi, send a wrong password from the LAN: the board must be back on the old network within about 30 s, still STA-only, with `wifi_change.result` `failed`, `reason` `auth` and `restored_previous` true. Repeat with an unknown SSID (`no_ap`) and a good SSID (`ok`). Host spec: `python test/test_wifi_change_spec.py`. Static IP: set a valid one and confirm it at the new address, then reboot and check it stays. Set an unreachable one (wrong subnet) and check it reverts after 90 s. With a static IP saved, change Wi-Fi and check `ip_mode` is `dhcp` on the new network. With a static IP saved, fail a Wi-Fi change and check the old static address returns. Router off at boot or mid-run → recovery AP `WIFI_FAIL_AP_MS` after the drop. Router back → STA rejoins within about 30 s, SoftAP off about 60 s later. Wrong password sent over the SoftAP → `wifi_change` readable at `http://192.168.4.1/api/v1/network`, SoftAP stays up.
 
 ## Known limits
 

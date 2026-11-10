@@ -4,6 +4,9 @@ name: Manager
 # a `manager-v<version>` tag additionally publishes a GitHub Release (Node zip + Windows portable exe + SHA256SUMS).
 on:
   push:
+    # Listing `tags` alone would stop branch pushes from triggering at all, so name both.
+    branches:
+      - "**"
     paths:
       - "manager/**"
       - "nodered/node-red-contrib-de-esp32/lib/**"

@@ -42,7 +42,8 @@ module.exports = function (RED) {
       return;
     }
     node.gpio = Number(n.gpio);
-    node.configure = n.configure !== false;
+    node.source = n.source === "configured" ? "configured" : "pad";
+    node.configure = node.source === "configured" ? false : (n.configure !== false);
     node.pinMode = n.pinMode === "adc" ? "adc" : "in";
 
     if (!node.device) {

@@ -355,6 +355,15 @@ module.exports = function (RED) {
     }),
   );
 
+  RED.httpAdmin.get(
+    "/de-esp32/pins",
+    RED.auth.needsPermission("de-esp32-device.read"),
+    asyncRoute(async (req, res) => {
+      const { host, port } = hostFromReq(req, RED);
+      res.json(await http.getPins(host, port));
+    }),
+  );
+
   RED.httpAdmin.post(
     "/de-esp32/command",
     RED.auth.needsPermission("de-esp32-device.write"),

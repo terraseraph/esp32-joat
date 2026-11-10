@@ -5,6 +5,7 @@
     defaults: {
       name: { value: "" },
       device: { type: "de-esp32-device", required: true },
+      source: { value: "pad" },
       gpio: { value: "", required: true },
       pinName: { value: "" },
       pinMode: { value: "out" },
@@ -31,6 +32,11 @@
         return this.name || ("gpio out " + who);
       }
       return this.name || (mode + " " + this.gpio + " → " + who);
+    },
+    oneditsave: function() {
+      if ($("#node-input-source").val() === "configured") {
+        $("#node-input-configure").prop("checked", false);
+      }
     },
     oneditprepare: function() {
       function fill(id, fallback) {
@@ -69,7 +75,7 @@
     <label for="node-input-pinName"><i class="fa fa-tag"></i> Pin name</label>
     <input type="text" id="node-input-pinName" placeholder="gpio_4">
   </div>
-  <div class="form-row">
+  <div class="form-row" id="de-esp32-configure-row">
     <label>&nbsp;</label>
     <input type="checkbox" id="node-input-configure" style="display:inline-block;width:auto;vertical-align:top">
     <label for="node-input-configure" style="width:auto">Configure pin on deploy</label>
@@ -130,6 +136,7 @@
     <label for="node-input-invert" style="width:auto">Invert logic</label>
     <p class="de-esp32-hint" id="de-esp32-invhint"></p>
   </div>
+  <div id="de-esp32-configured"></div>
   <div id="de-esp32-pinbox-out"></div>
   <div class="form-row">
     <label for="node-input-name"><i class="fa fa-tag"></i> Name</label>
@@ -140,5 +147,6 @@
 <script type="text/html" data-help-name="de-esp32-gpio-out">
   <p>Drives a digital output, PWM, or hobby servo. <code>msg.payload</code> is 0/1 (or on/off) for Out, 0–1000 duty for PWM, or an angle 0–180 for Servo.</p>
   <p>Pads show chip capabilities from <code>GET /api/v1/hardware</code>. Servo uses the same pins as PWM. Input-only and flash pads cannot be selected.</p>
-  <p>On deploy (unless unchecked) sends <code>pin.configure</code>. Servo maps 0° to 500 µs and 180° to 2500 µs. Open Advanced on the node to change that window. Each message sends <code>pin.set</code> with <code>mode</code> <code>servo</code>.</p>
+  <p><strong>Configured on this device</strong> lists output, PWM, and servo pins already set on the board (<code>GET /api/v1/pins</code>). It does not send <code>pin.configure</code>. Incoming messages still send <code>pin.set</code>.</p>
+  <p><strong>Pick pad</strong> uses the header map. On deploy (unless unchecked) sends <code>pin.configure</code>. Servo maps 0° to 500 µs and 180° to 2500 µs. Open Advanced on the node to change that window. Each message sends <code>pin.set</code> with <code>mode</code> <code>servo</code>.</p>
 </script>

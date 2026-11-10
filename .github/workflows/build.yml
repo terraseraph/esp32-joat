@@ -29,6 +29,7 @@ jobs:
           python test/test_capability_spec.py
           python test/test_module_spec.py
           python test/test_rule_spec.py
+          python test/test_wifi_change_spec.py
 
   firmware:
     runs-on: ubuntu-latest

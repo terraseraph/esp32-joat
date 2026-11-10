@@ -2,6 +2,7 @@
 
 #include <cstdio>
 #include <cstring>
+#include <ctime>
 
 #include "lwip/ip4_addr.h"
 
@@ -17,6 +18,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/event_groups.h"
 #include "freertos/semphr.h"
+#include "freertos/task.h"
 #include "mdns.h"
 #include "runtime_status.hpp"
 #include "runtime_version.hpp"
@@ -45,6 +47,72 @@ bool s_want_ap;
 char s_pending_ssid[33];
 char s_pending_pass[65];
 char s_captive_uri[] = "http://192.168.4.1";
+// Wi-Fi change bookkeeping (network_try_sta / network_commit_wifi). See README "Safe Wi-Fi change".
+bool s_sta_link;          // associated (WIFI_EVENT_STA_CONNECTED seen, no disconnect since)
+uint8_t s_last_reason;    // last STA disconnect reason this test, 0 = none
+bool s_restore_sta_only;  // on next GOT_IP: drop the SoftAP the test raised (old mode was STA)
+volatile bool s_swapping; // switch_sta() in progress: event handler must not reconnect or fail
+struct WifiChange {
+    const char* result = "none";  // none | testing | ok | failed
+    const char* reason = "";      // auth | no_ap | no_ip | timeout | connect_failed | save_failed
+    char ssid[33] = {0};
+    uint8_t disconnect_reason = 0;
+    bool restored_previous = false;
+    uint16_t seq = 0;
+    uint32_t uptime_s = 0;
+    int64_t epoch = 0;
+} s_change;
+
+void record_change(const char* result, const char* reason, const char* ssid, bool restored) {
+    s_change.result = result;
+    s_change.reason = reason ? reason : "";
+    if (ssid) {
+        snprintf(s_change.ssid, sizeof(s_change.ssid), "%s", ssid);
+    }
+    s_change.disconnect_reason = s_last_reason;
+    s_change.restored_previous = restored;
+    s_change.uptime_s = RuntimeStatus::instance().uptime_s();
+    time_t now = time(nullptr);
+    s_change.epoch = now > 1700000000 ? static_cast<int64_t>(now) : 0;  // 0 until SNTP set the clock
+}
+
+// Why a test failed. Mirrored by test/test_wifi_change_spec.py - keep both in sync.
+const char* classify_failure(bool associated, uint8_t reason) {
+    if (associated) {
+        return "no_ip";  // joined the AP but DHCP never answered
+    }
+    switch (reason) {
+        case 0:
+            return "timeout";
+        case WIFI_REASON_NO_AP_FOUND:
+        case WIFI_REASON_NO_AP_FOUND_W_COMPATIBLE_SECURITY:
+        case WIFI_REASON_NO_AP_FOUND_IN_AUTHMODE_THRESHOLD:
+        case WIFI_REASON_NO_AP_FOUND_IN_RSSI_THRESHOLD:
+            return "no_ap";
+        case WIFI_REASON_AUTH_FAIL:
+        case WIFI_REASON_AUTH_EXPIRE:
+        case WIFI_REASON_4WAY_HANDSHAKE_TIMEOUT:
+        case WIFI_REASON_HANDSHAKE_TIMEOUT:
+        case WIFI_REASON_MIC_FAILURE:
+        case WIFI_REASON_802_1X_AUTH_FAILED:
+            return "auth";
+        default:
+            return "connect_failed";
+    }
+}
+
+bool load_saved_wifi(char* ssid, size_t ssid_len, char* pass, size_t pass_len) {
+    size_t slen = ssid_len;
+    if (config_get_str("network", "ssid", ssid, &slen) != ESP_OK || !ssid[0]) {
+        ssid[0] = '\0';
+        return false;
+    }
+    size_t plen = pass_len;
+    if (config_get_str("network", "password", pass, &plen) != ESP_OK) {
+        pass[0] = '\0';
+    }
+    return true;
+}
 
 void setup_ap_dhcp() {
     if (!s_ap) {
@@ -89,10 +157,21 @@ void wifi_event(void*, esp_event_base_t base, int32_t id, void* data) {
         if (s_pending_ssid[0]) {
             esp_wifi_connect();
         }
+    } else if (base == WIFI_EVENT && id == WIFI_EVENT_STA_CONNECTED) {
+        s_sta_link = true;
     } else if (base == WIFI_EVENT && id == WIFI_EVENT_STA_DISCONNECTED) {
         auto* ev = static_cast<wifi_event_sta_disconnected_t*>(data);
         ESP_LOGW(TAG, "STA disconnected reason=%d", ev ? ev->reason : -1);
+        s_sta_link = false;
+        // ASSOC_LEAVE is our own esp_wifi_disconnect(); it says nothing about the new network.
+        if (ev && ev->reason != WIFI_REASON_ASSOC_LEAVE) {
+            s_last_reason = ev->reason;
+        }
         s_sta_ip[0] = '\0';
+        if (s_swapping) {
+            // switch_sta() is replacing the STA config and calls esp_wifi_connect() itself.
+            return;
+        }
         s_retry++;
         if (s_retry < 8 && s_pending_ssid[0]) {
             esp_wifi_connect();
@@ -118,6 +197,13 @@ void wifi_event(void*, esp_event_base_t base, int32_t id, void* data) {
             s_rssi = ap.rssi;
         }
         ESP_LOGI(TAG, "got IP %s rssi=%d", s_sta_ip, s_rssi);
+        if (s_restore_sta_only) {
+            // Back on the previous network after a failed change: drop the SoftAP the test raised.
+            s_restore_sta_only = false;
+            s_want_ap = false;
+            esp_wifi_set_mode(WIFI_MODE_STA);
+            ESP_LOGI(TAG, "previous network restored; SoftAP off");
+        }
         set_state(s_want_ap ? NetState::kApStaRecovery : NetState::kStaConnected);
         network_start_mdns();
     }
@@ -148,6 +234,40 @@ esp_err_t apply_sta_config(const char* ssid, const char* pass) {
     sta.sta.threshold.authmode = WIFI_AUTH_WPA_WPA2_PSK;
     sta.sta.pmf_cfg.capable = true;
     return esp_wifi_set_config(WIFI_IF_STA, &sta);
+}
+
+// Point the STA at ssid/pass and start connecting. Used by the test and by the rollback.
+// esp_wifi_set_config(STA) fails with ESP_ERR_WIFI_STATE while a connect is in flight, and the
+// event handler would otherwise reconnect (or raise FAIL_BIT) on our own disconnect, so the
+// handler stands aside while s_swapping is set.
+void switch_sta(const char* ssid, const char* pass) {
+    s_swapping = true;
+    esp_wifi_disconnect();
+    esp_err_t err = apply_sta_config(ssid, pass);
+    for (int i = 0; err == ESP_ERR_WIFI_STATE && i < 20; ++i) {
+        vTaskDelay(pdMS_TO_TICKS(50));
+        esp_wifi_disconnect();
+        err = apply_sta_config(ssid, pass);
+    }
+    if (err != ESP_OK) {
+        ESP_LOGW(TAG, "STA config %s", esp_err_to_name(err));
+    }
+    snprintf(s_pending_ssid, sizeof(s_pending_ssid), "%s", ssid);
+    snprintf(s_pending_pass, sizeof(s_pending_pass), "%s", pass ? pass : "");
+    s_retry = 0;
+    s_sta_link = false;
+    xEventGroupClearBits(s_wifi_eg, GOT_IP_BIT | FAIL_BIT);
+    set_state(NetState::kStaConnecting);
+    s_swapping = false;
+    esp_wifi_connect();
+}
+
+// Go back to the saved network after a failed test. Returns at once; the event handler finishes
+// the reconnect (8 retries, then recovery AP - same as at boot).
+void rollback_sta(const char* ssid, const char* pass, bool sta_only) {
+    ESP_LOGW(TAG, "wifi change failed - reconnecting to saved ssid=%s", ssid);
+    s_restore_sta_only = sta_only;
+    switch_sta(ssid, pass);
 }
 
 }  // namespace
@@ -256,44 +376,61 @@ esp_err_t network_try_sta(const char* ssid, const char* password, int timeout_ms
     if (!ssid || !ssid[0]) {
         return ESP_ERR_INVALID_ARG;
     }
-    xEventGroupClearBits(s_wifi_eg, GOT_IP_BIT | FAIL_BIT);
-    s_retry = 0;
-    snprintf(s_pending_ssid, sizeof(s_pending_ssid), "%s", ssid);
-    snprintf(s_pending_pass, sizeof(s_pending_pass), "%s", password ? password : "");
-    wifi_mode_t mode;
-    esp_wifi_get_mode(&mode);
-    if (mode != WIFI_MODE_APSTA && mode != WIFI_MODE_STA) {
-        esp_wifi_set_mode(WIFI_MODE_APSTA);
-    } else if (mode == WIFI_MODE_STA) {
-        // Keep AP available during first-provision test if already in APSTA.
+    if (xSemaphoreTake(s_mu, 0) != pdTRUE) {
+        ESP_LOGW(TAG, "wifi test already running");
+        return ESP_ERR_INVALID_STATE;
     }
-    // Always test in APSTA so the phone stays on the portal.
+    // The saved network stays in NVS until network_commit_wifi; remember it so a failed test can
+    // reconnect to it now instead of waiting for a reboot.
+    char prev_ssid[33] = {0};
+    char prev_pass[65] = {0};
+    bool have_prev = load_saved_wifi(prev_ssid, sizeof(prev_ssid), prev_pass, sizeof(prev_pass));
+    wifi_mode_t mode = WIFI_MODE_NULL;
+    esp_wifi_get_mode(&mode);
+    bool prev_sta_only = mode == WIFI_MODE_STA && !s_want_ap;
+
+    s_restore_sta_only = false;
+    s_last_reason = 0;
+    s_change.seq++;
+    record_change("testing", nullptr, ssid, false);
+    ESP_LOGI(TAG, "wifi test ssid=%s (saved=%s)", ssid, have_prev ? prev_ssid : "-");
+
+    // Always test in APSTA so a phone on the portal stays connected.
     esp_wifi_set_mode(WIFI_MODE_APSTA);
     apply_ap_config();
-    apply_sta_config(ssid, password);
-    set_state(NetState::kStaConnecting);
-    esp_wifi_disconnect();
-    esp_wifi_connect();
+    switch_sta(ssid, password);
     EventBits_t bits = xEventGroupWaitBits(s_wifi_eg, GOT_IP_BIT | FAIL_BIT, pdTRUE, pdFALSE,
                                            pdMS_TO_TICKS(timeout_ms));
     if (bits & GOT_IP_BIT) {
+        // Result stays "testing" until network_commit_wifi saves it.
+        xSemaphoreGive(s_mu);
         return ESP_OK;
     }
+    const char* why = classify_failure(s_sta_link, s_last_reason);
+    ESP_LOGW(TAG, "wifi test ssid=%s failed: %s (reason=%u)", ssid, why, (unsigned)s_last_reason);
+    record_change("failed", why, nullptr, have_prev);
+    if (have_prev) {
+        rollback_sta(prev_ssid, prev_pass, prev_sta_only);
+    }
+    // else first-time provisioning: nothing to go back to; the SoftAP stays up as before.
+    xSemaphoreGive(s_mu);
     return ESP_ERR_TIMEOUT;
 }
 
 esp_err_t network_commit_wifi(const char* ssid, const char* password) {
     esp_err_t err = config_set_str("network", "ssid", ssid);
-    if (err != ESP_OK) {
-        return err;
+    if (err == ESP_OK) {
+        err = config_set_str("network", "password", password ? password : "");
     }
-    err = config_set_str("network", "password", password ? password : "");
     if (err != ESP_OK) {
+        // Running on the new network but it is not saved; a reboot goes back to the old one.
+        record_change("failed", "save_failed", ssid, false);
         return err;
     }
     uint8_t provisioned = 1;
     config_set_u8("system", "provisioned", provisioned);
     s_want_ap = true;  // keep AP briefly so the portal can show STA IP
+    record_change("ok", nullptr, ssid, false);
     ESP_LOGI(TAG, "wifi committed ssid=%s sta_ip=%s mdns=%s.local", ssid, s_sta_ip, hostname());
     return ESP_OK;
 }
@@ -356,6 +493,19 @@ cJSON* network_status_json() {
     cJSON_AddNumberToObject(o, "rssi", s_rssi);
     cJSON_AddBoolToObject(o, "provisioned", config_has_wifi());
     cJSON_AddBoolToObject(o, "sta_connected", sta_connected());
+    cJSON* wc = cJSON_AddObjectToObject(o, "wifi_change");
+    if (wc) {
+        cJSON_AddStringToObject(wc, "result", s_change.result);
+        if (s_change.seq) {
+            cJSON_AddStringToObject(wc, "ssid", s_change.ssid);
+            cJSON_AddStringToObject(wc, "reason", s_change.reason);
+            cJSON_AddNumberToObject(wc, "disconnect_reason", s_change.disconnect_reason);
+            cJSON_AddBoolToObject(wc, "restored_previous", s_change.restored_previous);
+            cJSON_AddNumberToObject(wc, "uptime_s", s_change.uptime_s);
+            cJSON_AddNumberToObject(wc, "time", static_cast<double>(s_change.epoch));
+            cJSON_AddNumberToObject(wc, "seq", s_change.seq);
+        }
+    }
     return o;
 }
 

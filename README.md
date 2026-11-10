@@ -14,14 +14,13 @@ Feature index (start here): **[docs/FEATURES_README.md](docs/FEATURES_README.md)
 See [docs/features/toolchain_README.md](docs/features/toolchain_README.md).
 
 ```powershell
-$env:IDF_PATH = "D:\esp\esp-idf"
-$env:IDF_TOOLS_PATH = "D:\esp\idf-tools"
-. D:\esp\esp-idf\export.ps1
-# This workspace is on a mapped UNC share; keep the build tree on local D:.
-idf.py -B D:\esp\de-esp32-build set-target esp32
-idf.py -B D:\esp\de-esp32-build build
-idf.py -B D:\esp\de-esp32-build -p COMx flash monitor
+. .\tools\env.ps1        # finds ESP-IDF 5.4 (C:\esp, D:\esp, ~\esp, C:\Espressif, or $env:IDF_PATH)
+idf.py set-target esp32  # first time only
+idf.py build             # output in .\build, same as CI
+idf.py -p COMx flash monitor
 ```
+
+Every pull request is built in Espressif's ESP-IDF 5.4.2 image by [.github/workflows/build.yml](.github/workflows/build.yml), so a green check means it builds on a clean machine.
 
 Or pick a COM port interactively (optional device name):
 

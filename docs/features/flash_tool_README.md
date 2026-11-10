@@ -17,7 +17,7 @@ Flash once: pick the board from a COM list, give it a name like `kitchen-relay`,
 .\tools\flash.cmd
 ```
 
-Parameters: `-Port`, `-Name`, `-Build`, `-Monitor`, `-NoNamePrompt`, `-BuildDir` (default `D:\esp\de-esp32-build`).
+Parameters: `-Port`, `-Name`, `-Build`, `-Monitor`, `-NoNamePrompt`, `-BuildDir` (default `build\` in the repo, same as CI).
 
 State file `tools/flash_state.json` remembers last port and name (not committed).
 
@@ -36,7 +36,7 @@ Developers flashing DevKitC boards on Windows.
 
 ## How to update and maintain
 
-Keep `-B` on a **local** NTFS path (`D:\esp\de-esp32-build`). The repo on `Y:` is a UNC share; `cmd.exe` cannot cwd there during compile/link.
+No machine-specific paths: IDF is located by [tools/env.ps1](../../tools/env.ps1) and output defaults to the repo's `build\`. If the repo sits on a UNC/network share, pass `-BuildDir` with a local NTFS folder; `cmd.exe` cannot cwd into a UNC path during compile/link.
 
 COM listing uses `Win32_PnPEntity` names matching `(COMx)` so CH340/CP210x show up (plain `Win32_SerialPort` often misses USB-UART). If a new adapter family should be tagged `[likely ESP]`, add a keyword to the regex in `flash.ps1`.
 

@@ -21,16 +21,16 @@ Repo scripts, no extra pip packages. Windows mDNS is unreliable; the HTTP sweep 
 .\tools\discover.cmd --json
 ```
 
-Bare `python` on this PC is often PlatformIO 3.7 (broken sockets). The `.cmd` wrappers use Python 3.9 and clear `PYTHONHOME`. Exit `1` means none found. Then stop — do not USB-flash unless the user asked for `flash.ps1`.
+Bare `python` can be PlatformIO's 3.7 or the Microsoft Store alias. The `.cmd` wrappers clear `PYTHONHOME` and use the `py -3` launcher when present. Exit `1` means none found. Then stop — do not USB-flash unless the user asked for `flash.ps1`.
 
-2. **Build** if `D:\esp\de-esp32-build\de_esp32_runtime.bin` is missing or older than the sources you just changed:
+2. **Build** if `build\de_esp32_runtime.bin` is missing or older than the sources you just changed:
 
 ```powershell
 . .\tools\env.ps1
-idf.py -B D:\esp\de-esp32-build build
+idf.py build
 ```
 
-Keep `-B` on local `D:` (the repo on `Y:` is UNC).
+If the repo is on a network share, build to a local folder with `-B` and pass `--bin` to the push.
 
 3. **Push**
 

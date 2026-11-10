@@ -15,12 +15,12 @@ python tools/discover.py
 python tools/discover.py --json
 python tools/ota_push.py
 python tools/ota_push.py --ip 192.168.143.245
-python tools/ota_push.py --name esp-joat-test --bin D:\esp\de-esp32-build\de_esp32_runtime.bin
+python tools/ota_push.py --name esp-joat-test --bin build\de_esp32_runtime.bin
 .\tools\discover.cmd
 .\tools\ota_push.cmd
 ```
 
-Stdlib Python **3.9+** only (IDF's interpreter, not PlatformIO 3.7). `tools\discover.cmd` / `ota_push.cmd` clear `PYTHONHOME` and call `%LOCALAPPDATA%\Programs\Python\Python39\python.exe`.
+Stdlib Python **3.9+** only (not PlatformIO 3.7). `tools\discover.cmd` / `ota_push.cmd` clear `PYTHONHOME` and run `py -3`, falling back to `python`. `--bin` defaults to `build\de_esp32_runtime.bin` in the repo.
 
 Fingerprint: `ota.project == de_esp32_runtime` or hostname `esp32-*`.
 
@@ -38,7 +38,7 @@ Developers and Cursor agents on the same LAN as provisioned boards.
 
 ## How to update and maintain
 
-Keep the skill and these scripts in the same change if the OTA URL or status JSON shape changes. Do not add pip dependencies. Prefer probing `/api/v1/status` over trusting mDNS names (printers also speak `_http._tcp`). Build output stays on `D:\esp\de-esp32-build`.
+Keep the skill and these scripts in the same change if the OTA URL or status JSON shape changes. Do not add pip dependencies. Prefer probing `/api/v1/status` over trusting mDNS names (printers also speak `_http._tcp`). Build output defaults to the repo's `build\`; keep scripts free of machine-specific paths.
 
 ## How to test
 

@@ -4,7 +4,8 @@
 #   .\tools\flash.ps1 -Port COM3 -Name kitchen-relay
 #   .\tools\flash.ps1 -Build -Monitor
 #
-# Requires: ESP-IDF 5.4.2 (see tools\env.ps1). Build output lives on local D: because Y: is UNC.
+# Requires: ESP-IDF 5.4.2 (see tools\env.ps1). Build output defaults to .\build, same as CI.
+# If the repo sits on a network share, pass -BuildDir with a local folder.
 
 [CmdletBinding()]
 param(
@@ -13,7 +14,7 @@ param(
     [switch]$Build,
     [switch]$Monitor,
     [switch]$NoNamePrompt,
-    [string]$BuildDir = "D:\esp\de-esp32-build"
+    [string]$BuildDir = (Join-Path (Split-Path -Parent $PSScriptRoot) "build")
 )
 
 $ErrorActionPreference = "Stop"
@@ -104,13 +105,13 @@ function Get-IdfPython {
     if ($env:IDF_PYTHON_ENV_PATH) {
         $candidates += (Join-Path $env:IDF_PYTHON_ENV_PATH "Scripts\python.exe")
     }
-    if ($env:IDF_TOOLS_PATH) {
-        $candidates += (Join-Path $env:IDF_TOOLS_PATH "python_env\idf5.4_py3.9_env\Scripts\python.exe")
-    }
+    $toolsRoot = if ($env:IDF_TOOLS_PATH) { $env:IDF_TOOLS_PATH } else { Join-Path $HOME ".espressif" }
+    $candidates += Get-ChildItem (Join-Path $toolsRoot "python_env") -Directory -Filter "idf5.4_py*_env" -ErrorAction SilentlyContinue |
+        Sort-Object Name -Descending | ForEach-Object { Join-Path $_.FullName "Scripts\python.exe" }
     foreach ($c in $candidates) {
         if ($c -and (Test-Path $c)) { return $c }
     }
-    throw "ESP-IDF venv python not found. Re-run D:\esp\esp-idf\install.bat esp32"
+    throw "ESP-IDF venv python not found. Re-run $env:IDF_PATH\install.ps1 esp32"
 }
 
 function Initialize-Idf {
@@ -124,7 +125,7 @@ function Initialize-Idf {
     # Windows .py file association often launches PlatformIO 3.7 or system 3.9 (no IDF packages).
     & $script:IdfPython -c "import click"
     if ($LASTEXITCODE -ne 0) {
-        throw "IDF venv cannot import click ($script:IdfPython). Clear PYTHONHOME and re-run install.bat."
+        throw "IDF venv cannot import click ($script:IdfPython). Clear PYTHONHOME and re-run $env:IDF_PATH\install.ps1 esp32."
     }
 }
 

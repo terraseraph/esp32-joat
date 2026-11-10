@@ -5,7 +5,7 @@ Usage:
   python tools/ota_push.py
   python tools/ota_push.py --ip 192.168.143.245
   python tools/ota_push.py --name esp-joat-test
-  python tools/ota_push.py --bin D:/esp/de-esp32-build/de_esp32_runtime.bin
+  python tools/ota_push.py --bin path/to/de_esp32_runtime.bin   (default: build/ in the repo)
 """
 from __future__ import annotations
 
@@ -19,7 +19,8 @@ from pathlib import Path
 
 import discover
 
-DEFAULT_BIN = Path("D:/esp/de-esp32-build/de_esp32_runtime.bin")
+REPO_ROOT = Path(__file__).resolve().parent.parent
+DEFAULT_BIN = REPO_ROOT / "build" / "de_esp32_runtime.bin"
 
 
 def _pick(devices: list[dict], ip: str, name: str) -> dict:
@@ -98,7 +99,7 @@ def main(argv: list[str] | None = None) -> int:
     bin_path = args.bin
     if not bin_path.is_file():
         print(f"missing firmware image: {bin_path}", file=sys.stderr)
-        print("Build first: . .\\tools\\env.ps1; idf.py -B D:\\esp\\de-esp32-build build", file=sys.stderr)
+        print("Build first: . .\\tools\\env.ps1; idf.py build   (or pass --bin)", file=sys.stderr)
         return 2
 
     blob = bin_path.read_bytes()

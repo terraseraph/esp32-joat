@@ -1,11 +1,11 @@
 # Copy the three flash images into install/firmware/ for the browser installer.
 # Usage:
 #   .\tools\stage_web_flash.ps1
-#   .\tools\stage_web_flash.ps1 -BuildDir D:\esp\de-esp32-build
+#   .\tools\stage_web_flash.ps1 -BuildDir C:\some\other\build
 
 [CmdletBinding()]
 param(
-    [string]$BuildDir = "D:\esp\de-esp32-build"
+    [string]$BuildDir = (Join-Path (Split-Path -Parent $PSScriptRoot) "build")
 )
 
 $ErrorActionPreference = "Stop"

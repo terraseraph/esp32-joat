@@ -1,0 +1,44 @@
+name: Build check
+
+# Proves the firmware builds on a clean machine (Espressif's ESP-IDF image),
+# independent of anyone's workstation. Runs on every PR and on pushes to
+# branches other than main (main is built by install.yml).
+on:
+  pull_request:
+  push:
+    branches-ignore: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  host-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Host spec tests
+        run: |
+          python test/test_capability_spec.py
+          python test/test_module_spec.py
+          python test/test_rule_spec.py
+
+  firmware:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build ESP-IDF 5.4.2
+        uses: espressif/esp-idf-ci-action@v1
+        with:
+          esp_idf_version: v5.4.2
+          target: esp32
+          command: idf.py set-target esp32 && idf.py build
+      - name: Image size
+        run: ls -l build/de_esp32_runtime.bin

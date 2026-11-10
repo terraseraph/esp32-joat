@@ -6,11 +6,11 @@ Web Serial only works on `localhost` or HTTPS. Opening the HTML file directly wi
 
 ## Stage firmware
 
-From a normal IDF build (`D:\esp\de-esp32-build` by default):
+From a normal IDF build (the repo's `build\` by default):
 
 ```powershell
 .\tools\stage_web_flash.ps1
-.\tools\stage_web_flash.ps1 -BuildDir D:\esp\de-esp32-build
+.\tools\stage_web_flash.ps1 -BuildDir C:\some\other\build
 ```
 
 That copies `bootloader.bin`, `partition-table.bin`, and `de_esp32_runtime.bin` into `install/firmware/`. A push to `main` that changes firmware sources builds the same three images in GitHub Actions and commits them. Offsets live in `manifest.json`: bootloader `0x1000`, partition table `0x8000`, app `0x20000` (`ota_0`).

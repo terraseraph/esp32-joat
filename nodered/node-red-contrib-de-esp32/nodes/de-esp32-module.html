@@ -8,6 +8,8 @@
 .de-esp32-cs span{font-size:12px;opacity:.8}
 .de-esp32-cs button{padding:4px 8px;border:1px solid #999;background:transparent;cursor:pointer}
 .de-esp32-cs button.on{border-color:#6aa4ff}
+.de-esp32-installed{display:flex;flex-direction:column;gap:6px;margin:8px 0}
+.de-esp32-installed select{width:100%}
 </style>
 <script type="text/javascript">
   RED.nodes.registerType("de-esp32-module", {
@@ -16,6 +18,7 @@
     defaults: {
       name: { value: "" },
       device: { type: "de-esp32-device", required: true },
+      mode: { value: "add" },
       modType: { value: "" },
       modId: { value: "" },
       bus: { value: "" },
@@ -33,10 +36,17 @@
       const bus = this.bus ? (" " + String(this.bus).toUpperCase()) : "";
       return (this.modId || this.modType || "module") + bus;
     },
+    oneditsave: function() {
+      if ($("#node-input-mode").val() === "installed") {
+        $("#node-input-install").prop("checked", false);
+      }
+    },
     oneditprepare: function() {
       const node = this;
       let catalog = null;
       let hardware = null;
+      let installed = null;
+      let listError = "";
 
       function pinsObj() {
         try {
@@ -139,7 +149,44 @@
           return a.gpio - b.gpio;
         });
       }
-      function paint() {
+      function currentMode() {
+        return $("#node-input-mode").val() === "installed" ? "installed" : "add";
+      }
+      function moduleLabel(m) {
+        const type = (m && m.type) || "";
+        const t = typeById(type);
+        const typeLabel = (t && t.label) || type || "module";
+        const pins = (m && m.pins) || {};
+        const bits = [];
+        if (pins.cs != null) {
+          bits.push("CS " + pins.cs);
+        } else if (pins.ss != null) {
+          bits.push("CS " + pins.ss);
+        }
+        if (pins.sda != null) {
+          bits.push("SDA " + pins.sda);
+        }
+        if (pins.scl != null) {
+          bits.push("SCL " + pins.scl);
+        }
+        if (!bits.length) {
+          Object.keys(pins).forEach(function(k) {
+            bits.push(String(k).toUpperCase() + " " + pins[k]);
+          });
+        }
+        return [(m && m.id) || "?", typeLabel].concat(bits).join(", ");
+      }
+      function applyInstalled(m) {
+        if (!m) {
+          return;
+        }
+        $("#node-input-modId").val(m.id || "");
+        $("#node-input-modType").val(m.type || "");
+        $("#node-input-bus").val(m.bus || "");
+        savePins(m.pins || {});
+        $("#node-input-install").prop("checked", false);
+      }
+      function paintAdd() {
         const $box = $("#de-esp32-modbox");
         if (!catalog) {
           $box.html('<p class="de-esp32-hint">loading catalog…</p>');
@@ -211,13 +258,70 @@
           paint();
         });
       }
+      function paintInstalled() {
+        const $box = $("#de-esp32-modbox");
+        if (listError) {
+          $box.html('<p class="de-esp32-hint">' + DeEsp32.esc(listError) + "</p>");
+          return;
+        }
+        if (installed === null) {
+          $box.html('<p class="de-esp32-hint">loading installed modules…</p>');
+          return;
+        }
+        if (!installed.length) {
+          $box.html('<p class="de-esp32-hint">No modules are installed on this device.</p>');
+          return;
+        }
+        const cur = ($("#node-input-modId").val() || "").trim();
+        let html = '<div class="de-esp32-installed">';
+        html += '<select id="de-esp32-installed-sel">';
+        html += '<option value="">Select a module…</option>';
+        installed.forEach(function(m) {
+          const sel = m.id === cur ? " selected" : "";
+          html += '<option value="' + DeEsp32.esc(m.id) + '"' + sel + ">" + DeEsp32.esc(moduleLabel(m)) + "</option>";
+        });
+        html += "</select>";
+        const picked = installed.filter(function(m) { return m.id === cur; })[0];
+        if (picked) {
+          html += '<p class="de-esp32-hint">Listening to ' + DeEsp32.esc(picked.id) + " only. This will not install or reconfigure the board.</p>";
+        } else {
+          html += '<p class="de-esp32-hint">Pick an installed module. This node will only listen to its events.</p>';
+        }
+        html += "</div>";
+        $box.html(html);
+        $box.find("#de-esp32-installed-sel").on("change", function() {
+          const id = this.value;
+          const m = installed.filter(function(x) { return x.id === id; })[0];
+          applyInstalled(m);
+          paint();
+        });
+      }
+      function paint() {
+        const isInstalled = currentMode() === "installed";
+        $("#de-esp32-install-row").toggle(!isInstalled);
+        if (isInstalled) {
+          paintInstalled();
+        } else {
+          paintAdd();
+        }
+      }
 
       function load() {
         const dev = RED.nodes.node($("#node-input-device").val());
-        $("#de-esp32-modbox").html('<p class="de-esp32-hint">loading catalog…</p>');
+        catalog = null;
+        hardware = null;
+        installed = null;
+        listError = "";
         if (!dev || !dev.host) {
+          listError = "Pick a device with a host first.";
+          installed = [];
           $("#de-esp32-modbox").html('<p class="de-esp32-hint">Pick a device with a host first.</p>');
           return;
+        }
+        if (currentMode() === "installed") {
+          $("#de-esp32-modbox").html('<p class="de-esp32-hint">loading installed modules…</p>');
+        } else {
+          $("#de-esp32-modbox").html('<p class="de-esp32-hint">loading catalog…</p>');
         }
         $.getJSON("de-esp32/hardware", { host: dev.host, port: dev.port || 80, id: dev.id })
           .done(function(hw) { hardware = hw; paint(); })
@@ -231,11 +335,39 @@
           catalog = (res && res.result) || { types: [] };
           paint();
         }).fail(function(xhr) {
-          $("#de-esp32-modbox").html('<p class="de-esp32-hint">' + DeEsp32.esc(DeEsp32.ajaxErr(xhr)) + "</p>");
+          if (currentMode() !== "installed") {
+            $("#de-esp32-modbox").html('<p class="de-esp32-hint">' + DeEsp32.esc(DeEsp32.ajaxErr(xhr)) + "</p>");
+          }
+        });
+        $.ajax({
+          url: "de-esp32/command",
+          method: "POST",
+          contentType: "application/json",
+          data: JSON.stringify({ host: dev.host, port: dev.port || 80, id: dev.id, cmd: "module.list" }),
+        }).done(function(res) {
+          installed = (res && res.result && res.result.modules) || [];
+          listError = "";
+          paint();
+        }).fail(function(xhr) {
+          installed = [];
+          listError = DeEsp32.ajaxErr(xhr) || "Could not reach the device to list installed modules.";
+          paint();
         });
       }
 
+      if (!$("#node-input-mode").val()) {
+        $("#node-input-mode").val("add");
+      }
       $("#node-input-device").on("change", load);
+      $("#node-input-mode").on("change", function() {
+        if (currentMode() === "installed") {
+          $("#node-input-install").prop("checked", false);
+        }
+        paint();
+        if (currentMode() === "installed" && installed === null) {
+          load();
+        }
+      });
       $("#de-esp32-mod-reload").on("click", load);
       setTimeout(load, 0);
     },
@@ -248,6 +380,13 @@
     <input type="text" id="node-input-device">
   </div>
   <div class="form-row">
+    <label for="node-input-mode"><i class="fa fa-list"></i> Source</label>
+    <select id="node-input-mode" style="width:70%">
+      <option value="add">Add new</option>
+      <option value="installed">Installed on this device</option>
+    </select>
+  </div>
+  <div class="form-row">
     <label for="node-input-modId"><i class="fa fa-tag"></i> Id</label>
     <input type="text" id="node-input-modId" placeholder="rfid0" maxlength="16">
     <button type="button" id="de-esp32-mod-reload" class="red-ui-button" style="margin-left:8px">Reload</button>
@@ -255,7 +394,7 @@
   <input type="hidden" id="node-input-modType">
   <input type="hidden" id="node-input-bus">
   <input type="hidden" id="node-input-pins">
-  <div class="form-row">
+  <div class="form-row" id="de-esp32-install-row">
     <label>&nbsp;</label>
     <input type="checkbox" id="node-input-install" style="display:inline-block;width:auto;vertical-align:top">
     <label for="node-input-install" style="width:auto">Install module on deploy</label>
@@ -268,6 +407,8 @@
 </script>
 
 <script type="text/html" data-help-name="de-esp32-module">
-  <p>Installs a catalog addon (<code>module.add</code>) and outputs live events for that id. RFID messages are <code>{id, present, uid}</code>.</p>
-  <p>Each SPI addon is one choice per bus, for example RFID · HSPI. CS defaults to that bus SS pin (marked SS; on an RC522 the pad labelled SDA). Pick another free GPIO on the CS row if you wired it elsewhere. A busy bus stays disabled until those GPIOs are Off. The node status shows the tag UID, or “no tag” while it is scanning.</p>
+  <p>Outputs live events for a catalog addon. RFID messages are <code>{id, present, uid}</code>.</p>
+  <p><strong>Installed on this device</strong> loads <code>module.list</code> and lets you pick an id already on the board. The node only subscribes to that id's events. It does not call <code>module.add</code> or change the configuration.</p>
+  <p><strong>Add new</strong> installs a catalog addon (<code>module.add</code>) on deploy. Each SPI addon is one choice per bus, for example RFID · HSPI. CS defaults to that bus SS pin (marked SS; on an RC522 the pad labelled SDA). Pick another free GPIO on the CS row if you wired it elsewhere. A busy bus stays disabled until those GPIOs are Off. An id that is already installed with different pins is left alone.</p>
+  <p>The node status shows the tag UID, or "no tag" while it is scanning. Other module types show a short live reading, for example temperature and humidity.</p>
 </script>

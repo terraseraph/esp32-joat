@@ -32,6 +32,53 @@ function samePins(a, b) {
   return true;
 }
 
+function listedModules(res) {
+  return (res && res.result && res.result.modules) || [];
+}
+
+function statusInfo(state, modId) {
+  if (state && Object.prototype.hasOwnProperty.call(state, "present")) {
+    const present = !!state.present;
+    const uid = state.uid ? String(state.uid) : "";
+    return {
+      known: true,
+      present,
+      text: present ? uid || "tag" : "no tag",
+      payload: { id: modId, present, uid },
+    };
+  }
+  if (state && (state.t_c != null || state.rh != null || state.p_hpa != null)) {
+    const bits = [];
+    if (state.t_c != null) {
+      bits.push(state.t_c + "°C");
+    }
+    if (state.rh != null) {
+      bits.push(state.rh + "%");
+    }
+    if (state.p_hpa != null) {
+      bits.push(state.p_hpa + " hPa");
+    }
+    const ok = state.ok !== false;
+    return {
+      known: true,
+      present: ok,
+      text: ok ? bits.join(" · ") || "ready" : "sensor error",
+      payload: Object.assign({ id: modId }, state),
+    };
+  }
+  const known = !!(state && (state.id || state.type));
+  if (!known) {
+    return { known: false, present: false, text: "listening", payload: null };
+  }
+  const ok = !(state && state.ok === false);
+  return {
+    known: true,
+    present: ok,
+    text: ok ? "ready" : "error",
+    payload: Object.assign({ id: modId }, state),
+  };
+}
+
 module.exports = function (RED) {
   function ModuleNode(n) {
     RED.nodes.createNode(this, n);
@@ -42,25 +89,25 @@ module.exports = function (RED) {
     node.bus = n.bus || "";
     node.pins = parsePins(n.pins);
     node.install = n.install !== false;
+    node.mode = n.mode === "installed" ? "installed" : "add";
+    const listenOnly = node.mode === "installed" || node.install === false;
 
-    if (!node.device || !node.modType || !node.modId) {
+    if (!node.device || !node.modId || (!listenOnly && !node.modType)) {
       node.status({ fill: "red", shape: "ring", text: "no device/module" });
       return;
     }
 
     const showState = (state, sendIt) => {
-      const known = !!(state && (state.id || state.type || Object.prototype.hasOwnProperty.call(state, "present")));
-      const present = !!(state && state.present);
-      const uid = state && state.uid ? String(state.uid) : "";
-      const text = !known ? "scanning" : present ? uid || "tag" : "no tag";
+      const info = statusInfo(state, node.modId);
+      const text = info.known ? info.text : listenOnly ? "listening" : "scanning";
       node.status({
-        fill: present ? "green" : "blue",
+        fill: info.present ? "green" : "blue",
         shape: "dot",
         text: node.modId + " · " + text,
       });
-      if (sendIt && known) {
+      if (sendIt && info.known) {
         node.send({
-          payload: { id: node.modId, present, uid },
+          payload: info.payload,
           topic: node.modId,
           data: state,
         });
@@ -75,9 +122,25 @@ module.exports = function (RED) {
     };
 
     const start = async () => {
+      if (listenOnly) {
+        try {
+          const listed = await http.postCommand(node.device.host, node.device.port, { cmd: "module.list" });
+          const cur = listedModules(listed).find((m) => m.id === node.modId);
+          if (cur) {
+            showState(cur.state, true);
+          } else {
+            node.status({ fill: "yellow", shape: "ring", text: node.modId + " · not installed" });
+          }
+        } catch (err) {
+          node.status({ fill: "yellow", shape: "ring", text: err.message || "unreachable" });
+        }
+        node.device.subscribeModule(node.modId, node, onEv);
+        return;
+      }
+
       if (node.install) {
         const listed = await http.postCommand(node.device.host, node.device.port, { cmd: "module.list" });
-        const mods = (listed && listed.result && listed.result.modules) || [];
+        const mods = listedModules(listed);
         const values = Object.keys(node.pins).map((k) => Number(node.pins[k]));
         const dup = values.filter((g, i) => values.indexOf(g) !== i);
         if (dup.length) {

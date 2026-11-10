@@ -289,9 +289,133 @@
     return $.getJSON("de-esp32/hardware", q);
   };
 
+  DeEsp32.loadPins = function(host, port, id) {
+    const q = { host: host, port: port || 80 };
+    if (id) {
+      q.id = id;
+    }
+    return $.getJSON("de-esp32/pins", q);
+  };
+
+  DeEsp32.pinsFromSnapshot = function(snap) {
+    if (!snap || typeof snap !== "object") {
+      return [];
+    }
+    const rows = Array.isArray(snap) ? snap : Object.keys(snap).map(function(k) { return snap[k]; });
+    return rows.filter(function(p) {
+      return p && p.gpio != null && /^(in|out|pwm|adc|servo)$/.test(p.mode);
+    });
+  };
+
+  DeEsp32.pinFitsFamily = function(p, family) {
+    if (!p) {
+      return false;
+    }
+    if (family === "out") {
+      return p.mode === "out" || p.mode === "pwm" || p.mode === "servo";
+    }
+    return p.mode === "in" || p.mode === "adc";
+  };
+
+  DeEsp32.configuredPinLabel = function(p) {
+    const gpio = p && p.gpio != null ? p.gpio : "?";
+    const name = (p && (p.name || p.id)) || ("gpio_" + gpio);
+    const mode = (p && p.mode) || "";
+    return "GPIO " + gpio + ", " + name + ", " + mode;
+  };
+
+
   DeEsp32.bindGpioEditor = function(family, boxId, refreshId) {
     let hwCache = null;
+    let pinsCache = null;
+    let pinsError = "";
+
+    function source() {
+      return $("#node-input-source").val() === "configured" ? "configured" : "pad";
+    }
+
+    function padRows() {
+      return $("#de-esp32-configure-row, #de-esp32-pmeta, #de-esp32-row-deb, #de-esp32-row-adc, #de-esp32-row-pull, #de-esp32-row-inv, #de-esp32-row-boot, #de-esp32-row-pwm, #de-esp32-row-servo");
+    }
+
+    function applyConfigured(p) {
+      if (!p) {
+        return;
+      }
+      $("#node-input-gpio").val(p.gpio);
+      $("#node-input-pinMode").val(p.mode);
+      $("#node-input-pinMode").data("keepMode", p.mode);
+      const name = p.name || p.id || ((p.mode === "servo" ? "servo_" : "gpio_") + p.gpio);
+      $("#node-input-pinName").val(name);
+      $("#node-input-configure").prop("checked", false);
+    }
+
+    function paintConfigured() {
+      const $box = $("#de-esp32-configured");
+      if (!$box.length) {
+        return;
+      }
+      if (pinsError) {
+        $box.html('<p class="de-esp32-hint">' + DeEsp32.esc(pinsError) + "</p>");
+        return;
+      }
+      if (pinsCache === null) {
+        $box.html('<p class="de-esp32-hint">loading configured pins…</p>');
+        return;
+      }
+      const rows = DeEsp32.pinsFromSnapshot(pinsCache).filter(function(p) {
+        return DeEsp32.pinFitsFamily(p, family);
+      });
+      if (!rows.length) {
+        const kind = family === "out" ? "output" : "input";
+        $box.html('<p class="de-esp32-hint">No configured ' + kind + " pins on this device.</p>");
+        return;
+      }
+      const cur = $("#node-input-gpio").val();
+      let html = '<div class="de-esp32-configured">';
+      html += '<select id="de-esp32-configured-sel">';
+      html += '<option value="">Select a pin…</option>';
+      rows.forEach(function(p) {
+        const sel = String(p.gpio) === String(cur) ? " selected" : "";
+        html += '<option value="' + DeEsp32.esc(String(p.gpio)) + '"' + sel + ">" + DeEsp32.esc(DeEsp32.configuredPinLabel(p)) + "</option>";
+      });
+      html += "</select>";
+      const picked = rows.filter(function(p) { return String(p.gpio) === String(cur); })[0];
+      if (picked) {
+        if (family === "out") {
+        html += '<p class="de-esp32-hint">Using the pin as it is already configured. Incoming messages still send pin.set. This will not send pin.configure.</p>';
+      } else {
+        html += '<p class="de-esp32-hint">Listening to the pin as it is already configured. This will not send pin.configure.</p>';
+      }
+      } else {
+        html += '<p class="de-esp32-hint">Pick a pin already configured on the board. This node will not reconfigure it.</p>';
+      }
+      html += "</div>";
+      $box.html(html);
+      $box.find("#de-esp32-configured-sel").on("change", function() {
+        const g = this.value;
+        const p = rows.filter(function(x) { return String(x.gpio) === String(g); })[0];
+        applyConfigured(p);
+        paintConfigured();
+      });
+    }
+
+    function syncSourceUi() {
+      const configured = source() === "configured";
+      padRows().toggle(!configured);
+      $("#" + boxId).toggle(!configured);
+      $("#de-esp32-configured").toggle(configured);
+      if (configured) {
+        $("#node-input-configure").prop("checked", false);
+        paintConfigured();
+      }
+    }
+
     function paint(note) {
+      if (source() === "configured") {
+        paintConfigured();
+        return;
+      }
       const $box = $("#" + boxId);
       DeEsp32.syncPinForm(hwCache, family);
       if (!hwCache) {
@@ -330,6 +454,7 @@
         );
       }
     }
+
     function applyHw(hw, note) {
       if (!hw || !hw.header) {
         return;
@@ -337,9 +462,38 @@
       hwCache = hw;
       paint(note);
     }
+
+    function loadConfiguredPins() {
+      const dev = RED.nodes.node($("#node-input-device").val());
+      pinsCache = null;
+      pinsError = "";
+      if (!dev || !dev.host) {
+        pinsError = "Pick a device with a host first.";
+        pinsCache = {};
+        paintConfigured();
+        return;
+      }
+      paintConfigured();
+      DeEsp32.loadPins(dev.host, dev.port, dev.id)
+        .done(function(snap) {
+          pinsCache = snap || {};
+          pinsError = "";
+          paintConfigured();
+        })
+        .fail(function(xhr) {
+          pinsCache = {};
+          pinsError = DeEsp32.ajaxErr(xhr) || "Could not reach the device to list configured pins.";
+          paintConfigured();
+        });
+    }
+
     function refresh() {
       const $box = $("#" + boxId);
       const dev = RED.nodes.node($("#node-input-device").val());
+      if (source() === "configured") {
+        loadConfiguredPins();
+        return;
+      }
       $box.html('<p class="de-esp32-hint">loading pin map…</p>');
       $.getJSON("de-esp32/pinout-template")
         .done(function(hw) {
@@ -370,10 +524,18 @@
             });
         });
     }
+
+    if (!$("#node-input-source").val()) {
+      $("#node-input-source").val("pad");
+    }
     $("#node-input-device").on("change", refresh);
+    $("#node-input-source").on("change", function() {
+      syncSourceUi();
+      refresh();
+    });
     $("#node-input-pinMode").on("change", function() {
       const gpio = $("#node-input-gpio").val();
-      if (gpio !== "" && gpio != null) {
+      if (gpio !== "" && gpio != null && source() !== "configured") {
         const mode = $("#node-input-pinMode").val();
         const auto = mode === "servo" ? ("servo_" + gpio) : ("gpio_" + gpio);
         const cur = $("#node-input-pinName").val();
@@ -381,9 +543,12 @@
           $("#node-input-pinName").val(auto);
         }
       }
-      paint();
+      if (source() !== "configured") {
+        paint();
+      }
     });
     $("#" + refreshId).on("click", refresh);
+    syncSourceUi();
     setTimeout(refresh, 0);
   };
 
@@ -538,6 +703,7 @@
 </script>
 
 <style>
+.de-esp32-configured{margin:8px 0}.de-esp32-configured select{width:100%}
 .de-esp32-pinout{font:12px/1.2 system-ui,sans-serif;max-width:420px}
 .de-esp32-pinout .mod,.de-esp32-pinout .usb{
   text-align:center;padding:4px 0;color:#888;font-weight:600;letter-spacing:.04em

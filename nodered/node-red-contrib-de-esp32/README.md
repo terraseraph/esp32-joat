@@ -34,8 +34,8 @@ Then refresh the Node-RED browser tab. Not published to npm in v0.1.
 
 1. Add **de-esp32 device**. Paste the board IP, or **Scan**. Optional: select a Node-RED MQTT broker (must be deployed) and MQTT root (`devices`).
 2. **Save name on device** runs `identity.set_name`. MAC `id` is stable; MQTT topics follow the name.
-3. Add **gpio out** / **gpio in**, pick that device, click a pad on the header. Power/GND/EN, flash/input-only, and pins owned by a module or SPI bus are not selectable. Configure-on-deploy stays off for an owned GPIO.
-4. Add **module** to install a catalog addon (`module.add`) and receive its live events. RFID output is `{id, present, uid}`. An id that is already installed with the same pins is left alone.
+3. Add **gpio out** / **gpio in**, pick that device. **Pick pad** (default) clicks a pad on the header. Power/GND/EN, flash/input-only, and pins owned by a module or SPI bus are not selectable. Configure-on-deploy stays off for an owned GPIO. **Configured on this device** lists pins already set on the board (`GET /api/v1/pins`, with gpio, name/id, and mode) and only uses them — it will not send `pin.configure`. gpio-out still sends `pin.set` for incoming messages; gpio-in only listens.
+4. Add **module** to receive live events from a catalog addon. **Installed on this device** lists modules already on the board (`module.list`) and only listens — it will not call `module.add` or overwrite pins. **Add new** installs a catalog addon (`module.add`) on deploy. RFID output is `{id, present, uid}`. An id that is already installed with the same pins is left alone; different pins are left installed and not overwritten.
 
 Do not drop one GPIO node per pin unless you need them. Discover boards; wire the pads you use.
 

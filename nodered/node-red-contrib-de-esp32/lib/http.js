@@ -65,6 +65,10 @@ function getHardware(host, port, timeoutMs) {
   return fetchJson(`${baseUrl(host, port)}/api/v1/hardware`, { timeoutMs: timeoutMs || 2500 });
 }
 
+function getPins(host, port, timeoutMs) {
+  return fetchJson(`${baseUrl(host, port)}/api/v1/pins`, { timeoutMs: timeoutMs || 2000 });
+}
+
 function postCommand(host, port, body, timeoutMs) {
   return fetchJson(`${baseUrl(host, port)}/api/v1/command`, {
     method: "POST",
@@ -73,4 +77,4 @@ function postCommand(host, port, body, timeoutMs) {
   });
 }
 
-module.exports = { normalizeHost, baseUrl, fetchJson, getStatus, getHardware, postCommand };
+module.exports = { normalizeHost, baseUrl, fetchJson, getStatus, getHardware, getPins, postCommand };

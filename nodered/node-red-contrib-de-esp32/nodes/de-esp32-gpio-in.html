@@ -5,6 +5,7 @@
     defaults: {
       name: { value: "" },
       device: { type: "de-esp32-device", required: true },
+      source: { value: "pad" },
       gpio: { value: "", required: true },
       pinName: { value: "" },
       pinMode: { value: "in" },
@@ -28,6 +29,11 @@
         return this.name || ("gpio in " + who);
       }
       return this.name || (mode + " " + this.gpio + " ← " + who);
+    },
+    oneditsave: function() {
+      if ($("#node-input-source").val() === "configured") {
+        $("#node-input-configure").prop("checked", false);
+      }
     },
     oneditprepare: function() {
       DeEsp32.bindGpioEditor("in", "de-esp32-pinbox", "de-esp32-pin-refresh");
@@ -56,7 +62,7 @@
     <label for="node-input-pinName"><i class="fa fa-tag"></i> Pin name</label>
     <input type="text" id="node-input-pinName" placeholder="gpio_4">
   </div>
-  <div class="form-row">
+  <div class="form-row" id="de-esp32-configure-row">
     <label>&nbsp;</label>
     <input type="checkbox" id="node-input-configure" style="display:inline-block;width:auto;vertical-align:top">
     <label for="node-input-configure" style="width:auto">Configure pin on deploy</label>
@@ -96,6 +102,7 @@
     <label for="node-input-invert" style="width:auto">Invert logic</label>
     <p class="de-esp32-hint" id="de-esp32-invhint"></p>
   </div>
+  <div id="de-esp32-configured"></div>
   <div id="de-esp32-pinbox"></div>
   <div class="form-row">
     <label for="node-input-name"><i class="fa fa-tag"></i> Name</label>
@@ -106,5 +113,6 @@
 <script type="text/html" data-help-name="de-esp32-gpio-in">
   <p>Emits when the selected pad changes. Digital In payload is <code>level</code>; ADC payload is millivolts.</p>
   <p>Pads show chip capabilities (io, PWM, A1/A2, strap) from <code>GET /api/v1/hardware</code>. Mode In vs ADC is the same as the web Hardware tab; ADC is ADC1 only (GPIO 32–39).</p>
-  <p>On deploy (unless unchecked) sends <code>pin.configure</code> with debounce / pull-up / invert, or sample / threshold / smooth in ADC mode.</p>
+  <p><strong>Configured on this device</strong> lists pins already set on the board (<code>GET /api/v1/pins</code>) and only listens. It does not send <code>pin.configure</code>.</p>
+  <p><strong>Pick pad</strong> uses the header map. On deploy (unless unchecked) sends <code>pin.configure</code> with debounce / pull-up / invert, or sample / threshold / smooth in ADC mode.</p>
 </script>

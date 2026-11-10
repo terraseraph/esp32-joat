@@ -1,0 +1,162 @@
+/* Fleet screen. Tokens only (see proto/fleet.html). */
+
+/* Summary strip: each stat is a button that applies a filter */
+.fleet-stat { width: 100%; text-align: left; font: inherit; cursor: pointer; transition: border-color .15s, box-shadow .15s; }
+.fleet-stat:hover { border-color: var(--acc); }
+.fleet-stat.on { border-color: var(--acc); box-shadow: 0 0 0 1px var(--acc); }
+.fleet-stat.is-disabled { cursor: not-allowed; opacity: .55; }
+.fleet-stat.is-disabled:hover { border-color: var(--line); }
+.fleet-stat:focus-visible, .filter-chip:focus-visible, .fleet-sort:focus-visible { outline: 2px solid var(--acc); outline-offset: 2px; }
+.filter-chip.is-disabled { opacity: .5; cursor: not-allowed; }
+.filter-chip.is-disabled:hover { color: var(--mut); }
+
+.fleet-sort-pick { min-width: 150px; }
+.toolbar .fleet-sort-pick select { width: auto; min-width: 150px; }
+@media (max-width: 767.98px) { .toolbar .search { max-width: none; } }
+
+/* Cards */
+.fleet-grid { align-items: stretch; }
+.dev { display: flex; flex-direction: column; gap: var(--s3); padding: var(--s4) var(--s5); cursor: pointer; transition: border-color .15s, box-shadow .15s, background-color .15s; }
+.dev:hover { border-color: var(--mut); }
+.dev.sel { border-color: var(--acc); box-shadow: 0 0 0 1px var(--acc); }
+.dev.is-offline { background: var(--in); }
+.dev.is-offline .chips, .dev.is-offline .dev-meta { opacity: .65; }
+.dev-top { display: flex; align-items: flex-start; gap: 10px; }
+.dev-top .chip { margin-top: 2px; flex: none; }
+.sel-box { width: 40px; min-height: 40px; justify-content: center; margin: -8px 0 -8px -10px; flex: none; }
+.dev-id { flex: 1; min-width: 0; }
+.dev-name { font-size: 17px; font-weight: 650; overflow-wrap: anywhere; }
+.fleet-title-link { color: inherit; text-decoration: none; }
+.fleet-title-link:hover { color: var(--acc); }
+.dev-id .mono { font-size: var(--fs-xs); overflow-wrap: anywhere; }
+.attn { display: flex; align-items: flex-start; gap: 8px; font-size: 14px; font-weight: 600; }
+.attn .i { margin-top: 2px; flex: none; }
+.attn.warn { color: var(--warn); } .attn.bad { color: var(--bad); } .attn.none { color: var(--mut); font-weight: 500; }
+.dev-meta { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: var(--fs-sm); }
+.dev-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2); margin-top: auto; padding-top: var(--s1); cursor: default; }
+
+/* Signal bars */
+.fleet-signal { width: 14px; height: 14px; }
+.fleet-signal rect { fill: var(--line); }
+.fleet-signal rect.on { fill: currentColor; }
+
+/* Table */
+.fleet-table tbody tr { cursor: pointer; }
+.fleet-sort { display: inline-flex; align-items: center; gap: 2px; padding: 0; border: 0; background: none; color: inherit; font: inherit; letter-spacing: inherit; text-transform: inherit; cursor: pointer; }
+.fleet-sort:hover, .fleet-sort.on { color: var(--fg); }
+.fleet-table th.num .fleet-sort { justify-content: flex-end; }
+
+/* Bulk bar */
+.fleet-bulk .fleet-bulk-all { min-height: 36px; font-size: var(--fs-sm); }
+.fleet-tip { display: inline-flex; border-radius: var(--r-sm); }
+.fleet-tip:focus-visible { outline: 2px solid var(--acc); outline-offset: 2px; }
+
+/* Empty fleet */
+.fleet-empty-actions { justify-content: center; }
+
+/* Firmware update in progress on a card / row */
+.fleet-updating { display: grid; gap: 6px; font-size: var(--fs-sm); }
+.fleet-updating-pct { font-size: var(--fs-sm); }
+
+/* Table fit. The page container is NOT the viewport (viewport = container + nav 232/68/0 + page padding), so the
+   columns are chosen from the table container's own width (container query), and the layout is fixed so nothing
+   can push the table wider than its box: at a 1280px viewport with the nav expanded the container is ~985px, so
+   Uptime and RSSI drop out (see below), the rest is sized to fit and long text ends in an ellipsis (full text in the
+   title tooltip). Narrower than the minimum, the table scrolls INSIDE its container (never the page). */
+.fleet-table-wrap { container: fleet-tbl / inline-size; }
+.table.fleet-table { min-width: 650px; table-layout: fixed; }
+.fleet-table th, .fleet-table td { padding-left: 10px; padding-right: 10px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fleet-table th.sel, .fleet-table td.sel { width: 40px; padding-right: 0; }
+.fleet-table .cell-main, .fleet-table .cell-sub { display: block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fleet-table th.fleet-col-health { width: 108px; }
+.fleet-table th.fleet-col-ip { width: 150px; }
+.fleet-table th.fleet-col-fw { width: 112px; }
+.fleet-table th.fleet-col-uptime { width: 90px; }
+.fleet-table th.fleet-col-rssi { width: 84px; }
+.fleet-table th.fleet-col-mqtt { width: 124px; }
+.fleet-table th.fleet-col-memory { width: 132px; }
+.fleet-table th.fleet-col-seen { width: 98px; }
+.fleet-table td.fleet-col-ip { white-space: normal; overflow-wrap: anywhere; }
+.fleet-table td.fleet-col-ip .chip { margin-left: 4px; }
+.fleet-table td .chip { max-width: 100%; }
+/* Lower priority columns go first. Budget: fixed columns add up to 840px with everything shown, plus 140 for the name. */
+@container fleet-tbl (max-width: 1239.98px) { .fleet-col-uptime { display: none; } }
+@container fleet-tbl (max-width: 1049.98px) { .fleet-col-rssi { display: none; } }   /* 1280px viewport, nav expanded: ~985px lands here */
+@container fleet-tbl (max-width: 909.98px) { .fleet-col-memory { display: none; } }
+@container fleet-tbl (max-width: 779.98px) { .fleet-col-mqtt { display: none; } }    /* ~800px viewport (rail nav): ~690px lands here */
+
+/* Summary strip: each stat is a button that applies a filter */
+.fleet-stat { width: 100%; text-align: left; font: inherit; cursor: pointer; transition: border-color .15s, box-shadow .15s; }
+.fleet-stat:hover { border-color: var(--acc); }
+.fleet-stat.on { border-color: var(--acc); box-shadow: 0 0 0 1px var(--acc); }
+.fleet-stat.is-disabled { cursor: not-allowed; opacity: .55; }
+.fleet-stat.is-disabled:hover { border-color: var(--line); }
+.fleet-stat:focus-visible, .filter-chip:focus-visible, .fleet-sort:focus-visible { outline: 2px solid var(--acc); outline-offset: 2px; }
+.filter-chip.is-disabled { opacity: .5; cursor: not-allowed; }
+.filter-chip.is-disabled:hover { color: var(--mut); }
+
+.fleet-sort-pick { min-width: 150px; }
+.toolbar .fleet-sort-pick select { width: auto; min-width: 150px; }
+@media (max-width: 767.98px) { .toolbar .search { max-width: none; } }
+
+/* Cards */
+.fleet-grid { align-items: stretch; }
+.dev { display: flex; flex-direction: column; gap: var(--s3); padding: var(--s4) var(--s5); cursor: pointer; transition: border-color .15s, box-shadow .15s, background-color .15s; }
+.dev:hover { border-color: var(--mut); }
+.dev.sel { border-color: var(--acc); box-shadow: 0 0 0 1px var(--acc); }
+.dev.is-offline { background: var(--in); }
+.dev.is-offline .chips, .dev.is-offline .dev-meta { opacity: .65; }
+.dev-top { display: flex; align-items: flex-start; gap: 10px; }
+.dev-top .chip { margin-top: 2px; flex: none; }
+.sel-box { width: 40px; min-height: 40px; justify-content: center; margin: -8px 0 -8px -10px; flex: none; }
+.dev-id { flex: 1; min-width: 0; }
+.dev-name { font-size: 17px; font-weight: 650; overflow-wrap: anywhere; }
+.fleet-title-link { color: inherit; text-decoration: none; }
+.fleet-title-link:hover { color: var(--acc); }
+.dev-id .mono { font-size: var(--fs-xs); overflow-wrap: anywhere; }
+.attn { display: flex; align-items: flex-start; gap: 8px; font-size: 14px; font-weight: 600; }
+.attn .i { margin-top: 2px; flex: none; }
+.attn.warn { color: var(--warn); } .attn.bad { color: var(--bad); } .attn.none { color: var(--mut); font-weight: 500; }
+.dev-meta { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: var(--fs-sm); }
+.dev-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2); margin-top: auto; padding-top: var(--s1); cursor: default; }
+
+/* Signal bars */
+.fleet-signal { width: 14px; height: 14px; }
+.fleet-signal rect { fill: var(--line); }
+.fleet-signal rect.on { fill: currentColor; }
+
+/* Table */
+.fleet-table tbody tr { cursor: pointer; }
+.fleet-sort { display: inline-flex; align-items: center; gap: 2px; padding: 0; border: 0; background: none; color: inherit; font: inherit; letter-spacing: inherit; text-transform: inherit; cursor: pointer; }
+.fleet-sort:hover, .fleet-sort.on { color: var(--fg); }
+.fleet-table th.num .fleet-sort { justify-content: flex-end; }
+
+/* Bulk bar */
+.fleet-bulk .fleet-bulk-all { min-height: 36px; font-size: var(--fs-sm); }
+.fleet-tip { display: inline-flex; border-radius: var(--r-sm); }
+.fleet-tip:focus-visible { outline: 2px solid var(--acc); outline-offset: 2px; }
+
+/* Empty fleet */
+.fleet-empty-actions { justify-content: center; }
+
+/* Firmware update in progress on a card / row */
+.fleet-updating { display: grid; gap: 6px; font-size: var(--fs-sm); }
+.fleet-updating-pct { font-size: var(--fs-sm); }
+
+/* Table fit: no fixed minimum width, tighter cells, long names truncate (full text in the title tooltip). */
+.fleet-table { min-width: 0; }
+.fleet-table th, .fleet-table td { padding-left: 10px; padding-right: 10px; }
+.fleet-table th.sel, .fleet-table td.sel { padding-right: 0; }
+.fleet-table .cell-main { display: block; max-width: 20ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fleet-table .cell-sub { max-width: 20ch; overflow: hidden; text-overflow: ellipsis; }
+.fleet-table td.fleet-col-ip { white-space: normal; }
+.fleet-table td.fleet-col-ip .chip { margin-left: 4px; }
+@media (max-width: 1439.98px) { .fleet-col-uptime { display: none; } }           /* least useful column goes first */
+@media (max-width: 1023.98px) { .fleet-col-rssi, .fleet-col-memory { display: none; } }
+
+/* Summary strip: balanced rows (3 + 2 as 3 and 2 equal-width tiles) instead of an orphan tile. */
+@media (min-width: 640px) and (max-width: 1099.98px) {
+  .fleet-stats { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+  .fleet-stats > :nth-child(-n + 3) { grid-column: span 2; }
+  .fleet-stats > :nth-child(n + 4) { grid-column: span 3; }
+}

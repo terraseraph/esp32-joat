@@ -1,0 +1,36 @@
+/* Setup over the device's own Wi-Fi: Discover section + guided flow. Tokens only. */
+.su-section { display: grid; gap: var(--s4); margin-bottom: var(--s5); min-width: 0; }
+.su-stack { display: grid; gap: var(--s2); }
+.su-acts { display: inline-flex; flex-wrap: wrap; gap: var(--s2); }
+.su-title { display: inline-flex; align-items: center; gap: var(--s2); }
+.su-p { margin: 0; font-size: var(--fs-sm); max-width: 64ch; }
+.su-h { margin: 0 0 var(--s1); font-size: var(--fs-md); font-weight: 650; }
+.su-wait { display: flex; align-items: center; gap: var(--s2); }
+.su-unsupported { display: flex; align-items: flex-start; gap: var(--s2); margin: 0; font-size: var(--fs-sm); max-width: 70ch; }
+.su-unsupported .i { margin-top: 2px; flex: none; }
+.su-empty { display: grid; gap: var(--s1); }
+.su-empty p:first-child { margin: 0; font-weight: 550; }
+
+.su-aps { list-style: none; margin: 0; padding: 0; display: grid; }
+.su-ap { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2) var(--s4); padding: var(--s3) 0; }
+.su-ap + .su-ap { border-top: 1px solid var(--line); }
+.su-ap-main { flex: 1 1 200px; min-width: 0; }
+.su-ap-name { font-weight: 650; overflow-wrap: anywhere; }
+.su-ap-meta { display: flex; align-items: center; gap: var(--s2); font-size: var(--fs-sm); }
+.su-sig { display: inline-flex; align-items: flex-end; gap: 2px; height: 14px; }
+.su-sig i { width: 3px; background: var(--line); border-radius: 1px; }
+.su-sig i:nth-child(1) { height: 4px; } .su-sig i:nth-child(2) { height: 7px; } .su-sig i:nth-child(3) { height: 10px; } .su-sig i:nth-child(4) { height: 14px; }
+.su-sig[data-l="1"] i:nth-child(-n+1), .su-sig[data-l="2"] i:nth-child(-n+2), .su-sig[data-l="3"] i:nth-child(-n+3), .su-sig[data-l="4"] i { background: var(--ok); }
+
+.su-body { display: grid; gap: var(--s4); min-width: 0; }
+.su-danger { border: 1px solid var(--bad); border-radius: var(--r-sm); padding: var(--s3); background: var(--bad-bg, transparent); }
+
+.su-choose { display: grid; gap: var(--s3); padding-top: var(--s4); border-top: 1px solid var(--line); }
+.su-nets { display: grid; gap: var(--s1); border: 0; margin: 0; padding: 0; min-width: 0; max-height: 280px; overflow-y: auto; }
+.su-net { display: flex; align-items: center; gap: var(--s3); padding: 8px 12px; border: 1px solid var(--line); border-radius: var(--r-sm); cursor: pointer; min-width: 0; }
+.su-net:hover { background: var(--acc-bg); }
+.su-net.on { border-color: var(--acc); background: var(--acc-bg); }
+.su-net:has(input:focus-visible) { outline: 2px solid var(--acc); outline-offset: 2px; }
+.su-net-name { flex: 1; min-width: 0; overflow-wrap: anywhere; font-weight: 550; }
+.su-net-meta { display: inline-flex; align-items: center; gap: var(--s2); font-size: var(--fs-sm); flex: none; }
+.dev-banner-acts { display: inline-flex; flex-wrap: wrap; gap: var(--s2); }

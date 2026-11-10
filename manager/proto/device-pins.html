@@ -1,0 +1,957 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>Pins &amp; add-ons - de-esp32 Manager</title>
+<script>try{var t=localStorage.getItem('deesp32-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t)}catch(e){}</script>
+<link rel="stylesheet" href="tokens.css">
+<style>
+/* page-specific, built from tokens only */
+section[id]{scroll-margin-top:var(--s4)}
+.sec-head{display:flex;flex-wrap:wrap;align-items:center;gap:var(--s2) var(--s3);margin-bottom:var(--s4)}
+.sec-head .sub{color:var(--mut);font-size:var(--fs-sm)}
+.pins-grid{display:grid;grid-template-columns:minmax(0,440px) minmax(0,1fr);gap:var(--s4);align-items:start}
+@media(max-width:899.98px){.pins-grid{grid-template-columns:minmax(0,1fr)}}
+
+/* pinout */
+.board{max-width:420px;margin:0 auto;background:var(--in);border:1px solid var(--line);border-radius:var(--r-lg);overflow:hidden}
+.b-top{display:grid;justify-items:center;gap:6px;padding:12px 0 8px}
+.b-ant{width:176px;height:22px;display:grid;place-items:center;border:1px dashed var(--mut);border-radius:6px;background:repeating-linear-gradient(135deg,transparent 0 6px,var(--line) 6px 7px);font-size:11px;color:var(--mut)}
+.b-ant span{padding:0 6px;background:var(--in)}
+.b-mod{width:132px;height:52px;display:grid;place-items:center;border:1px solid var(--mut);border-radius:6px;background:var(--card);font:600 11px var(--mono);color:var(--mut)}
+.b-cols{display:grid;grid-template-columns:minmax(0,1fr) 68px minmax(0,1fr)}
+.hdr{list-style:none;margin:0;padding:0;display:grid;grid-auto-rows:34px}
+.b-mid{display:grid;place-items:center;background:var(--card);border-left:2px solid var(--line);border-right:2px solid var(--line)}
+.b-mid span{writing-mode:vertical-rl;letter-spacing:.3em;font-size:var(--fs-xs);font-weight:700;color:var(--line);text-transform:uppercase}
+.b-usb{width:88px;height:32px;margin:10px auto 0;display:grid;place-items:center;border:1px solid var(--mut);border-bottom:0;border-radius:6px 6px 0 0;background:var(--card);font-size:11px;font-weight:700;letter-spacing:.08em;color:var(--mut)}
+.b-cut{padding:6px 0 10px;text-align:center;color:var(--mut);letter-spacing:.3em}
+.pad{position:relative;display:flex;align-items:center;gap:6px;width:100%;height:34px;padding:0 6px 0 8px;border:0;border-radius:6px;background:none;color:var(--fg);font-size:var(--fs-sm);text-align:left}
+.hdr:first-child .pad{flex-direction:row-reverse;padding:0 8px 0 6px;text-align:right}
+.ps{font-weight:650;font-variant-numeric:tabular-nums}
+.pt{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px;font-weight:600;color:var(--mut)}
+.sq{flex:none;width:14px;height:14px;border:2px solid var(--mut);border-radius:4px;background:var(--card)}
+button.pad:hover:not(:disabled){background:var(--acc-bg)}
+button.pad.sel{box-shadow:inset 0 0 0 2px var(--acc)}
+.pad.cfg .sq,.sq.cfg{background:var(--acc);border-color:var(--acc)}
+.pad.cfg .pt{color:var(--acc);font-weight:700}
+.pad.own .sq,.sq.own{background:var(--fg);border-color:var(--fg)}
+.pad.own .pt{color:var(--fg);font-weight:700}
+.pad.flash,.sq.flash{background-image:repeating-linear-gradient(135deg,transparent 0 4px,var(--line) 4px 5px)}
+.pad.flash{color:var(--mut)}
+.pad.flash .sq,.sq.flash{background:repeating-linear-gradient(135deg,var(--mut) 0 2px,transparent 2px 4px);border-color:var(--line)}
+.pad.fixed{color:var(--mut)}
+.pad.fixed .sq,.sq.fix{border-radius:50%;background:var(--line);border-color:var(--line)}
+.pad:disabled{cursor:not-allowed}
+.fg{flex:none;min-width:14px;height:14px;padding:0 3px;display:inline-grid;place-items:center;border:1px solid var(--warn-bd);border-radius:4px;background:var(--warn-bg);color:var(--warn);font-size:10px;font-weight:700;line-height:1;vertical-align:1px}
+.fg.io{border-color:var(--line);background:var(--card);color:var(--mut)}
+.is-offline .pad{opacity:.55}
+.is-offline.board{pointer-events:none}
+.legend{display:flex;flex-wrap:wrap;gap:6px 16px;margin-top:var(--s4);font-size:var(--fs-xs);color:var(--mut)}
+.legend span{display:inline-flex;align-items:center;gap:6px}
+.legend .sq{width:12px;height:12px}
+@media(pointer:coarse){.hdr{grid-auto-rows:40px}.pad{height:40px}}
+
+/* pin list */
+.plist{list-style:none;margin:0;padding:0;max-height:760px;overflow:auto;border:1px solid var(--line);border-radius:var(--r-sm)}
+.plist li+li{border-top:1px solid var(--line)}
+.pl{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:var(--s3);width:100%;min-height:56px;padding:8px 12px;border:0;background:none;color:var(--fg);text-align:left}
+.pl:hover:not(:disabled){background:var(--in)}
+.pl:disabled{opacity:.5;cursor:not-allowed}
+.pl .nt{display:block;font-size:var(--fs-xs);color:var(--mut)}
+.pl .free{font-size:var(--fs-sm);color:var(--mut)}
+
+/* sheets */
+.seg.wrap{flex-wrap:wrap}
+.note{display:flex;align-items:flex-start;gap:8px;font-size:var(--fs-sm);color:var(--mut)}
+.note .i{margin-top:2px}
+.checks{display:grid}
+.flags{display:flex;flex-wrap:wrap;gap:6px}
+.sheet .field{min-width:0}
+.rule-block{display:grid;gap:var(--s2)}
+.rule-row{display:grid;gap:var(--s3)}
+.rr3{grid-template-columns:minmax(0,1.5fr) minmax(0,.7fr) minmax(0,1fr)}
+.rr2{grid-template-columns:minmax(0,1.5fr) minmax(0,1fr)}
+@media(max-width:520px){.rr3,.rr2{grid-template-columns:minmax(0,1fr)}}
+.type{display:grid;gap:6px;padding:var(--s4);border:1px solid var(--line);border-radius:var(--r);background:var(--in);color:var(--fg);text-align:left}
+.type:hover:not(:disabled){border-color:var(--mut)}
+.type.on{border-color:var(--acc);background:var(--acc-bg);box-shadow:0 0 0 1px var(--acc)}
+.type:disabled{opacity:.5}
+.type .t{font-weight:650}
+
+/* add-ons */
+.addon{display:grid;gap:var(--s3);align-content:start}
+.addon-top{display:flex;flex-wrap:wrap;align-items:center;gap:var(--s2) var(--s3)}
+.addon-top h3{font-size:var(--fs-lg)}
+.addon .live{margin-left:auto;text-align:right}
+.live .rd{font-size:26px;font-weight:650;line-height:1.1;font-variant-numeric:tabular-nums}
+.live .sb{font-size:var(--fs-xs);color:var(--mut);font-variant-numeric:tabular-nums}
+.addon.is-disabled .live,.addon.is-disabled .kv{opacity:.5}
+.addon .kv{grid-template-columns:minmax(80px,28%) minmax(0,1fr)}
+
+/* rules */
+.rule{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:var(--s3) var(--s4);padding:var(--s3) var(--s4)}
+.rule+.rule{border-top:1px solid var(--line)}
+.rule .sent{line-height:1.6}
+.rule .ra{display:flex;flex-wrap:wrap;align-items:center;justify-content:flex-end;gap:var(--s2)}
+@media(max-width:767.98px){.rule{grid-template-columns:minmax(0,1fr) auto}.rule .sent{grid-column:1/-1;order:3}}
+
+/* states */
+.mock{border:1px solid var(--line);border-radius:var(--r-lg);background:var(--card);overflow:hidden;box-shadow:var(--sh-1)}
+.mock .dlg-body{overflow:visible}
+.states h3.eyebrow{margin-bottom:var(--s3)}
+.states>.grid>.card{display:flex;flex-direction:column;gap:var(--s3);align-content:start}
+.states .full{grid-column:1/-1}
+.states .cap{font-size:var(--fs-sm);color:var(--mut)}
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false"><defs>
+<symbol id="i-chip" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2"/><path d="M9 2v4M15 2v4M9 18v4M15 18v4M2 9h4M2 15h4M18 9h4M18 15h4"/></symbol>
+<symbol id="i-fleet" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></symbol>
+<symbol id="i-discover" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4"/><path d="M12 12l5-5"/></symbol>
+<symbol id="i-firmware" viewBox="0 0 24 24"><path d="M12 3v12M7 10l5 5 5-5"/><path d="M4 20h16"/></symbol>
+<symbol id="i-backups" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="5" rx="1.5"/><path d="M5 9v9a2 2 0 002 2h10a2 2 0 002-2V9M10 13h4"/></symbol>
+<symbol id="i-settings" viewBox="0 0 24 24"><path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="17" r="2"/></symbol>
+<symbol id="i-theme" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 010 18z" fill="currentColor"/></symbol>
+<symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></symbol>
+<symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+<symbol id="i-refresh" viewBox="0 0 24 24"><path d="M20 11a8 8 0 00-14-4L4 9"/><path d="M4 4v5h5"/><path d="M4 13a8 8 0 0014 4l2-2"/><path d="M20 20v-5h-5"/></symbol>
+<symbol id="i-ext" viewBox="0 0 24 24"><path d="M14 4h6v6M20 4l-9 9"/><path d="M18 14v5a1 1 0 01-1 1H5a1 1 0 01-1-1V7a1 1 0 011-1h5"/></symbol>
+<symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12l5 5 9-10"/></symbol>
+<symbol id="i-alert" viewBox="0 0 24 24"><path d="M12 3l10 18H2z"/><path d="M12 10v5M12 18v.01"/></symbol>
+<symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.01"/></symbol>
+<symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></symbol>
+<symbol id="i-trash" viewBox="0 0 24 24"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></symbol>
+<symbol id="i-list" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/></symbol>
+<symbol id="i-upload" viewBox="0 0 24 24"><path d="M12 16V4M7 9l5-5 5 5"/><path d="M4 20h16"/></symbol>
+<symbol id="i-wifi" viewBox="0 0 24 24"><path d="M2 9a15 15 0 0120 0M5 12.5a10 10 0 0114 0M8.5 16a5 5 0 017 0"/><path d="M12 19.5v.01"/></symbol>
+<symbol id="i-power" viewBox="0 0 24 24"><path d="M12 3v9"/><path d="M6.3 7a8 8 0 1011.4 0"/></symbol>
+<symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></symbol>
+<symbol id="i-server" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="7" rx="2"/><rect x="3" y="13" width="18" height="7" rx="2"/><path d="M7 7.5v.01M7 16.5v.01"/></symbol>
+</defs></svg>
+<div class="app">
+<aside class="nav">
+  <a class="brand" href="fleet.html" aria-label="de-esp32 Manager"><span class="logo"><svg class="i" aria-hidden="true"><use href="#i-chip"/></svg></span><span class="lbl">de-esp32 Manager</span></a>
+  <nav class="nav-list" aria-label="Main">
+    <a class="nav-item on" href="fleet.html" aria-current="page" title="Fleet"><svg class="i" aria-hidden="true"><use href="#i-fleet"/></svg><span class="lbl">Fleet</span><span class="badge">8</span></a>
+    <a class="nav-item" href="discover.html" title="Discover"><svg class="i" aria-hidden="true"><use href="#i-discover"/></svg><span class="lbl">Discover</span></a>
+    <a class="nav-item" href="firmware.html" title="Firmware"><svg class="i" aria-hidden="true"><use href="#i-firmware"/></svg><span class="lbl">Firmware</span></a>
+    <a class="nav-item" href="backups.html" title="Backups"><svg class="i" aria-hidden="true"><use href="#i-backups"/></svg><span class="lbl">Backups</span></a>
+    <a class="nav-item" href="settings.html" title="Settings"><svg class="i" aria-hidden="true"><use href="#i-settings"/></svg><span class="lbl">Settings</span></a>
+  </nav>
+  <div class="nav-foot">
+    <div class="srv" title="Server connected · localhost:5180"><span class="dot ok"></span><span class="lbl">Server connected · localhost:5180</span></div>
+    <button class="btn ghost" type="button" data-theme-toggle title="Theme: system" aria-label="Theme: system"><svg class="i" aria-hidden="true"><use href="#i-theme"/></svg><span class="lbl">Theme: system</span></button>
+  </div>
+</aside>
+<main class="page">
+<header class="device-head">
+  <a class="back" href="fleet.html"><span aria-hidden="true">←</span> Fleet</a>
+  <div>
+    <div class="device-title"><h1>Workshop node</h1></div>
+    <p class="device-sub mono">esp32-b3c4d5 · 192.168.1.42 · a4cf12b3c4d5</p>
+    <div class="chips">
+      <span class="chip ok">Online</span>
+      <span class="chip"><svg class="i" aria-hidden="true"><use href="#i-wifi"/></svg>Wi-Fi -58 dBm</span>
+      <span class="chip ok">MQTT connected</span>
+      <span class="chip ok">Memory ok</span>
+      <span class="chip mono">9dcba89</span>
+    </div>
+  </div>
+  <div class="device-actions">
+    <a class="btn" href="http://192.168.1.42/" target="_blank" rel="noopener">Open device page ↗</a>
+    <button class="btn" type="button"><svg class="i" aria-hidden="true"><use href="#i-refresh"/></svg>Refresh</button>
+    <button class="btn" type="button"><svg class="i" aria-hidden="true"><use href="#i-backups"/></svg>Back up</button>
+    <a class="btn primary" href="firmware.html"><svg class="i" aria-hidden="true"><use href="#i-firmware"/></svg>Update</a>
+    <button class="btn" type="button" data-open="reboot-modal"><svg class="i" aria-hidden="true"><use href="#i-power"/></svg>Reboot</button>
+  </div>
+</header>
+<nav class="tabs" aria-label="Device sections">
+  <a href="device-live.html">Live</a>
+  <a class="on" href="device-pins.html" aria-current="page">Pins &amp; add-ons</a>
+  <a href="device-network.html">Network</a>
+  <a href="device-system.html">System</a>
+</nav>
+
+<div class="row" style="margin-top:var(--s5)">
+  <div class="seg" role="group" aria-label="Jump to section">
+    <button type="button" class="on" aria-pressed="true" data-jump="sec-pins">Pins</button>
+    <button type="button" aria-pressed="false" data-jump="sec-addons">Add-ons (2)</button>
+    <button type="button" aria-pressed="false" data-jump="sec-rules">Rules (2 / 8)</button>
+  </div>
+</div>
+
+<!-- ============ 1. PINS ============ -->
+<section id="sec-pins" aria-labelledby="pins-h">
+  <div class="sec-head">
+    <h2 id="pins-h">Pins</h2>
+    <span class="sub">7 configured · 7 used by add-ons · 14 free</span>
+    <span class="spacer"></span>
+    <span class="sub">Prototype shortcuts:</span>
+    <button class="btn sm" type="button" data-gpio="25">Configure GPIO 25</button>
+    <button class="btn sm" type="button" data-gpio="21">GPIO 21 (in use)</button>
+  </div>
+  <div class="pins-grid">
+    <section class="card" aria-labelledby="pinout-h">
+      <div class="card-head"><h3 id="pinout-h">DevKitC pinout</h3><span class="sub mut">USB at the bottom · click a pad</span></div>
+      <div class="board" role="group" aria-label="ESP32 DevKitC pinout, USB at the bottom">
+  <div class="b-top" aria-hidden="true"><div class="b-ant"><span>Antenna</span></div><div class="b-mod">ESP32-WROOM-32</div></div>
+  <div class="b-cols">
+    <ul class="hdr">
+      <li><div class="pad fixed"><span class="sq"></span><span class="ps">3V3</span><span class="pt"></span></div></li>
+      <li><div class="pad fixed"><span class="sq"></span><span class="ps">EN</span><span class="pt"></span></div></li>
+      <li><button type="button" class="pad free" data-gpio="36" aria-label="GPIO 36 (VP), free, input-only" title="GPIO 36 · SVP · input-only SVP, ADC1_CH0"><span class="sq"></span><span class="ps">VP</span><span class="fg io" title="Input-only" aria-hidden="true">I</span><span class="pt"></span></button></li>
+      <li><button type="button" class="pad free" data-gpio="39" aria-label="GPIO 39 (VN), free, input-only" title="GPIO 39 · SVN · input-only SVN, ADC1_CH3"><span class="sq"></span><span class="ps">VN</span><span class="fg io" title="Input-only" aria-hidden="true">I</span><span class="pt"></span></button></li>
+      <li><button type="button" class="pad cfg" data-gpio="34" aria-label="GPIO 34, Analog, input-only" title="GPIO 34 · input-only, no internal pull, ADC1_CH6"><span class="sq"></span><span class="ps">34</span><span class="fg io" title="Input-only" aria-hidden="true">I</span><span class="pt">ADC</span></button></li>
+      <li><button type="button" class="pad free" data-gpio="35" aria-label="GPIO 35, free, input-only" title="GPIO 35 · input-only, no internal pull, ADC1_CH7"><span class="sq"></span><span class="ps">35</span><span class="fg io" title="Input-only" aria-hidden="true">I</span><span class="pt"></span></button></li>
+      <li><button type="button" class="pad cfg" data-gpio="32" aria-label="GPIO 32, Analog" title="GPIO 32 · ADC1_CH4"><span class="sq"></span><span class="ps">32</span><span class="pt">ADC</span></button></li>
+      <li><button type="button" class="pad free" data-gpio="33" aria-label="GPIO 33, free" title="GPIO 33 · ADC1_CH5"><span class="sq"></span><span class="ps">33</span><span class="pt"></span></button></li>
+      <li><button type="button" class="pad cfg" data-gpio="25" aria-label="GPIO 25, PWM" title="GPIO 25 · DAC1 · DAC1 / ADC2"><span class="sq"></span><span class="ps">25</span><span class="pt">PWM</span></button></li>
+      <li><button type="button" class="pad cfg" data-gpio="26" aria-label="GPIO 26, Servo" title="GPIO 26 · DAC2 · DAC2 / ADC2"><span class="sq"></span><span class="ps">26</span><span class="pt">SRV</span></button></li>
+      <li><button type="button" class="pad own" data-gpio="27" aria-label="GPIO 27, in use by add-on rfid0, RST" title="GPIO 27 · general I/O"><span class="sq"></span><span class="ps">27</span><span class="pt">rfid0</span></button></li>
+      <li><button type="button" class="pad free" data-gpio="14" aria-label="GPIO 14, free" title="GPIO 14 · HSPI SCK · general I/O"><span class="sq"></span><span class="ps">14</span><span class="pt"></span></button></li>
+      <li><button type="button" class="pad free" data-gpio="12" aria-label="GPIO 12, free, strapping pin" title="GPIO 12 · HSPI MISO · MTDI strapping; HIGH at reset can select 1.8V flash and prevent boot"><span class="sq"></span><span class="ps">12</span><span class="fg" title="Strapping pin" aria-hidden="true">S</span><span class="pt"></span></button></li>
+      <li><div class="pad fixed"><span class="sq"></span><span class="ps">GND</span><span class="pt"></span></div></li>
+      <li><button type="button" class="pad cfg" data-gpio="13" aria-label="GPIO 13, Input" title="GPIO 13 · HSPI MOSI · general I/O"><span class="sq"></span><span class="ps">13</span><span class="pt">IN</span></button></li>
+      <li><button type="button" class="pad flash" data-gpio="9" disabled aria-label="GPIO 9 (D2), reserved for SPI flash" title="GPIO 9 · D2 · SPI flash SHD — reserved"><span class="sq"></span><span class="ps">D2</span><span class="pt"></span></button></li>
+      <li><button type="button" class="pad flash" data-gpio="10" disabled aria-label="GPIO 10 (D3), reserved for SPI flash" title="GPIO 10 · D3 · SPI flash SWP — reserved"><span class="sq"></span><span class="ps">D3</span><span class="pt"></span></button></li>
+      <li><button type="button" class="pad flash" data-gpio="11" disabled aria-label="GPIO 11 (CMD), reserved for SPI flash" title="GPIO 11 · CMD · SPI flash SCS — reserved"><span class="sq"></span><span class="ps">CMD</span><span class="pt"></span></button></li>
+      <li><div class="pad fixed"><span class="sq"></span><span class="ps">5V</span><span class="pt"></span></div></li>
+    </ul>
+    <div class="b-mid" aria-hidden="true"><span>DevKitC</span></div>
+    <ul class="hdr">
+      <li><div class="pad fixed"><span class="sq"></span><span class="ps">GND</span><span class="pt"></span></div></li>
+      <li><button type="button" class="pad own" data-gpio="23" aria-label="GPIO 23, in use by add-on rfid0, MOSI" title="GPIO 23 · VSPI MOSI · VSPI MOSI default"><span class="sq"></span><span class="ps">23</span><span class="pt">rfid0</span></button></li>
+      <li><button type="button" class="pad own" data-gpio="22" aria-label="GPIO 22, in use by add-on env0, SCL" title="GPIO 22 · I2C SCL · default I2C SCL"><span class="sq"></span><span class="ps">22</span><span class="pt">env0</span></button></li>
+      <li><button type="button" class="pad free" data-gpio="1" aria-label="GPIO 1 (TXD), free" title="GPIO 1 · TX0 · UART0 TX — serial console, avoid as GPIO"><span class="sq"></span><span class="ps">TXD</span><span class="pt"></span></button></li>
+      <li><button type="button" class="pad free" data-gpio="3" aria-label="GPIO 3 (RXD), free" title="GPIO 3 · RX0 · UART0 RX — serial console, avoid as GPIO"><span class="sq"></span><span class="ps">RXD</span><span class="pt"></span></button></li>
+      <li><button type="button" class="pad own" data-gpio="21" aria-label="GPIO 21, in use by add-on env0, SDA" title="GPIO 21 · I2C SDA · default I2C SDA"><span class="sq"></span><span class="ps">21</span><span class="pt">env0</span></button></li>
+      <li><div class="pad fixed"><span class="sq"></span><span class="ps">GND</span><span class="pt"></span></div></li>
+      <li><button type="button" class="pad own" data-gpio="19" aria-label="GPIO 19, in use by add-on rfid0, MISO" title="GPIO 19 · VSPI MISO · VSPI MISO default"><span class="sq"></span><span class="ps">19</span><span class="pt">rfid0</span></button></li>
+      <li><button type="button" class="pad own" data-gpio="18" aria-label="GPIO 18, in use by add-on rfid0, SCK" title="GPIO 18 · VSPI SCK · VSPI SCK default"><span class="sq"></span><span class="ps">18</span><span class="pt">rfid0</span></button></li>
+      <li><button type="button" class="pad own" data-gpio="5" aria-label="GPIO 5, in use by add-on rfid0, CS, strapping pin" title="GPIO 5 · VSPI SS · strapping (timing); default VSPI chip-select"><span class="sq"></span><span class="ps">5</span><span class="fg" title="Strapping pin" aria-hidden="true">S</span><span class="pt">rfid0</span></button></li>
+      <li><button type="button" class="pad free" data-gpio="17" aria-label="GPIO 17, free" title="GPIO 17 · U2TXD · general I/O (U2TXD default)"><span class="sq"></span><span class="ps">17</span><span class="pt"></span></button></li>
+      <li><button type="button" class="pad free" data-gpio="16" aria-label="GPIO 16, free" title="GPIO 16 · U2RXD · general I/O (U2RXD default)"><span class="sq"></span><span class="ps">16</span><span class="pt"></span></button></li>
+      <li><button type="button" class="pad cfg" data-gpio="4" aria-label="GPIO 4, Output" title="GPIO 4 · general I/O"><span class="sq"></span><span class="ps">4</span><span class="pt">OUT</span></button></li>
+      <li><button type="button" class="pad free" data-gpio="0" aria-label="GPIO 0, free, strapping pin" title="GPIO 0 · BOOT · strapping BOOT; held at reset enters download mode"><span class="sq"></span><span class="ps">0</span><span class="fg" title="Strapping pin" aria-hidden="true">S</span><span class="pt"></span></button></li>
+      <li><button type="button" class="pad cfg" data-gpio="2" aria-label="GPIO 2, Output, strapping pin" title="GPIO 2 · LED · strapping; onboard LED on most DevKitC boards"><span class="sq"></span><span class="ps">2</span><span class="fg" title="Strapping pin" aria-hidden="true">S</span><span class="pt">OUT</span></button></li>
+      <li><button type="button" class="pad free" data-gpio="15" aria-label="GPIO 15, free, strapping pin" title="GPIO 15 · HSPI SS · strapping MTDO"><span class="sq"></span><span class="ps">15</span><span class="fg" title="Strapping pin" aria-hidden="true">S</span><span class="pt"></span></button></li>
+      <li><button type="button" class="pad flash" data-gpio="8" disabled aria-label="GPIO 8 (D1), reserved for SPI flash" title="GPIO 8 · D1 · SPI flash SDI — reserved"><span class="sq"></span><span class="ps">D1</span><span class="pt"></span></button></li>
+      <li><button type="button" class="pad flash" data-gpio="7" disabled aria-label="GPIO 7 (D0), reserved for SPI flash" title="GPIO 7 · D0 · SPI flash SDO — reserved"><span class="sq"></span><span class="ps">D0</span><span class="pt"></span></button></li>
+      <li><button type="button" class="pad flash" data-gpio="6" disabled aria-label="GPIO 6 (CLK), reserved for SPI flash" title="GPIO 6 · CLK · SPI flash SCK — reserved"><span class="sq"></span><span class="ps">CLK</span><span class="pt"></span></button></li>
+    </ul>
+  </div>
+  <div class="b-usb" aria-hidden="true">USB</div>
+</div>
+      <div class="legend" aria-label="Legend">
+        <span><i class="sq cfg"></i>Configured (mode on the pad)</span>
+        <span><i class="sq own"></i>In use by an add-on</span>
+        <span><i class="sq"></i>Free</span>
+        <span><i class="sq flash"></i>SPI flash, reserved</span>
+        <span><i class="sq fix"></i>Power, GND, EN</span>
+        <span><i class="fg" aria-hidden="true">S</i>Strapping pin</span>
+        <span><i class="fg io" aria-hidden="true">I</i>Input-only</span>
+      </div>
+      <p class="hint" style="margin-top:var(--s3)">OUT output · IN input · PWM · SRV servo · ADC analog. GPIO 37 and 38 are in the list but not on this header.</p>
+    </section>
+    <section class="card" aria-labelledby="plist-h">
+      <div class="card-head">
+        <h3 id="plist-h">Pin list</h3>
+        <div class="seg" role="group" aria-label="Filter pins">
+          <button type="button" class="on" aria-pressed="true" data-pf="all">All 34</button>
+          <button type="button" aria-pressed="false" data-pf="used">Used 14</button>
+          <button type="button" aria-pressed="false" data-pf="free">Free 14</button>
+        </div>
+      </div>
+      <ul class="plist" id="plist">
+      <li data-st="free"><button type="button" class="pl" data-gpio="0"><span><span class="strong">GPIO 0</span><span class="mut"> · BOOT</span> <span class="fg" title="Strapping pin" aria-hidden="true">S</span><span class="nt">strapping BOOT; held at reset enters download mode</span></span><span class="free">Free</span></button></li>
+      <li data-st="free"><button type="button" class="pl" data-gpio="1"><span><span class="strong">GPIO 1</span><span class="mut"> · TX0</span><span class="nt">UART0 TX — serial console, avoid as GPIO</span></span><span class="free">Free</span></button></li>
+      <li data-st="used"><button type="button" class="pl" data-gpio="2"><span><span class="strong">GPIO 2</span><span class="mut"> · LED</span> <span class="fg" title="Strapping pin" aria-hidden="true">S</span><span class="nt">strapping; onboard LED on most DevKitC boards</span></span><span class="chip acc">Output</span></button></li>
+      <li data-st="free"><button type="button" class="pl" data-gpio="3"><span><span class="strong">GPIO 3</span><span class="mut"> · RX0</span><span class="nt">UART0 RX — serial console, avoid as GPIO</span></span><span class="free">Free</span></button></li>
+      <li data-st="used"><button type="button" class="pl" data-gpio="4"><span><span class="strong">GPIO 4</span><span class="nt">general I/O</span></span><span class="chip acc">Output</span></button></li>
+      <li data-st="used"><button type="button" class="pl" data-gpio="5"><span><span class="strong">GPIO 5</span><span class="mut"> · VSPI SS</span> <span class="fg" title="Strapping pin" aria-hidden="true">S</span><span class="nt">strapping (timing); default VSPI chip-select</span></span><span class="chip">rfid0 · CS</span></button></li>
+      <li data-st="flash"><button type="button" class="pl" data-gpio="6" disabled><span><span class="strong">GPIO 6</span><span class="mut"> · CLK</span><span class="nt">SPI flash SCK — reserved</span></span><span class="chip off">Reserved</span></button></li>
+      <li data-st="flash"><button type="button" class="pl" data-gpio="7" disabled><span><span class="strong">GPIO 7</span><span class="mut"> · D0</span><span class="nt">SPI flash SDO — reserved</span></span><span class="chip off">Reserved</span></button></li>
+      <li data-st="flash"><button type="button" class="pl" data-gpio="8" disabled><span><span class="strong">GPIO 8</span><span class="mut"> · D1</span><span class="nt">SPI flash SDI — reserved</span></span><span class="chip off">Reserved</span></button></li>
+      <li data-st="flash"><button type="button" class="pl" data-gpio="9" disabled><span><span class="strong">GPIO 9</span><span class="mut"> · D2</span><span class="nt">SPI flash SHD — reserved</span></span><span class="chip off">Reserved</span></button></li>
+      <li data-st="flash"><button type="button" class="pl" data-gpio="10" disabled><span><span class="strong">GPIO 10</span><span class="mut"> · D3</span><span class="nt">SPI flash SWP — reserved</span></span><span class="chip off">Reserved</span></button></li>
+      <li data-st="flash"><button type="button" class="pl" data-gpio="11" disabled><span><span class="strong">GPIO 11</span><span class="mut"> · CMD</span><span class="nt">SPI flash SCS — reserved</span></span><span class="chip off">Reserved</span></button></li>
+      <li data-st="free"><button type="button" class="pl" data-gpio="12"><span><span class="strong">GPIO 12</span><span class="mut"> · HSPI MISO</span> <span class="fg" title="Strapping pin" aria-hidden="true">S</span><span class="nt">MTDI strapping; HIGH at reset can select 1.8V flash and prevent boot</span></span><span class="free">Free</span></button></li>
+      <li data-st="used"><button type="button" class="pl" data-gpio="13"><span><span class="strong">GPIO 13</span><span class="mut"> · HSPI MOSI</span><span class="nt">general I/O</span></span><span class="chip acc">Input</span></button></li>
+      <li data-st="free"><button type="button" class="pl" data-gpio="14"><span><span class="strong">GPIO 14</span><span class="mut"> · HSPI SCK</span><span class="nt">general I/O</span></span><span class="free">Free</span></button></li>
+      <li data-st="free"><button type="button" class="pl" data-gpio="15"><span><span class="strong">GPIO 15</span><span class="mut"> · HSPI SS</span> <span class="fg" title="Strapping pin" aria-hidden="true">S</span><span class="nt">strapping MTDO</span></span><span class="free">Free</span></button></li>
+      <li data-st="free"><button type="button" class="pl" data-gpio="16"><span><span class="strong">GPIO 16</span><span class="mut"> · U2RXD</span><span class="nt">general I/O (U2RXD default)</span></span><span class="free">Free</span></button></li>
+      <li data-st="free"><button type="button" class="pl" data-gpio="17"><span><span class="strong">GPIO 17</span><span class="mut"> · U2TXD</span><span class="nt">general I/O (U2TXD default)</span></span><span class="free">Free</span></button></li>
+      <li data-st="used"><button type="button" class="pl" data-gpio="18"><span><span class="strong">GPIO 18</span><span class="mut"> · VSPI SCK</span><span class="nt">VSPI SCK default</span></span><span class="chip">rfid0 · SCK</span></button></li>
+      <li data-st="used"><button type="button" class="pl" data-gpio="19"><span><span class="strong">GPIO 19</span><span class="mut"> · VSPI MISO</span><span class="nt">VSPI MISO default</span></span><span class="chip">rfid0 · MISO</span></button></li>
+      <li data-st="used"><button type="button" class="pl" data-gpio="21"><span><span class="strong">GPIO 21</span><span class="mut"> · I2C SDA</span><span class="nt">default I2C SDA</span></span><span class="chip">env0 · SDA</span></button></li>
+      <li data-st="used"><button type="button" class="pl" data-gpio="22"><span><span class="strong">GPIO 22</span><span class="mut"> · I2C SCL</span><span class="nt">default I2C SCL</span></span><span class="chip">env0 · SCL</span></button></li>
+      <li data-st="used"><button type="button" class="pl" data-gpio="23"><span><span class="strong">GPIO 23</span><span class="mut"> · VSPI MOSI</span><span class="nt">VSPI MOSI default</span></span><span class="chip">rfid0 · MOSI</span></button></li>
+      <li data-st="used"><button type="button" class="pl" data-gpio="25"><span><span class="strong">GPIO 25</span><span class="mut"> · DAC1</span><span class="nt">DAC1 / ADC2</span></span><span class="chip acc">PWM</span></button></li>
+      <li data-st="used"><button type="button" class="pl" data-gpio="26"><span><span class="strong">GPIO 26</span><span class="mut"> · DAC2</span><span class="nt">DAC2 / ADC2</span></span><span class="chip acc">Servo</span></button></li>
+      <li data-st="used"><button type="button" class="pl" data-gpio="27"><span><span class="strong">GPIO 27</span><span class="nt">general I/O</span></span><span class="chip">rfid0 · RST</span></button></li>
+      <li data-st="used"><button type="button" class="pl" data-gpio="32"><span><span class="strong">GPIO 32</span><span class="nt">ADC1_CH4</span></span><span class="chip acc">Analog</span></button></li>
+      <li data-st="free"><button type="button" class="pl" data-gpio="33"><span><span class="strong">GPIO 33</span><span class="nt">ADC1_CH5</span></span><span class="free">Free</span></button></li>
+      <li data-st="used"><button type="button" class="pl" data-gpio="34"><span><span class="strong">GPIO 34</span> <span class="fg io" title="Input-only" aria-hidden="true">I</span><span class="nt">input-only, no internal pull, ADC1_CH6</span></span><span class="chip acc">Analog</span></button></li>
+      <li data-st="free"><button type="button" class="pl" data-gpio="35"><span><span class="strong">GPIO 35</span> <span class="fg io" title="Input-only" aria-hidden="true">I</span><span class="nt">input-only, no internal pull, ADC1_CH7</span></span><span class="free">Free</span></button></li>
+      <li data-st="free"><button type="button" class="pl" data-gpio="36"><span><span class="strong">GPIO 36</span><span class="mut"> · SVP</span> <span class="fg io" title="Input-only" aria-hidden="true">I</span><span class="nt">input-only SVP, ADC1_CH0</span></span><span class="free">Free</span></button></li>
+      <li data-st="free"><button type="button" class="pl" data-gpio="37"><span><span class="strong">GPIO 37</span> <span class="fg io" title="Input-only" aria-hidden="true">I</span><span class="nt">input-only, ADC1_CH1 (often not routed)</span></span><span class="free">Free</span></button></li>
+      <li data-st="free"><button type="button" class="pl" data-gpio="38"><span><span class="strong">GPIO 38</span> <span class="fg io" title="Input-only" aria-hidden="true">I</span><span class="nt">input-only, ADC1_CH2 (often not routed)</span></span><span class="free">Free</span></button></li>
+      <li data-st="free"><button type="button" class="pl" data-gpio="39"><span><span class="strong">GPIO 39</span><span class="mut"> · SVN</span> <span class="fg io" title="Input-only" aria-hidden="true">I</span><span class="nt">input-only SVN, ADC1_CH3</span></span><span class="free">Free</span></button></li>
+      </ul>
+    </section>
+  </div>
+</section>
+
+<!-- ============ 2. ADD-ONS ============ -->
+<section id="sec-addons" aria-labelledby="addons-h">
+  <div class="sec-head">
+    <h2 id="addons-h">Add-ons</h2>
+    <span class="sub">BME280: 1 of 2 · RC522: 1 of 4</span>
+    <span class="spacer"></span>
+    <button class="btn primary" type="button" data-open="add-wizard"><svg class="i" aria-hidden="true"><use href="#i-plus"/></svg>Add add-on</button>
+  </div>
+  <div class="grid" style="--min:440px">
+    <article class="card addon" id="addon-env0">
+      <div class="addon-top">
+        <span class="chip mono">env0</span><h3>BME280</h3><span class="chip ok" data-state>Enabled</span>
+        <div class="live"><div class="rd">23.4 <small class="mut" style="font-size:14px;font-weight:500">°C</small></div><div class="sb">48 %RH · 1011 hPa</div></div>
+      </div>
+      <dl class="kv">
+        <dt>Bus</dt><dd>I²C · <span class="mono">i2c0</span></dd>
+        <dt>Pins</dt><dd>SDA 21 · SCL 22</dd>
+        <dt>Address</dt><dd>0x76</dd>
+        <dt>Sampling</dt><dd>every 1000 ms · normal mode</dd>
+        <dt>Oversampling</dt><dd>×1 / ×1 / ×1 <span class="mut">(temperature / pressure / humidity)</span></dd>
+        <dt>Filter</dt><dd>Off</dd>
+      </dl>
+      <div class="actions">
+        <button class="btn sm" type="button" data-open="edit-env0">Edit</button>
+        <button class="btn sm" type="button" data-toggle-addon>Disable</button>
+        <button class="btn sm danger" type="button" data-rm="addon" data-id="env0" data-type="BME280" data-pins="SDA 21, SCL 22">Remove</button>
+      </div>
+    </article>
+    <article class="card addon" id="addon-rfid0">
+      <div class="addon-top">
+        <span class="chip mono">rfid0</span><h3>RC522 RFID</h3><span class="chip ok" data-state>Enabled</span>
+        <div class="live"><div class="rd" style="font-size:20px">Tag 04A1B2C3D4E5F6</div><div class="sb">Latest tag read</div></div>
+      </div>
+      <dl class="kv">
+        <dt>Bus</dt><dd>SPI · <span class="mono">vspi</span></dd>
+        <dt>Pins</dt><dd>SCK 18 · MISO 19 · MOSI 23 · CS 5 · RST 27</dd>
+        <dt>Settings</dt><dd class="mut">None</dd>
+      </dl>
+      <div class="actions">
+        <button class="btn sm" type="button" data-open="edit-rfid0">Edit</button>
+        <button class="btn sm" type="button" data-toggle-addon>Disable</button>
+        <button class="btn sm danger" type="button" data-rm="addon" data-id="rfid0" data-type="RC522 RFID" data-pins="SCK 18, MISO 19, MOSI 23, CS 5, RST 27">Remove</button>
+      </div>
+    </article>
+  </div>
+</section>
+
+<!-- ============ 3. RULES ============ -->
+<section id="sec-rules" aria-labelledby="rules-h">
+  <div class="sec-head">
+    <h2 id="rules-h">Rules · 2 of 8</h2>
+    <span class="spacer"></span>
+    <button class="btn primary" type="button" data-open="rule-new"><svg class="i" aria-hidden="true"><use href="#i-plus"/></svg>Add rule</button>
+  </div>
+  <div class="card flush">
+    <div class="rule">
+      <span class="chip mono">r32</span>
+      <p class="sent">When <strong>GPIO 32 (Analog)</strong> is <strong>&gt; 1000 mV</strong>, set <strong>GPIO 4 (Output)</strong> to <strong>On</strong>, otherwise <strong>Off</strong></p>
+      <div class="ra">
+        <button class="switch" type="button" role="switch" aria-checked="true" aria-label="Enable rule r32"></button>
+        <button class="btn sm" type="button" data-open="rule-edit">Edit</button>
+        <button class="btn sm" type="button" data-rm="rule" data-id="r32">Delete</button>
+      </div>
+    </div>
+    <div class="rule">
+      <span class="chip mono">r13</span>
+      <p class="sent">When <strong>GPIO 13 (Input)</strong> is <strong>= High</strong>, set <strong>GPIO 25 (PWM)</strong> to <strong>80 %</strong>, otherwise <strong>0 %</strong></p>
+      <div class="ra">
+        <button class="switch" type="button" role="switch" aria-checked="true" aria-label="Enable rule r13"></button>
+        <button class="btn sm" type="button" data-open="rule-edit">Edit</button>
+        <button class="btn sm" type="button" data-rm="rule" data-id="r13">Delete</button>
+      </div>
+    </div>
+  </div>
+  <p class="note" style="margin-top:var(--s3)"><svg class="i sm" aria-hidden="true"><use href="#i-info"/></svg><span>One rule per input pin. Rules run on the device even when the Manager is closed.</span></p>
+</section>
+
+<hr class="divider">
+
+<!-- ============ STATES ============ -->
+<section class="states" aria-labelledby="states-h">
+  <h2 id="states-h">States (prototype only)</h2>
+  <p class="mut" style="margin-top:4px;margin-bottom:var(--s4)">Compact mockups of the other states this screen must handle. Not part of the real page.</p>
+  <div class="grid" style="--min:420px">
+
+    <div class="card">
+      <h3 class="eyebrow">(a) Loading</h3>
+      <div class="grid" style="--min:170px" aria-busy="true" aria-label="Loading pins">
+        <div class="stack"><span class="skeleton title"></span><span class="skeleton line" style="width:90%"></span><span class="skeleton line" style="width:70%"></span><span class="skeleton line" style="width:90%"></span><span class="skeleton line" style="width:70%"></span><span class="skeleton line" style="width:90%"></span><span class="skeleton line" style="width:70%"></span><span class="skeleton line" style="width:90%"></span><span class="skeleton line" style="width:70%"></span><span class="skeleton block" style="height:120px"></span></div>
+        <div class="stack"><span class="skeleton title"></span><span class="skeleton line" style="width:90%"></span><span class="skeleton line" style="width:70%"></span><span class="skeleton line" style="width:90%"></span><span class="skeleton line" style="width:70%"></span><span class="skeleton line" style="width:90%"></span><span class="skeleton line" style="width:70%"></span></div>
+      </div>
+      <p class="cap">Skeleton pinout and list while <code>/hardware</code>, status and <code>module.list</code> load. No spinner over forms.</p>
+    </div>
+
+    <div class="card">
+      <h3 class="eyebrow">(b) Device offline</h3>
+      <div class="banner warn" role="status"><svg class="i" aria-hidden="true"><use href="#i-alert"/></svg><div class="txt"><strong>Workshop node is offline.</strong> Showing the last known pins · last seen 5 min ago.</div><div class="act"><button class="btn sm" type="button"><svg class="i sm" aria-hidden="true"><use href="#i-refresh"/></svg>Retry</button></div></div>
+      <div class="board is-offline" role="group" aria-label="ESP32 DevKitC pinout, first 8 rows">
+  <div class="b-top" aria-hidden="true"><div class="b-ant"><span>Antenna</span></div><div class="b-mod">ESP32-WROOM-32</div></div>
+  <div class="b-cols">
+    <ul class="hdr">
+      <li><div class="pad fixed"><span class="sq"></span><span class="ps">3V3</span><span class="pt"></span></div></li>
+      <li><div class="pad fixed"><span class="sq"></span><span class="ps">EN</span><span class="pt"></span></div></li>
+      <li><button type="button" class="pad free" data-gpio="36" disabled aria-label="GPIO 36 (VP), free, input-only" title="GPIO 36 · SVP · input-only SVP, ADC1_CH0"><span class="sq"></span><span class="ps">VP</span><span class="fg io" title="Input-only" aria-hidden="true">I</span><span class="pt"></span></button></li>
+      <li><button type="button" class="pad free" data-gpio="39" disabled aria-label="GPIO 39 (VN), free, input-only" title="GPIO 39 · SVN · input-only SVN, ADC1_CH3"><span class="sq"></span><span class="ps">VN</span><span class="fg io" title="Input-only" aria-hidden="true">I</span><span class="pt"></span></button></li>
+      <li><button type="button" class="pad cfg" data-gpio="34" disabled aria-label="GPIO 34, Analog, input-only" title="GPIO 34 · input-only, no internal pull, ADC1_CH6"><span class="sq"></span><span class="ps">34</span><span class="fg io" title="Input-only" aria-hidden="true">I</span><span class="pt">ADC</span></button></li>
+      <li><button type="button" class="pad free" data-gpio="35" disabled aria-label="GPIO 35, free, input-only" title="GPIO 35 · input-only, no internal pull, ADC1_CH7"><span class="sq"></span><span class="ps">35</span><span class="fg io" title="Input-only" aria-hidden="true">I</span><span class="pt"></span></button></li>
+      <li><button type="button" class="pad cfg" data-gpio="32" disabled aria-label="GPIO 32, Analog" title="GPIO 32 · ADC1_CH4"><span class="sq"></span><span class="ps">32</span><span class="pt">ADC</span></button></li>
+      <li><button type="button" class="pad free" data-gpio="33" disabled aria-label="GPIO 33, free" title="GPIO 33 · ADC1_CH5"><span class="sq"></span><span class="ps">33</span><span class="pt"></span></button></li>
+    </ul>
+    <div class="b-mid" aria-hidden="true"><span>DevKitC</span></div>
+    <ul class="hdr">
+      <li><div class="pad fixed"><span class="sq"></span><span class="ps">GND</span><span class="pt"></span></div></li>
+      <li><button type="button" class="pad own" data-gpio="23" disabled aria-label="GPIO 23, in use by add-on rfid0, MOSI" title="GPIO 23 · VSPI MOSI · VSPI MOSI default"><span class="sq"></span><span class="ps">23</span><span class="pt">rfid0</span></button></li>
+      <li><button type="button" class="pad own" data-gpio="22" disabled aria-label="GPIO 22, in use by add-on env0, SCL" title="GPIO 22 · I2C SCL · default I2C SCL"><span class="sq"></span><span class="ps">22</span><span class="pt">env0</span></button></li>
+      <li><button type="button" class="pad free" data-gpio="1" disabled aria-label="GPIO 1 (TXD), free" title="GPIO 1 · TX0 · UART0 TX — serial console, avoid as GPIO"><span class="sq"></span><span class="ps">TXD</span><span class="pt"></span></button></li>
+      <li><button type="button" class="pad free" data-gpio="3" disabled aria-label="GPIO 3 (RXD), free" title="GPIO 3 · RX0 · UART0 RX — serial console, avoid as GPIO"><span class="sq"></span><span class="ps">RXD</span><span class="pt"></span></button></li>
+      <li><button type="button" class="pad own" data-gpio="21" disabled aria-label="GPIO 21, in use by add-on env0, SDA" title="GPIO 21 · I2C SDA · default I2C SDA"><span class="sq"></span><span class="ps">21</span><span class="pt">env0</span></button></li>
+      <li><div class="pad fixed"><span class="sq"></span><span class="ps">GND</span><span class="pt"></span></div></li>
+      <li><button type="button" class="pad own" data-gpio="19" disabled aria-label="GPIO 19, in use by add-on rfid0, MISO" title="GPIO 19 · VSPI MISO · VSPI MISO default"><span class="sq"></span><span class="ps">19</span><span class="pt">rfid0</span></button></li>
+    </ul>
+  </div>
+  <div class="b-cut" aria-hidden="true">· · ·</div>
+</div>
+      <div class="mock dlg"><div class="dlg-foot"><button class="btn" type="button" disabled>Cancel</button><button class="btn primary" type="button" disabled>Save</button></div></div>
+      <p class="cap">Pads are greyed and disabled (first 8 of 19 rows shown); Add add-on, Add rule and every Save are disabled.</p>
+    </div>
+
+    <div class="card">
+      <h3 class="eyebrow">(c) Save errors, shown as the device sent them</h3>
+      <div class="mock dlg">
+        <div class="dlg-head"><h2>GPIO 36 · SVP</h2></div>
+        <div class="dlg-body">
+          <div class="seg wrap" role="group" aria-label="Mode"><button type="button">Off</button><button type="button" class="on">Output</button><button type="button">Input</button></div>
+          <div class="banner bad" role="alert"><svg class="i" aria-hidden="true"><use href="#i-alert"/></svg><div class="txt"><strong>The device rejected this change:</strong> <span class="mono">gpio is input-only</span></div></div>
+        </div>
+        <div class="dlg-foot"><button class="btn" type="button">Cancel</button><button class="btn primary" type="button">Save</button></div>
+      </div>
+      <p class="cap">The sheet stays open with the settings kept. The Manager hides modes a pin can't do, so this only shows if the device disagrees.</p>
+      <div class="mock dlg">
+        <div class="dlg-body">
+          <ol class="steps"><li class="done">Type</li><li class="done">Pins</li><li class="done">Settings</li><li class="on">Review</li></ol>
+          <div class="banner bad" role="alert"><svg class="i" aria-hidden="true"><use href="#i-alert"/></svg><div class="txt"><strong>The device rejected this add-on:</strong> <span class="mono">module pins must be unique</span></div></div>
+        </div>
+        <div class="dlg-foot"><button class="btn" type="button">Back</button><button class="btn primary" type="button">Add add-on</button></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3 class="eyebrow">(d) Not enough memory to add an add-on</h3>
+      <div class="mock dlg">
+        <div class="dlg-body">
+          <ol class="steps"><li class="done">Type</li><li class="done">Pins</li><li class="done">Settings</li><li class="on">Review</li></ol>
+          <div class="banner bad" role="alert"><svg class="i" aria-hidden="true"><use href="#i-alert"/></svg><div class="txt"><strong>The device couldn't start this add-on:</strong> <span class="mono">need 6144 bytes, largest 4096, free 30000</span><div class="mut" style="margin-top:4px">Reboot the device or remove another add-on to free memory, then try again.</div></div><div class="act"><button class="btn sm" type="button">Reboot…</button></div></div>
+        </div>
+        <div class="dlg-foot"><button class="btn" type="button">Back</button><button class="btn primary" type="button">Try again</button></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3 class="eyebrow">(e) Rules full</h3>
+      <div class="row"><h3>Rules · 8 of 8</h3><span class="spacer"></span><button class="btn primary" type="button" disabled><svg class="i" aria-hidden="true"><use href="#i-plus"/></svg>Add rule</button></div>
+      <div class="banner warn" role="status"><svg class="i" aria-hidden="true"><use href="#i-alert"/></svg><div class="txt">8 of 8 rules — delete one to add another</div></div>
+      <div class="card flush">
+        <div class="rule"><span class="chip mono">r32</span><p class="sent">When <strong>GPIO 32 (Analog)</strong> is <strong>&gt; 1000 mV</strong>, set <strong>GPIO 4 (Output)</strong> to <strong>On</strong>, otherwise <strong>Off</strong></p><div class="ra"><button class="btn sm" type="button">Delete</button></div></div>
+        <div class="rule"><span class="mut">…</span><p class="sent mut">and 7 more rules</p><span></span></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3 class="eyebrow">(f) No add-ons yet</h3>
+      <div class="empty">
+        <span class="ico"><svg class="i" aria-hidden="true"><use href="#i-chip"/></svg></span>
+        <h3>No add-ons yet</h3>
+        <p>Add a BME280 temperature, humidity and pressure sensor or an RC522 RFID reader. Add-ons use the pins you choose.</p>
+        <button class="btn primary" type="button"><svg class="i" aria-hidden="true"><use href="#i-plus"/></svg>Add add-on</button>
+      </div>
+    </div>
+
+    <div class="card full">
+      <h3 class="eyebrow">(g) Pin sheet field sets by mode</h3>
+      <div class="grid" style="--min:300px">
+        <div class="mock dlg"><div class="dlg-head"><h2>GPIO 4 · Output</h2></div><div class="dlg-body"><div class="field"><label for="g1-boot">Start level at boot</label><select id="g1-boot"><option value="0">Low</option><option value="1">High</option></select><div class="hint">Level used each time the device starts.</div></div>
+<div class="checks"><label class="check"><input type="checkbox" id="g1-inv"> Invert</label><label class="check"><input type="checkbox" id="g1-pu"> Pull-up</label><label class="check"><input type="checkbox" id="g1-pd"> Pull-down</label></div></div></div>
+        <div class="mock dlg"><div class="dlg-head"><h2>GPIO 34 · Input</h2></div><div class="dlg-body"><div class="checks"><label class="check"><input type="checkbox" id="g2-inv"> Invert</label><div class="js-pull" hidden><label class="check"><input type="checkbox" id="g2-pu"> Pull-up</label><label class="check"><input type="checkbox" id="g2-pd"> Pull-down</label></div></div>
+<p class="note js-nopull"><svg class="i sm" aria-hidden="true"><use href="#i-info"/></svg><span>Input-only pin, no internal pull.</span></p>
+<div class="field"><label for="g2-deb">Debounce (ms)</label><input type="number" id="g2-deb" min="0" max="500" value="50"><div class="hint">0–500 ms. Default 50.</div></div></div></div>
+        <div class="mock dlg"><div class="dlg-head"><h2>GPIO 26 · Servo</h2></div><div class="dlg-body"><div class="field"><label for="g3-ang">Start angle (°)</label><input type="number" id="g3-ang" min="0" max="180" value="90"><div class="hint">0–180°. Default 90.</div></div>
+<div class="grid" style="--min:180px">
+  <div class="field"><label for="g3-min">Min pulse (µs)</label><input type="number" id="g3-min" min="500" max="1500" value="500"><div class="hint">500–1500 µs.</div></div>
+  <div class="field"><label for="g3-max">Max pulse (µs)</label><input type="number" id="g3-max" min="1500" max="2500" value="2500"><div class="hint">1500–2500 µs.</div></div>
+</div></div></div>
+        <div class="mock dlg"><div class="dlg-head"><h2>GPIO 32 · Analog</h2></div><div class="dlg-body"><div class="field"><label for="g4-smp">Sample every (ms)</label><input type="number" id="g4-smp" min="20" max="1000" value="50"><div class="hint">20–1000 ms. Default 50.</div></div>
+<div class="grid" style="--min:180px">
+  <div class="field"><label for="g4-hys">Hysteresis (mV)</label><input type="number" id="g4-hys" min="5" max="500" value="20"><div class="hint">5–500 mV. Default 20.</div></div>
+  <div class="field"><label for="g4-smo">Smoothing (%)</label><input type="number" id="g4-smo" min="0" max="90" value="70"><div class="hint">0–90 %. Default 70.</div></div>
+</div></div></div>
+      </div>
+    </div>
+
+    <div class="card full">
+      <h3 class="eyebrow">(h) Add add-on wizard: steps 1, 3 and 4 (step 2 is the live dialog)</h3>
+      <div class="grid" style="--min:320px">
+        <div class="mock dlg">
+          <div class="dlg-head"><h2>Add add-on</h2></div>
+          <div class="dlg-body">
+            <ol class="steps"><li class="on">Type</li><li>Pins</li><li>Settings</li><li>Review</li></ol>
+            <div class="grid" style="--min:170px">
+              <button class="type on" type="button" aria-pressed="true"><span class="t">BME280</span><span class="mut">Temperature, humidity, pressure</span><span class="chips"><span class="chip">I²C</span><span class="chip">1 of 2 used</span></span></button>
+              <button class="type" type="button" aria-pressed="false"><span class="t">RC522 RFID</span><span class="mut">RFID tag reader</span><span class="chips"><span class="chip">SPI</span><span class="chip">1 of 4 used</span></span></button>
+            </div>
+            <p class="hint">A type that has reached its limit is disabled and shows “2 of 2 used”.</p>
+          </div>
+          <div class="dlg-foot"><button class="btn" type="button">Cancel</button><button class="btn primary" type="button">Next</button></div>
+        </div>
+        <div class="mock dlg">
+          <div class="dlg-head"><h2>Add add-on</h2></div>
+          <div class="dlg-body">
+            <ol class="steps"><li class="done">Type</li><li class="done">Pins</li><li class="on">Settings</li><li>Review</li></ol>
+            <div class="field"><label for="w3-addr">I²C address</label><select id="w3-addr"><option value="118" disabled>0x76 · in use by env0</option><option value="119" selected>0x77</option></select><div class="hint"><strong>0x76 is used by env0 on i2c0.</strong> Two sensors on one bus need different addresses.</div></div>
+<div class="field"><label for="w3-smp">Sample every (ms)</label><input type="number" id="w3-smp" min="200" max="10000" value="1000"><div class="hint">200–10000 ms. Default 1000.</div></div>
+<div class="grid" style="--min:120px"><div class="field"><label for="w3-ot">Temperature oversampling</label><select id="w3-ot"><option value="1" selected>×1</option><option value="2">×2</option><option value="4">×4</option><option value="8">×8</option><option value="16">×16</option></select></div><div class="field"><label for="w3-op">Pressure oversampling</label><select id="w3-op"><option value="1" selected>×1</option><option value="2">×2</option><option value="4">×4</option><option value="8">×8</option><option value="16">×16</option></select></div><div class="field"><label for="w3-oh">Humidity oversampling</label><select id="w3-oh"><option value="1" selected>×1</option><option value="2">×2</option><option value="4">×4</option><option value="8">×8</option><option value="16">×16</option></select></div></div>
+<div class="grid" style="--min:180px">
+  <div class="field"><label for="w3-flt">Filter</label><select id="w3-flt"><option value="0" selected>Off</option><option value="2">2</option><option value="4">4</option><option value="8">8</option><option value="16">16</option></select></div>
+  <div class="field"><label for="w3-mode">Mode</label><select id="w3-mode"><option value="normal" selected>Normal</option><option value="forced">Forced</option></select></div>
+</div>
+          </div>
+          <div class="dlg-foot"><button class="btn" type="button">Back</button><button class="btn primary" type="button">Next</button></div>
+        </div>
+        <div class="mock dlg">
+          <div class="dlg-head"><h2>Add add-on</h2></div>
+          <div class="dlg-body">
+            <ol class="steps"><li class="done">Type</li><li class="done">Pins</li><li class="done">Settings</li><li class="on">Review</li></ol>
+            <dl class="kv">
+  <dt>Add-on</dt><dd>BME280 <span class="mut">· Temperature, humidity, pressure</span></dd>
+  <dt>Name</dt><dd class="mono">env1</dd>
+  <dt>Bus</dt><dd>I²C · <span class="mono">i2c0</span></dd>
+  <dt>SDA</dt><dd>GPIO 21 <span class="mut">· shared with env0</span></dd>
+  <dt>SCL</dt><dd>GPIO 22 <span class="mut">· shared with env0</span></dd>
+  <dt>Address</dt><dd>0x77</dd>
+  <dt>Sampling</dt><dd>every 1000 ms · normal mode</dd>
+  <dt>Oversampling</dt><dd>temperature ×1 · pressure ×1 · humidity ×1</dd>
+  <dt>Filter</dt><dd>Off</dd>
+</dl>
+            <p class="hint">The device checks it has enough free memory before it starts the add-on. Sends <code>module.add</code>.</p>
+          </div>
+          <div class="dlg-foot"><button class="btn" type="button">Back</button><button class="btn primary" type="button">Add add-on</button></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card full">
+      <h3 class="eyebrow">(i) Rule sheet validation</h3>
+      <div class="grid" style="--min:320px">
+        <div class="mock dlg"><div class="dlg-head"><h2>Add rule</h2></div><div class="dlg-body"><div data-rule>
+<div class="stack">
+  <div class="rule-block">
+    <div class="eyebrow">When</div>
+    <div class="rule-row rr3">
+      <div class="field"><label for="rv-src">Source pin</label><select id="rv-src" data-vsel data-src><option value="13" data-t="in" selected>GPIO 13 (Input)</option><option value="32" data-t="adc">GPIO 32 (Analog)</option><option value="34" data-t="adc">GPIO 34 (Analog)</option></select></div>
+      <div class="field"><label for="rv-op">Is</label><select id="rv-op"><option value="gt">></option><option value="ge">≥</option><option value="lt"><</option><option value="le">≤</option><option value="eq" selected>=</option><option value="ne">≠</option></select></div>
+      <div class="field" data-v="adc" hidden><label for="rv-w-adc">Value (mV)</label><input type="number" id="rv-w-adc" min="0" max="3300" value="1000"></div><div class="field" data-v="in"><label for="rv-w-in">Level</label><select id="rv-w-in"><option value="low">Low</option><option value="high" selected>High</option></select></div>
+    </div>
+    <div class="hint">Source: inputs and analog pins.</div>
+  </div>
+  <div class="rule-block">
+    <div class="eyebrow">Then set</div>
+    <div class="rule-row rr2">
+      <div class="field err"><label for="rv-dst">Destination pin</label><select id="rv-dst" data-vsel data-dst aria-invalid="true" aria-describedby="rv-dst-m"><option value="13" data-t="out" selected>GPIO 13 (Input)</option><option value="2" data-t="out">GPIO 2 (Output)</option><option value="4" data-t="out">GPIO 4 (Output)</option><option value="25" data-t="pwm">GPIO 25 (PWM)</option><option value="26" data-t="servo">GPIO 26 (Servo)</option></select><div class="msg" id="rv-dst-m"><svg class="i sm" aria-hidden="true"><use href="#i-alert"/></svg>Destination must be different from the source pin</div></div>
+      <div class="field" data-v="out"><label for="rv-t-out">Set to</label><select id="rv-t-out"><option value="on" selected>On</option><option value="off">Off</option></select></div><div class="field" data-v="pwm" hidden><label for="rv-t-pwm">Duty (%)</label><input type="number" id="rv-t-pwm" min="0" max="100" value="80"></div><div class="field" data-v="servo" hidden><label for="rv-t-servo">Angle (°)</label><input type="number" id="rv-t-servo" min="0" max="180" value="90"></div>
+    </div>
+    <div class="hint">Destination: outputs, PWM and servo pins.</div>
+  </div>
+  <div class="rule-block">
+    <label class="check"><input type="checkbox" data-else-on> <span class="strong">Otherwise</span> <span class="mut">(optional)</span></label>
+    <div class="rule-row rr2" data-else-body hidden>
+      <div class="field"><label for="rv-edst">Destination pin</label><select id="rv-edst" data-vsel><option value="2" data-t="out" selected>GPIO 2 (Output)</option><option value="4" data-t="out">GPIO 4 (Output)</option><option value="25" data-t="pwm">GPIO 25 (PWM)</option><option value="26" data-t="servo">GPIO 26 (Servo)</option></select></div>
+      <div class="field" data-v="out"><label for="rv-e-out">Set to</label><select id="rv-e-out"><option value="on">On</option><option value="off" selected>Off</option></select></div><div class="field" data-v="pwm" hidden><label for="rv-e-pwm">Duty (%)</label><input type="number" id="rv-e-pwm" min="0" max="100" value="80"></div><div class="field" data-v="servo" hidden><label for="rv-e-servo">Angle (°)</label><input type="number" id="rv-e-servo" min="0" max="180" value="90"></div>
+    </div>
+  </div>
+  <div class="grid" style="--min:160px">
+    <div class="field"><label for="rv-id">Rule ID</label><input id="rv-id" maxlength="7" value="r13" spellcheck="false" autocomplete="off"><div class="hint">Up to 7 characters. Default: r + source pin.</div></div>
+    <div class="field"><span class="label">Status</span><label class="check"><input type="checkbox" checked> Enabled</label></div>
+  </div>
+  <p class="hint">One rule per source pin: saving replaces any rule that already uses this source. Sends <code>rule.set</code>.</p>
+</div>
+</div></div><div class="dlg-foot"><button class="btn" type="button">Cancel</button><button class="btn primary" type="button">Save rule</button></div></div>
+        <p class="cap">Mirrors the device rule: the destination must differ from the source. The pickers already keep inputs and outputs apart, so this message only shows if a pin's mode changed elsewhere while the sheet was open.</p>
+      </div>
+    </div>
+
+  </div>
+</section>
+</main>
+</div>
+
+<!-- ============ DIALOGS ============ -->
+<dialog class="sheet" id="pin-sheet" aria-labelledby="ps-t">
+  <div class="dlg">
+    <div class="dlg-head"><h2 id="ps-t">GPIO 25 · DAC1</h2><button type="button" class="btn icon ghost" data-close aria-label="Close"><svg class="i" aria-hidden="true"><use href="#i-x"/></svg></button></div>
+    <div class="dlg-body">
+      <div>
+        <p class="mut" id="ps-notes">DAC1 / ADC2</p>
+        <div class="flags" id="ps-flags" style="margin-top:6px"><span class="chip">ADC2</span><span class="chip">DAC</span></div>
+      </div>
+      <div class="field">
+        <span class="label">Mode</span>
+        <div class="seg wrap" role="group" aria-label="Pin mode">
+          <button type="button" data-mode="off" aria-pressed="false">Off</button>
+          <button type="button" data-mode="out" aria-pressed="false">Output</button>
+          <button type="button" data-mode="in" aria-pressed="false">Input</button>
+          <button type="button" data-mode="pwm" class="on" aria-pressed="true">PWM</button>
+          <button type="button" data-mode="servo" aria-pressed="false">Servo</button>
+          <button type="button" data-mode="adc" aria-pressed="false" hidden>Analog</button>
+        </div>
+      </div>
+      <p class="note" id="ps-adc2"><svg class="i sm" aria-hidden="true"><use href="#i-info"/></svg><span>Analog (ADC) isn't available on this pin: ADC2 can't be used while Wi-Fi is on.</span></p>
+      <p class="note" id="ps-inonly" hidden><svg class="i sm" aria-hidden="true"><use href="#i-info"/></svg><span>Output, PWM and Servo aren't available: this pin is input-only.</span></p>
+      <p class="note" id="ps-strap" hidden><svg class="i sm" aria-hidden="true"><use href="#i-alert"/></svg><span>Strapping pin: its level at power-up changes how the board boots, so avoid wiring that holds it high or low then.</span></p>
+      <p class="note" id="ps-rule"><svg class="i sm" aria-hidden="true"><use href="#i-info"/></svg><span>Driven by rule r13.</span></p>
+      <div class="stack" data-panel="off" hidden><p class="mut">Mode Off: the pin is unused and its saved settings are removed.</p></div>
+<div class="stack" data-panel="out" hidden><div class="field"><label for="ps-o-boot">Start level at boot</label><select id="ps-o-boot"><option value="0">Low</option><option value="1">High</option></select><div class="hint">Level used each time the device starts.</div></div>
+<div class="checks"><label class="check"><input type="checkbox" id="ps-o-inv"> Invert</label><label class="check"><input type="checkbox" id="ps-o-pu"> Pull-up</label><label class="check"><input type="checkbox" id="ps-o-pd"> Pull-down</label></div></div>
+<div class="stack" data-panel="in" hidden><div class="checks"><label class="check"><input type="checkbox" id="ps-i-inv"> Invert</label><div class="js-pull"><label class="check"><input type="checkbox" id="ps-i-pu"> Pull-up</label><label class="check"><input type="checkbox" id="ps-i-pd"> Pull-down</label></div></div>
+<p class="note js-nopull" hidden><svg class="i sm" aria-hidden="true"><use href="#i-info"/></svg><span>Input-only pin, no internal pull.</span></p>
+<div class="field"><label for="ps-i-deb">Debounce (ms)</label><input type="number" id="ps-i-deb" min="0" max="500" value="50"><div class="hint">0–500 ms. Default 50.</div></div></div>
+<div class="stack" data-panel="pwm"><div class="grid" style="--min:180px">
+  <div class="field"><label for="ps-p-duty">Duty (%)</label><input type="number" id="ps-p-duty" min="0" max="100" value="35" data-duty><div class="hint" data-duty-out>Sent as duty 350 (0–1000).</div></div>
+  <div class="field"><label for="ps-p-hz">Frequency (Hz)</label><input type="number" id="ps-p-hz" min="50" max="20000" value="5000"><div class="hint">50–20000 Hz.</div></div>
+</div>
+<div class="banner warn" role="note"><svg class="i" aria-hidden="true"><use href="#i-alert"/></svg><div class="txt"><strong>Frequency is shared by all PWM pins.</strong> <span data-pwm-others>No other pin uses PWM right now, so only GPIO 25 changes.</span></div></div></div>
+<div class="stack" data-panel="servo" hidden><div class="field"><label for="ps-s-ang">Start angle (°)</label><input type="number" id="ps-s-ang" min="0" max="180" value="90"><div class="hint">0–180°. Default 90.</div></div>
+<div class="grid" style="--min:180px">
+  <div class="field"><label for="ps-s-min">Min pulse (µs)</label><input type="number" id="ps-s-min" min="500" max="1500" value="500"><div class="hint">500–1500 µs.</div></div>
+  <div class="field"><label for="ps-s-max">Max pulse (µs)</label><input type="number" id="ps-s-max" min="1500" max="2500" value="2500"><div class="hint">1500–2500 µs.</div></div>
+</div></div>
+<div class="stack" data-panel="adc" hidden><div class="field"><label for="ps-a-smp">Sample every (ms)</label><input type="number" id="ps-a-smp" min="20" max="1000" value="50"><div class="hint">20–1000 ms. Default 50.</div></div>
+<div class="grid" style="--min:180px">
+  <div class="field"><label for="ps-a-hys">Hysteresis (mV)</label><input type="number" id="ps-a-hys" min="5" max="500" value="20"><div class="hint">5–500 mV. Default 20.</div></div>
+  <div class="field"><label for="ps-a-smo">Smoothing (%)</label><input type="number" id="ps-a-smo" min="0" max="90" value="70"><div class="hint">0–90 %. Default 70.</div></div>
+</div></div>
+      <p class="hint">Save sends <code>pin.configure</code> and keeps it across reboots. Only options that differ from the defaults are sent.</p>
+    </div>
+    <div class="dlg-foot"><button type="button" class="btn" data-close>Cancel</button><button type="button" class="btn primary" data-close>Save</button></div>
+  </div>
+</dialog>
+
+<dialog class="sheet" id="pin-owned" aria-labelledby="po-t">
+  <div class="dlg">
+    <div class="dlg-head"><h2 id="po-t">GPIO 21 · I2C SDA</h2><button type="button" class="btn icon ghost" data-close aria-label="Close"><svg class="i" aria-hidden="true"><use href="#i-x"/></svg></button></div>
+    <div class="dlg-body">
+      <div class="banner" role="note"><svg class="i" aria-hidden="true"><use href="#i-info"/></svg><div class="txt" id="po-msg">In use by add-on <strong>env0</strong> (BME280, SDA). Remove or edit that add-on to free this pin.</div></div>
+    </div>
+    <div class="dlg-foot"><button type="button" class="btn" data-close>Close</button><a class="btn primary" id="po-go" href="#addon-env0" data-close>Go to add-on</a></div>
+  </div>
+</dialog>
+
+<dialog class="sheet" id="add-wizard" aria-labelledby="aw-t">
+  <div class="dlg">
+    <div class="dlg-head"><h2 id="aw-t">Add add-on</h2><button type="button" class="btn icon ghost" data-close aria-label="Close"><svg class="i" aria-hidden="true"><use href="#i-x"/></svg></button></div>
+    <div class="dlg-body">
+      <ol class="steps"><li class="done">Type</li><li class="on">Pins</li><li>Settings</li><li>Review</li></ol>
+      <p><strong>BME280</strong> <span class="mut">· Temperature, humidity, pressure · I²C</span></p>
+      <div class="field"><label for="aw-id">Name</label><input id="aw-id" value="env1" maxlength="16" pattern="[a-z][a-z0-9_]{0,15}" spellcheck="false" autocomplete="off"><div class="hint">a–z, 0–9, _ · up to 16 chars · starts with a letter</div></div>
+<div class="field"><label for="aw-bus">Bus</label><select id="aw-bus"><option value="i2c0" selected>i2c0 (default)</option><option value="i2c1">i2c1</option></select></div>
+<div class="grid" style="--min:180px">
+  <div class="field"><label for="aw-sda">SDA</label><select id="aw-sda"><option value="21" selected>21 · shared with env0</option><option value="0">0 · strapping</option><option value="1">1 · serial console</option><option value="3">3 · serial console</option><option value="12">12 · strapping</option><option value="14">14</option><option value="15">15 · strapping</option><option value="16">16</option><option value="17">17</option><option value="33">33</option></select></div>
+  <div class="field"><label for="aw-scl">SCL</label><select id="aw-scl"><option value="22" selected>22 · shared with env0</option><option value="0">0 · strapping</option><option value="1">1 · serial console</option><option value="3">3 · serial console</option><option value="12">12 · strapping</option><option value="14">14</option><option value="15">15 · strapping</option><option value="16">16</option><option value="17">17</option><option value="33">33</option></select></div>
+</div>
+<div class="banner" role="note"><svg class="i" aria-hidden="true"><use href="#i-info"/></svg><div class="txt"><strong>Shared I²C bus:</strong> must match env0 (SDA 21, SCL 22). Only free pins are listed otherwise.</div></div>
+    </div>
+    <div class="dlg-foot"><button type="button" class="btn" data-close>Cancel</button><button type="button" class="btn" data-close>Back</button><button type="button" class="btn primary" data-close>Next</button></div>
+  </div>
+</dialog>
+
+<dialog class="sheet" id="edit-env0" aria-labelledby="ee-t">
+  <div class="dlg">
+    <div class="dlg-head"><h2 id="ee-t">Edit env0 · BME280</h2><button type="button" class="btn icon ghost" data-close aria-label="Close"><svg class="i" aria-hidden="true"><use href="#i-x"/></svg></button></div>
+    <div class="dlg-body"><div class="field"><label for="ee-id">Name</label><input id="ee-id" value="env0" readonly><div class="hint">The name can't be changed. Remove the add-on and add it again to rename it.</div></div>
+<div class="field"><label for="ee-bus">Bus</label><select id="ee-bus"><option value="i2c0" selected>i2c0</option><option value="i2c1">i2c1</option></select></div>
+<div class="grid" style="--min:180px"><div class="field"><label for="ee-sda">SDA</label><select id="ee-sda"><option value="21" selected>21 · current</option><option value="0">0 · strapping</option><option value="1">1 · serial console</option><option value="3">3 · serial console</option><option value="12">12 · strapping</option><option value="14">14</option><option value="15">15 · strapping</option><option value="16">16</option><option value="17">17</option><option value="33">33</option></select></div><div class="field"><label for="ee-scl">SCL</label><select id="ee-scl"><option value="22" selected>22 · current</option><option value="0">0 · strapping</option><option value="1">1 · serial console</option><option value="3">3 · serial console</option><option value="12">12 · strapping</option><option value="14">14</option><option value="15">15 · strapping</option><option value="16">16</option><option value="17">17</option><option value="33">33</option></select></div></div>
+<div class="field"><label for="ee-addr">I²C address</label><select id="ee-addr"><option value="118" selected>0x76</option><option value="119">0x77</option></select></div>
+<div class="field"><label for="ee-smp">Sample every (ms)</label><input type="number" id="ee-smp" min="200" max="10000" value="1000"><div class="hint">200–10000 ms. Default 1000.</div></div>
+<div class="grid" style="--min:120px"><div class="field"><label for="ee-ot">Temperature oversampling</label><select id="ee-ot"><option value="1" selected>×1</option><option value="2">×2</option><option value="4">×4</option><option value="8">×8</option><option value="16">×16</option></select></div><div class="field"><label for="ee-op">Pressure oversampling</label><select id="ee-op"><option value="1" selected>×1</option><option value="2">×2</option><option value="4">×4</option><option value="8">×8</option><option value="16">×16</option></select></div><div class="field"><label for="ee-oh">Humidity oversampling</label><select id="ee-oh"><option value="1" selected>×1</option><option value="2">×2</option><option value="4">×4</option><option value="8">×8</option><option value="16">×16</option></select></div></div>
+<div class="grid" style="--min:180px">
+  <div class="field"><label for="ee-flt">Filter</label><select id="ee-flt"><option value="0" selected>Off</option><option value="2">2</option><option value="4">4</option><option value="8">8</option><option value="16">16</option></select></div>
+  <div class="field"><label for="ee-mode">Mode</label><select id="ee-mode"><option value="normal" selected>Normal</option><option value="forced">Forced</option></select></div>
+</div>
+<p class="hint">If the device can't apply the change it keeps the old settings. Sends <code>module.configure</code>.</p></div>
+    <div class="dlg-foot"><button type="button" class="btn" data-close>Cancel</button><button type="button" class="btn primary" data-close>Save</button></div>
+  </div>
+</dialog>
+
+<dialog class="sheet" id="edit-rfid0" aria-labelledby="er-t">
+  <div class="dlg">
+    <div class="dlg-head"><h2 id="er-t">Edit rfid0 · RC522 RFID</h2><button type="button" class="btn icon ghost" data-close aria-label="Close"><svg class="i" aria-hidden="true"><use href="#i-x"/></svg></button></div>
+    <div class="dlg-body"><div class="field"><label for="er-id">Name</label><input id="er-id" value="rfid0" readonly><div class="hint">The name can't be changed. Remove the add-on and add it again to rename it.</div></div>
+<div class="field"><label for="er-bus">Bus</label><select id="er-bus"><option value="vspi" selected>vspi</option><option value="hspi">hspi</option></select></div>
+<div class="grid" style="--min:180px"><div class="field"><label for="er-sck">SCK</label><select id="er-sck"><option value="18" selected>18 · current</option><option value="0">0 · strapping</option><option value="1">1 · serial console</option><option value="3">3 · serial console</option><option value="12">12 · strapping</option><option value="14">14</option><option value="15">15 · strapping</option><option value="16">16</option><option value="17">17</option><option value="33">33</option></select></div><div class="field"><label for="er-miso">MISO</label><select id="er-miso"><option value="19" selected>19 · current</option><option value="0">0 · strapping</option><option value="1">1 · serial console</option><option value="3">3 · serial console</option><option value="12">12 · strapping</option><option value="14">14</option><option value="15">15 · strapping</option><option value="16">16</option><option value="17">17</option><option value="33">33</option><option value="35">35 · input-only</option><option value="36">36 · input-only</option><option value="37">37 · input-only · often not routed</option><option value="38">38 · input-only · often not routed</option><option value="39">39 · input-only</option></select></div><div class="field"><label for="er-mosi">MOSI</label><select id="er-mosi"><option value="23" selected>23 · current</option><option value="0">0 · strapping</option><option value="1">1 · serial console</option><option value="3">3 · serial console</option><option value="12">12 · strapping</option><option value="14">14</option><option value="15">15 · strapping</option><option value="16">16</option><option value="17">17</option><option value="33">33</option></select></div><div class="field"><label for="er-cs">CS</label><select id="er-cs"><option value="5" selected>5 · current</option><option value="0">0 · strapping</option><option value="1">1 · serial console</option><option value="3">3 · serial console</option><option value="12">12 · strapping</option><option value="14">14</option><option value="15">15 · strapping</option><option value="16">16</option><option value="17">17</option><option value="33">33</option></select></div><div class="field"><label for="er-rst">RST</label><select id="er-rst"><option value="">Not used</option><option value="27" selected>27 · current</option><option value="0">0 · strapping</option><option value="1">1 · serial console</option><option value="3">3 · serial console</option><option value="12">12 · strapping</option><option value="14">14</option><option value="15">15 · strapping</option><option value="16">16</option><option value="17">17</option><option value="33">33</option></select><div class="hint">Optional</div></div></div>
+<p class="mut">RC522 RFID has no other settings.</p>
+<p class="hint">If the device can't apply the change it keeps the old settings. Sends <code>module.configure</code>.</p></div>
+    <div class="dlg-foot"><button type="button" class="btn" data-close>Cancel</button><button type="button" class="btn primary" data-close>Save</button></div>
+  </div>
+</dialog>
+
+<dialog class="sheet" id="rule-edit" aria-labelledby="rule-edit-t">
+  <div class="dlg">
+    <div class="dlg-head"><h2 id="rule-edit-t">Edit rule r32</h2><button type="button" class="btn icon ghost" data-close aria-label="Close"><svg class="i" aria-hidden="true"><use href="#i-x"/></svg></button></div>
+    <div class="dlg-body"><div data-rule>
+<div class="stack">
+  <div class="rule-block">
+    <div class="eyebrow">When</div>
+    <div class="rule-row rr3">
+      <div class="field"><label for="re-src">Source pin</label><select id="re-src" data-vsel data-src><option value="13" data-t="in">GPIO 13 (Input)</option><option value="32" data-t="adc" selected>GPIO 32 (Analog)</option><option value="34" data-t="adc">GPIO 34 (Analog)</option></select></div>
+      <div class="field"><label for="re-op">Is</label><select id="re-op"><option value="gt" selected>></option><option value="ge">≥</option><option value="lt"><</option><option value="le">≤</option><option value="eq">=</option><option value="ne">≠</option></select></div>
+      <div class="field" data-v="adc"><label for="re-w-adc">Value (mV)</label><input type="number" id="re-w-adc" min="0" max="3300" value="1000"></div><div class="field" data-v="in" hidden><label for="re-w-in">Level</label><select id="re-w-in"><option value="low">Low</option><option value="high" selected>High</option></select></div>
+    </div>
+    <div class="hint">Source: inputs and analog pins.</div>
+  </div>
+  <div class="rule-block">
+    <div class="eyebrow">Then set</div>
+    <div class="rule-row rr2">
+      <div class="field"><label for="re-dst">Destination pin</label><select id="re-dst" data-vsel data-dst aria-describedby="re-dst-m"><option value="2" data-t="out">GPIO 2 (Output)</option><option value="4" data-t="out" selected>GPIO 4 (Output)</option><option value="25" data-t="pwm">GPIO 25 (PWM)</option><option value="26" data-t="servo">GPIO 26 (Servo)</option></select><div class="msg" id="re-dst-m"><svg class="i sm" aria-hidden="true"><use href="#i-alert"/></svg>Destination must be different from the source pin</div></div>
+      <div class="field" data-v="out"><label for="re-t-out">Set to</label><select id="re-t-out"><option value="on" selected>On</option><option value="off">Off</option></select></div><div class="field" data-v="pwm" hidden><label for="re-t-pwm">Duty (%)</label><input type="number" id="re-t-pwm" min="0" max="100" value="80"></div><div class="field" data-v="servo" hidden><label for="re-t-servo">Angle (°)</label><input type="number" id="re-t-servo" min="0" max="180" value="90"></div>
+    </div>
+    <div class="hint">Destination: outputs, PWM and servo pins.</div>
+  </div>
+  <div class="rule-block">
+    <label class="check"><input type="checkbox" data-else-on checked> <span class="strong">Otherwise</span> <span class="mut">(optional)</span></label>
+    <div class="rule-row rr2" data-else-body>
+      <div class="field"><label for="re-edst">Destination pin</label><select id="re-edst" data-vsel><option value="2" data-t="out">GPIO 2 (Output)</option><option value="4" data-t="out" selected>GPIO 4 (Output)</option><option value="25" data-t="pwm">GPIO 25 (PWM)</option><option value="26" data-t="servo">GPIO 26 (Servo)</option></select></div>
+      <div class="field" data-v="out"><label for="re-e-out">Set to</label><select id="re-e-out"><option value="on">On</option><option value="off" selected>Off</option></select></div><div class="field" data-v="pwm" hidden><label for="re-e-pwm">Duty (%)</label><input type="number" id="re-e-pwm" min="0" max="100" value="80"></div><div class="field" data-v="servo" hidden><label for="re-e-servo">Angle (°)</label><input type="number" id="re-e-servo" min="0" max="180" value="90"></div>
+    </div>
+  </div>
+  <div class="grid" style="--min:160px">
+    <div class="field"><label for="re-id">Rule ID</label><input id="re-id" maxlength="7" value="r32" spellcheck="false" autocomplete="off"><div class="hint">Up to 7 characters. Default: r + source pin.</div></div>
+    <div class="field"><span class="label">Status</span><label class="check"><input type="checkbox" checked> Enabled</label></div>
+  </div>
+  <p class="hint">One rule per source pin: saving replaces any rule that already uses this source. Sends <code>rule.set</code>.</p>
+</div>
+</div></div>
+    <div class="dlg-foot"><button type="button" class="btn" data-close>Cancel</button><button type="button" class="btn primary" data-close>Save rule</button></div>
+  </div>
+</dialog>
+
+<dialog class="sheet" id="rule-new" aria-labelledby="rule-new-t">
+  <div class="dlg">
+    <div class="dlg-head"><h2 id="rule-new-t">Add rule</h2><button type="button" class="btn icon ghost" data-close aria-label="Close"><svg class="i" aria-hidden="true"><use href="#i-x"/></svg></button></div>
+    <div class="dlg-body"><div data-rule>
+<div class="stack">
+  <div class="rule-block">
+    <div class="eyebrow">When</div>
+    <div class="rule-row rr3">
+      <div class="field"><label for="rn-src">Source pin</label><select id="rn-src" data-vsel data-src><option value="13" data-t="in" selected>GPIO 13 (Input)</option><option value="32" data-t="adc">GPIO 32 (Analog)</option><option value="34" data-t="adc">GPIO 34 (Analog)</option></select></div>
+      <div class="field"><label for="rn-op">Is</label><select id="rn-op"><option value="gt">></option><option value="ge">≥</option><option value="lt"><</option><option value="le">≤</option><option value="eq" selected>=</option><option value="ne">≠</option></select></div>
+      <div class="field" data-v="adc" hidden><label for="rn-w-adc">Value (mV)</label><input type="number" id="rn-w-adc" min="0" max="3300" value="1000"></div><div class="field" data-v="in"><label for="rn-w-in">Level</label><select id="rn-w-in"><option value="low">Low</option><option value="high" selected>High</option></select></div>
+    </div>
+    <div class="hint">Source: inputs and analog pins.</div>
+  </div>
+  <div class="rule-block">
+    <div class="eyebrow">Then set</div>
+    <div class="rule-row rr2">
+      <div class="field"><label for="rn-dst">Destination pin</label><select id="rn-dst" data-vsel data-dst aria-describedby="rn-dst-m"><option value="2" data-t="out" selected>GPIO 2 (Output)</option><option value="4" data-t="out">GPIO 4 (Output)</option><option value="25" data-t="pwm">GPIO 25 (PWM)</option><option value="26" data-t="servo">GPIO 26 (Servo)</option></select><div class="msg" id="rn-dst-m"><svg class="i sm" aria-hidden="true"><use href="#i-alert"/></svg>Destination must be different from the source pin</div></div>
+      <div class="field" data-v="out"><label for="rn-t-out">Set to</label><select id="rn-t-out"><option value="on" selected>On</option><option value="off">Off</option></select></div><div class="field" data-v="pwm" hidden><label for="rn-t-pwm">Duty (%)</label><input type="number" id="rn-t-pwm" min="0" max="100" value="80"></div><div class="field" data-v="servo" hidden><label for="rn-t-servo">Angle (°)</label><input type="number" id="rn-t-servo" min="0" max="180" value="90"></div>
+    </div>
+    <div class="hint">Destination: outputs, PWM and servo pins.</div>
+  </div>
+  <div class="rule-block">
+    <label class="check"><input type="checkbox" data-else-on checked> <span class="strong">Otherwise</span> <span class="mut">(optional)</span></label>
+    <div class="rule-row rr2" data-else-body>
+      <div class="field"><label for="rn-edst">Destination pin</label><select id="rn-edst" data-vsel><option value="2" data-t="out" selected>GPIO 2 (Output)</option><option value="4" data-t="out">GPIO 4 (Output)</option><option value="25" data-t="pwm">GPIO 25 (PWM)</option><option value="26" data-t="servo">GPIO 26 (Servo)</option></select></div>
+      <div class="field" data-v="out"><label for="rn-e-out">Set to</label><select id="rn-e-out"><option value="on">On</option><option value="off" selected>Off</option></select></div><div class="field" data-v="pwm" hidden><label for="rn-e-pwm">Duty (%)</label><input type="number" id="rn-e-pwm" min="0" max="100" value="80"></div><div class="field" data-v="servo" hidden><label for="rn-e-servo">Angle (°)</label><input type="number" id="rn-e-servo" min="0" max="180" value="90"></div>
+    </div>
+  </div>
+  <div class="grid" style="--min:160px">
+    <div class="field"><label for="rn-id">Rule ID</label><input id="rn-id" maxlength="7" value="r13" spellcheck="false" autocomplete="off"><div class="hint">Up to 7 characters. Default: r + source pin.</div></div>
+    <div class="field"><span class="label">Status</span><label class="check"><input type="checkbox" checked> Enabled</label></div>
+  </div>
+  <p class="hint">One rule per source pin: saving replaces any rule that already uses this source. Sends <code>rule.set</code>.</p>
+</div>
+</div></div>
+    <div class="dlg-foot"><button type="button" class="btn" data-close>Cancel</button><button type="button" class="btn primary" data-close>Save rule</button></div>
+  </div>
+</dialog>
+
+<dialog class="modal" id="reboot-modal" aria-labelledby="reboot-t">
+  <form method="dialog" class="dlg">
+    <div class="dlg-head"><h2 id="reboot-t">Reboot Workshop node?</h2><button type="button" class="btn icon ghost" data-close aria-label="Close"><svg class="i" aria-hidden="true"><use href="#i-x"/></svg></button></div>
+    <div class="dlg-body"><p>It will be offline for about 10 seconds.</p></div>
+    <div class="dlg-foot"><button type="button" class="btn" data-close>Cancel</button><button class="btn primary" value="reboot">Reboot</button></div>
+  </form>
+</dialog>
+
+<dialog class="modal danger" id="rm-addon" aria-labelledby="rm-addon-t">
+  <form method="dialog" class="dlg">
+    <div class="dlg-head"><h2 id="rm-addon-t">Remove env0?</h2><button type="button" class="btn icon ghost" data-close aria-label="Close"><svg class="i" aria-hidden="true"><use href="#i-x"/></svg></button></div>
+    <div class="dlg-body"><p id="rm-addon-b">env0 (BME280) stops reporting and its pins (SDA 21, SCL 22) are freed. You can add it again later.</p></div>
+    <div class="dlg-foot"><button type="button" class="btn" data-close>Cancel</button><button class="btn danger" value="remove">Remove add-on</button></div>
+  </form>
+</dialog>
+
+<dialog class="modal danger" id="rm-rule" aria-labelledby="rm-rule-t">
+  <form method="dialog" class="dlg">
+    <div class="dlg-head"><h2 id="rm-rule-t">Delete rule r32?</h2><button type="button" class="btn icon ghost" data-close aria-label="Close"><svg class="i" aria-hidden="true"><use href="#i-x"/></svg></button></div>
+    <div class="dlg-body"><p id="rm-rule-b">Rule r32 stops running on the device. Its pins keep their current settings.</p></div>
+    <div class="dlg-foot"><button type="button" class="btn" data-close>Cancel</button><button class="btn danger" value="delete">Delete rule</button></div>
+  </form>
+</dialog>
+
+<script>
+(function(){
+  var root=document.documentElement,modes=['system','light','dark'],cur='system',KEY='deesp32-theme';
+  try{var s=localStorage.getItem(KEY);if(s==='light'||s==='dark')cur=s}catch(e){}
+  function apply(){
+    if(cur==='system')root.removeAttribute('data-theme');else root.setAttribute('data-theme',cur);
+    document.querySelectorAll('[data-theme-toggle]').forEach(function(b){
+      var l=b.querySelector('.lbl');if(l)l.textContent='Theme: '+cur;
+      b.title='Theme: '+cur;b.setAttribute('aria-label','Theme: '+cur+' (click to change)');
+    });
+  }
+  apply();
+  document.addEventListener('click',function(e){
+    var t=e.target.closest('[data-theme-toggle]');
+    if(t){cur=modes[(modes.indexOf(cur)+1)%3];try{localStorage.setItem(KEY,cur)}catch(x){}apply();return}
+    var o=e.target.closest('[data-open]');
+    if(o){var d=document.getElementById(o.getAttribute('data-open'));if(d&&d.showModal)d.showModal();return}
+    var c=e.target.closest('[data-close]');
+    if(c){var dd=c.closest('dialog');if(dd)dd.close();return}
+    if(e.target.tagName==='DIALOG'&&e.target.open){e.target.close();return}
+    var sg=e.target.closest('.seg button');
+    if(sg){sg.parentNode.querySelectorAll('button').forEach(function(b){var on=b===sg;b.classList.toggle('on',on);b.setAttribute('aria-pressed',on)});return}
+    var fc=e.target.closest('.filter-chip');
+    if(fc){
+      var grp=fc.closest('[data-single]');
+      if(grp){grp.querySelectorAll('.filter-chip').forEach(function(b){var on=b===fc;b.classList.toggle('on',on);b.setAttribute('aria-pressed',on)})}
+      else{var on=fc.classList.toggle('on');fc.setAttribute('aria-pressed',on)}
+      return;
+    }
+    var sw=e.target.closest('.switch');
+    if(sw){sw.setAttribute('aria-checked',sw.getAttribute('aria-checked')!=='true');return}
+    var dm=e.target.closest('[data-dismiss]');
+    if(dm){var tt=dm.closest('.toast');if(tt)tt.remove()}
+  });
+})();
+(function(){
+  var PINS={"0":{"role":"BOOT","notes":"strapping BOOT; held at reset enters download mode","io":0,"a1":0,"a2":1,"dac":0,"touch":1,"strap":1,"flash":0},"1":{"role":"TX0","notes":"UART0 TX — serial console, avoid as GPIO","io":0,"a1":0,"a2":0,"dac":0,"touch":0,"strap":0,"flash":0},"2":{"role":"LED","notes":"strapping; onboard LED on most DevKitC boards","io":0,"a1":0,"a2":1,"dac":0,"touch":1,"strap":1,"flash":0,"cfg":"out"},"3":{"role":"RX0","notes":"UART0 RX — serial console, avoid as GPIO","io":0,"a1":0,"a2":0,"dac":0,"touch":0,"strap":0,"flash":0},"4":{"role":"","notes":"general I/O","io":0,"a1":0,"a2":1,"dac":0,"touch":1,"strap":0,"flash":0,"cfg":"out","rule":"Driven by rule r32."},"5":{"role":"VSPI SS","notes":"strapping (timing); default VSPI chip-select","io":0,"a1":0,"a2":0,"dac":0,"touch":0,"strap":1,"flash":0,"owner":"rfid0","otype":"RC522 RFID","orole":"CS"},"6":{"role":"CLK","notes":"SPI flash SCK — reserved","io":0,"a1":0,"a2":0,"dac":0,"touch":0,"strap":0,"flash":1},"7":{"role":"D0","notes":"SPI flash SDO — reserved","io":0,"a1":0,"a2":0,"dac":0,"touch":0,"strap":0,"flash":1},"8":{"role":"D1","notes":"SPI flash SDI — reserved","io":0,"a1":0,"a2":0,"dac":0,"touch":0,"strap":0,"flash":1},"9":{"role":"D2","notes":"SPI flash SHD — reserved","io":0,"a1":0,"a2":0,"dac":0,"touch":0,"strap":0,"flash":1},"10":{"role":"D3","notes":"SPI flash SWP — reserved","io":0,"a1":0,"a2":0,"dac":0,"touch":0,"strap":0,"flash":1},"11":{"role":"CMD","notes":"SPI flash SCS — reserved","io":0,"a1":0,"a2":0,"dac":0,"touch":0,"strap":0,"flash":1},"12":{"role":"HSPI MISO","notes":"MTDI strapping; HIGH at reset can select 1.8V flash and prevent boot","io":0,"a1":0,"a2":1,"dac":0,"touch":1,"strap":1,"flash":0},"13":{"role":"HSPI MOSI","notes":"general I/O","io":0,"a1":0,"a2":1,"dac":0,"touch":1,"strap":0,"flash":0,"cfg":"in","rule":"Source of rule r13."},"14":{"role":"HSPI SCK","notes":"general I/O","io":0,"a1":0,"a2":1,"dac":0,"touch":1,"strap":0,"flash":0},"15":{"role":"HSPI SS","notes":"strapping MTDO","io":0,"a1":0,"a2":1,"dac":0,"touch":1,"strap":1,"flash":0},"16":{"role":"U2RXD","notes":"general I/O (U2RXD default)","io":0,"a1":0,"a2":0,"dac":0,"touch":0,"strap":0,"flash":0},"17":{"role":"U2TXD","notes":"general I/O (U2TXD default)","io":0,"a1":0,"a2":0,"dac":0,"touch":0,"strap":0,"flash":0},"18":{"role":"VSPI SCK","notes":"VSPI SCK default","io":0,"a1":0,"a2":0,"dac":0,"touch":0,"strap":0,"flash":0,"owner":"rfid0","otype":"RC522 RFID","orole":"SCK"},"19":{"role":"VSPI MISO","notes":"VSPI MISO default","io":0,"a1":0,"a2":0,"dac":0,"touch":0,"strap":0,"flash":0,"owner":"rfid0","otype":"RC522 RFID","orole":"MISO"},"21":{"role":"I2C SDA","notes":"default I2C SDA","io":0,"a1":0,"a2":0,"dac":0,"touch":0,"strap":0,"flash":0,"owner":"env0","otype":"BME280","orole":"SDA"},"22":{"role":"I2C SCL","notes":"default I2C SCL","io":0,"a1":0,"a2":0,"dac":0,"touch":0,"strap":0,"flash":0,"owner":"env0","otype":"BME280","orole":"SCL"},"23":{"role":"VSPI MOSI","notes":"VSPI MOSI default","io":0,"a1":0,"a2":0,"dac":0,"touch":0,"strap":0,"flash":0,"owner":"rfid0","otype":"RC522 RFID","orole":"MOSI"},"25":{"role":"DAC1","notes":"DAC1 / ADC2","io":0,"a1":0,"a2":1,"dac":1,"touch":0,"strap":0,"flash":0,"cfg":"pwm","rule":"Driven by rule r13."},"26":{"role":"DAC2","notes":"DAC2 / ADC2","io":0,"a1":0,"a2":1,"dac":1,"touch":0,"strap":0,"flash":0,"cfg":"servo"},"27":{"role":"","notes":"general I/O","io":0,"a1":0,"a2":1,"dac":0,"touch":1,"strap":0,"flash":0,"owner":"rfid0","otype":"RC522 RFID","orole":"RST"},"32":{"role":"","notes":"ADC1_CH4","io":0,"a1":1,"a2":0,"dac":0,"touch":1,"strap":0,"flash":0,"cfg":"adc","rule":"Source of rule r32."},"33":{"role":"","notes":"ADC1_CH5","io":0,"a1":1,"a2":0,"dac":0,"touch":1,"strap":0,"flash":0},"34":{"role":"","notes":"input-only, no internal pull, ADC1_CH6","io":1,"a1":1,"a2":0,"dac":0,"touch":0,"strap":0,"flash":0,"cfg":"adc"},"35":{"role":"","notes":"input-only, no internal pull, ADC1_CH7","io":1,"a1":1,"a2":0,"dac":0,"touch":0,"strap":0,"flash":0},"36":{"role":"SVP","notes":"input-only SVP, ADC1_CH0","io":1,"a1":1,"a2":0,"dac":0,"touch":0,"strap":0,"flash":0},"37":{"role":"","notes":"input-only, ADC1_CH1 (often not routed)","io":1,"a1":1,"a2":0,"dac":0,"touch":0,"strap":0,"flash":0},"38":{"role":"","notes":"input-only, ADC1_CH2 (often not routed)","io":1,"a1":1,"a2":0,"dac":0,"touch":0,"strap":0,"flash":0},"39":{"role":"SVN","notes":"input-only SVN, ADC1_CH3","io":1,"a1":1,"a2":0,"dac":0,"touch":0,"strap":0,"flash":0}};
+  var $=function(id){return document.getElementById(id)};
+  var sheet=$('pin-sheet'),owned=$('pin-owned');
+
+  function allowed(p,m){
+    if(m==='off'||m==='in')return true;
+    if(m==='adc')return !!p.a1;
+    return !p.io; /* out, pwm, servo */
+  }
+  function setMode(m){
+    sheet.querySelectorAll('[data-mode]').forEach(function(b){var on=b.getAttribute('data-mode')===m;b.classList.toggle('on',on);b.setAttribute('aria-pressed',on)});
+    sheet.querySelectorAll('[data-panel]').forEach(function(pn){pn.hidden=pn.getAttribute('data-panel')!==m});
+  }
+  function pwmOthers(g){
+    var o=Object.keys(PINS).filter(function(k){return PINS[k].cfg==='pwm'&&+k!==g});
+    return o.length?'Changing it also changes GPIO '+o.join(', ')+'.':'No other pin uses PWM right now, so only GPIO '+g+' changes.';
+  }
+  function openPin(g){
+    var p=PINS[g];if(!p||p.flash)return;
+    document.querySelectorAll('.board .pad.sel').forEach(function(x){x.classList.remove('sel')});
+    var pb=document.querySelector('.board .pad[data-gpio="'+g+'"]');if(pb)pb.classList.add('sel');
+    if(p.owner){
+      $('po-t').textContent='GPIO '+g+' · '+p.role;
+      $('po-msg').innerHTML='In use by add-on <strong>'+p.owner+'</strong> ('+p.otype+', '+p.orole+'). Remove or edit that add-on to free this pin.';
+      $('po-go').setAttribute('href','#addon-'+p.owner);
+      owned.showModal();return;
+    }
+    $('ps-t').textContent='GPIO '+g+(p.role?' · '+p.role:'');
+    $('ps-notes').textContent=p.notes;
+    var f=[];
+    if(p.a1)f.push('<span class="chip">ADC1</span>');
+    if(p.a2)f.push('<span class="chip">ADC2</span>');
+    if(p.dac)f.push('<span class="chip">DAC</span>');
+    if(p.touch)f.push('<span class="chip">Touch</span>');
+    if(p.io)f.push('<span class="chip">Input-only</span>');
+    if(p.strap)f.push('<span class="chip warn">Strapping pin</span>');
+    $('ps-flags').innerHTML=f.join('');
+    sheet.querySelectorAll('[data-mode]').forEach(function(b){b.hidden=!allowed(p,b.getAttribute('data-mode'))});
+    $('ps-adc2').hidden=!p.a2;
+    $('ps-inonly').hidden=!p.io;
+    $('ps-strap').hidden=!p.strap;
+    $('ps-rule').hidden=!p.rule;
+    if(p.rule)$('ps-rule').querySelector('span').textContent=p.rule;
+    sheet.querySelectorAll('.js-pull').forEach(function(x){x.hidden=!!p.io});
+    sheet.querySelectorAll('.js-nopull').forEach(function(x){x.hidden=!p.io});
+    sheet.querySelectorAll('[data-pwm-others]').forEach(function(x){x.textContent=pwmOthers(g)});
+    setMode(p.cfg||'off');
+    sheet.showModal();
+  }
+
+  function ruleSync(root){
+    root.querySelectorAll('select[data-vsel]').forEach(function(s){
+      var t=s.options[s.selectedIndex].getAttribute('data-t');
+      s.closest('.rule-row').querySelectorAll('[data-v]').forEach(function(v){v.hidden=v.getAttribute('data-v')!==t});
+    });
+    var src=root.querySelector('[data-src]'),dst=root.querySelector('[data-dst]');
+    if(src&&dst){var bad=src.value===dst.value;dst.closest('.field').classList.toggle('err',bad);dst.setAttribute('aria-invalid',bad)}
+    var eo=root.querySelector('[data-else-on]');
+    if(eo)root.querySelectorAll('[data-else-body]').forEach(function(b){b.hidden=!eo.checked});
+  }
+  document.querySelectorAll('[data-rule]').forEach(ruleSync);
+  document.addEventListener('change',function(e){var r=e.target.closest&&e.target.closest('[data-rule]');if(r)ruleSync(r)});
+
+  document.addEventListener('input',function(e){
+    var t=e.target;if(!t.matches||!t.matches('[data-duty]'))return;
+    var o=t.closest('.field').querySelector('[data-duty-out]');
+    var v=Math.max(0,Math.min(100,+t.value||0));
+    if(o)o.textContent='Sent as duty '+Math.round(v*10)+' (0–1000).';
+  });
+
+  document.addEventListener('click',function(e){
+    var g=e.target.closest('[data-gpio]');
+    if(g&&!g.disabled){openPin(+g.getAttribute('data-gpio'));return}
+    var md=e.target.closest('[data-mode]');
+    if(md){setMode(md.getAttribute('data-mode'));return}
+    var pf=e.target.closest('[data-pf]');
+    if(pf){var f=pf.getAttribute('data-pf');document.querySelectorAll('#plist li').forEach(function(li){li.hidden=!(f==='all'||li.getAttribute('data-st')===f)});return}
+    var j=e.target.closest('[data-jump]');
+    if(j){var s=$(j.getAttribute('data-jump'));if(s)s.scrollIntoView({behavior:'smooth',block:'start'});return}
+    var ta=e.target.closest('[data-toggle-addon]');
+    if(ta){
+      var card=ta.closest('.addon'),off=!card.classList.contains('is-disabled'),st=card.querySelector('[data-state]');
+      card.classList.toggle('is-disabled',off);
+      ta.textContent=off?'Enable':'Disable';
+      st.className='chip '+(off?'off':'ok');st.textContent=off?'Disabled':'Enabled';
+      return;
+    }
+    var rm=e.target.closest('[data-rm]');
+    if(rm){
+      var kind=rm.getAttribute('data-rm'),id=rm.getAttribute('data-id');
+      if(kind==='addon'){
+        $('rm-addon-t').textContent='Remove '+id+'?';
+        $('rm-addon-b').textContent=id+' ('+rm.getAttribute('data-type')+') stops reporting and its pins ('+rm.getAttribute('data-pins')+') are freed. You can add it again later.';
+        $('rm-addon').showModal();
+      }else{
+        $('rm-rule-t').textContent='Delete rule '+id+'?';
+        $('rm-rule-b').textContent='Rule '+id+' stops running on the device. Its pins keep their current settings.';
+        $('rm-rule').showModal();
+      }
+    }
+  });
+})();
+</script>
+</body>
+</html>

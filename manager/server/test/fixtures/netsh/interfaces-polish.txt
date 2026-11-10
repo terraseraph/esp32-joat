@@ -1,0 +1,24 @@
+
+W systemie jest 1 interfejs:
+
+    Nazwa                  : Wi-Fi
+    Opis                   : Example(R) Wi-Fi 6 Wireless Network Adapter
+    GUID                   : 00000000-0000-0000-0000-00000000000a
+    Adres fizyczny         : aa:bb:cc:00:11:66
+    Typ interfejsu         : Podstawowy
+    Stan                   : połączono
+    SSID                   : Łódź-Wi-Fi
+    BSSID punktu dostępu   : 02:00:00:00:00:0a
+    Pasmo                  : 2,4 GHz
+    Kanał                  : 6
+    Typ sieci              : Infrastruktura
+    Typ radia              : 802.11n
+    Uwierzytelnianie       : WPA2-Personal
+    Szyfr                  : CCMP
+    Tryb połączenia        : Profil
+    Szybkość odbierania    : 144,4
+    Szybkość transmisji    : 144,4
+    Sygnał                 : 83%
+    Profil                 : Łódź-Wi-Fi
+
+    Stan sieci hostowanej  : Niedostępna

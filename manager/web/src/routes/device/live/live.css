@@ -1,0 +1,24 @@
+.live-tab { display: grid; gap: var(--s5); min-width: 0; }
+.live-tab .livebar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2) var(--s3); font-size: var(--fs-sm); }
+.live-tab .livebar .spacer { flex: 1 1 0; }
+.live-tab .group { display: grid; gap: var(--s3); min-width: 0; }
+.live-tab .group > h2.eyebrow { margin: 0; }
+.live-tab .tile .nm { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 8px; min-width: 0; }
+.live-tab .tile .why { font-size: var(--fs-xs); color: var(--mut); }
+.live-tab .tile .rd.uid { display: flex; align-items: center; gap: 10px; font-family: var(--mono); font-size: 19px; letter-spacing: .02em; overflow-wrap: anywhere; }
+.live-tab .tile .slider { margin-top: auto; }
+.live-tab .tile .progress { margin-top: auto; }
+.live-tab .progress > i { transition: none; }
+.live-tab .tile.is-offline .led { box-shadow: inset 0 0 0 2px var(--mut); background: transparent; }
+.live-tab .tile.live-skel { gap: var(--s3); }
+.live-tab .foot-note { margin: 0; font-size: var(--fs-sm); color: var(--mut); }
+.live-tab .live-note { margin: 0; font-size: var(--fs-sm); }
+
+.live-chip.is-pulsing::before { animation: live-pulse 1.6s ease-in-out infinite; }
+@keyframes live-pulse {
+  0%, 100% { opacity: 1; box-shadow: 0 0 0 0 color-mix(in srgb, currentColor 45%, transparent); }
+  50% { opacity: .55; box-shadow: 0 0 0 4px transparent; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .live-chip.is-pulsing::before { animation: none; }
+}

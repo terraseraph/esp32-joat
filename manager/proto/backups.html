@@ -1,0 +1,518 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>Backups - de-esp32 Manager</title>
+<script>try{var t=localStorage.getItem('deesp32-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t)}catch(e){}</script>
+<link rel="stylesheet" href="tokens.css">
+<style>
+/* backups.html page-specific styles (tokens only) */
+.sheet.wide{width:min(640px,100vw)}
+.sheet .table{min-width:0}
+.sheet .table-wrap{box-shadow:none}
+.gaps summary{list-style:none;cursor:pointer;display:inline-flex;align-items:center;min-height:32px}
+.gaps summary::-webkit-details-marker{display:none}
+.gaps summary:focus-visible{outline:2px solid var(--acc);outline-offset:2px;border-radius:var(--r-pill)}
+.gaps ul{margin:6px 0 4px;padding-left:18px;color:var(--mut);font-size:var(--fs-xs);white-space:normal;min-width:210px}
+.gaps ul li+li{margin-top:2px}
+.pick{display:flex;align-items:center;gap:10px;padding:6px 12px;border:1px solid var(--line);border-radius:var(--r-sm);background:var(--card)}
+.pick input{width:18px;height:18px;margin:0;flex:none;accent-color:var(--acc)}
+.pick .grow{flex:1;min-width:0}
+.pick .nm{font-weight:650;display:block}
+.pick .sub{display:block;font:var(--fs-xs) var(--mono);color:var(--mut)}
+.pick.dis{opacity:.6;background:var(--in);cursor:not-allowed}
+.pick.dis .check{cursor:not-allowed}
+.plan{display:grid;gap:var(--s4)}
+.plan-step{display:grid;gap:6px}
+.plan-step h4{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 8px;font-size:var(--fs-sm);font-weight:650}
+.plan-step h4 .n{display:inline-grid;place-items:center;width:20px;height:20px;border-radius:50%;background:var(--in);border:1px solid var(--line);color:var(--mut);font-size:11px;font-variant-numeric:tabular-nums}
+.plan-step h4 .none{color:var(--mut);font-weight:500}
+.diff{list-style:none;margin:0;padding:0;display:grid;gap:4px}
+.diff li{display:grid;grid-template-columns:20px minmax(0,1fr);gap:8px;align-items:start;padding:6px 10px;border-radius:var(--r-sm);background:var(--in);font-size:14px}
+.diff .mk{font:700 15px/1.35 var(--mono);text-align:center}
+.diff li.add{background:var(--ok-bg)} .diff li.add .mk{color:var(--ok)}
+.diff li.del{background:var(--bad-bg)} .diff li.del .mk{color:var(--bad)}
+.diff li.chg{background:var(--warn-bg)} .diff li.chg .mk{color:var(--warn)}
+.diff li.conflict{background:var(--warn-bg);border:1px solid var(--warn-bd)}
+.diff li small{display:block;color:var(--mut);font-size:var(--fs-xs)}
+.run{list-style:none;margin:0;padding:0;display:grid;gap:6px;font-size:14px}
+.run li{display:grid;grid-template-columns:18px minmax(0,1fr);gap:8px;align-items:start}
+.run li>.i,.run li>.dash{margin-top:2px;width:16px;height:16px}
+.run li>.dash{text-align:center;color:var(--mut);line-height:16px}
+.run li.ok>.i{color:var(--ok)} .run li.bad>.i{color:var(--bad)} .run li.now>.i{color:var(--acc)}
+.run li.wait,.run li.skip{color:var(--mut)}
+.run .err-msg{display:block;margin-top:2px;padding:6px 10px;border-radius:var(--r-sm);background:var(--bad-bg);border:1px solid var(--bad-bd);color:var(--bad);font:12.5px/1.45 var(--mono);overflow-wrap:anywhere}
+.spin{animation:spin 1s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.rules-list{list-style:none;margin:0;padding:0;display:grid;gap:6px}
+.rules-list li{display:flex;gap:10px;align-items:baseline;padding:8px 12px;border-radius:var(--r-sm);background:var(--in)}
+.sect{display:grid;gap:var(--s2)}
+.sect>h3{font-size:var(--fs-sm);text-transform:uppercase;letter-spacing:.05em;color:var(--mut)}
+.states h3.eyebrow{margin-bottom:var(--s3)}
+.states>.grid>.card{display:flex;flex-direction:column;gap:var(--s3)}
+.states .full{grid-column:1/-1}
+.wiz-mock{border:1px solid var(--line);border-radius:var(--r);background:var(--card);padding:var(--s4);display:flex;flex-direction:column;gap:var(--s3)}
+.wiz-mock .steps{gap:var(--s2) var(--s4);padding-bottom:var(--s3);border-bottom:1px solid var(--line)}
+.wiz-mock .foot{display:flex;justify-content:flex-end;gap:var(--s2);padding-top:var(--s2)}
+.dlg-body .steps{gap:var(--s2) var(--s4);padding-bottom:var(--s3);border-bottom:1px solid var(--line)}
+@media(max-width:767.98px){.sheet.wide{width:100%}}
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false"><defs>
+<symbol id="i-chip" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2"/><path d="M9 2v4M15 2v4M9 18v4M15 18v4M2 9h4M2 15h4M18 9h4M18 15h4"/></symbol>
+<symbol id="i-fleet" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></symbol>
+<symbol id="i-discover" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4"/><path d="M12 12l5-5"/></symbol>
+<symbol id="i-firmware" viewBox="0 0 24 24"><path d="M12 3v12M7 10l5 5 5-5"/><path d="M4 20h16"/></symbol>
+<symbol id="i-backups" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="5" rx="1.5"/><path d="M5 9v9a2 2 0 002 2h10a2 2 0 002-2V9M10 13h4"/></symbol>
+<symbol id="i-settings" viewBox="0 0 24 24"><path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="17" r="2"/></symbol>
+<symbol id="i-theme" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 010 18z" fill="currentColor"/></symbol>
+<symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+<symbol id="i-refresh" viewBox="0 0 24 24"><path d="M20 11a8 8 0 00-14-4L4 9"/><path d="M4 4v5h5"/><path d="M4 13a8 8 0 0014 4l2-2"/><path d="M20 20v-5h-5"/></symbol>
+<symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12l5 5 9-10"/></symbol>
+<symbol id="i-alert" viewBox="0 0 24 24"><path d="M12 3l10 18H2z"/><path d="M12 10v5M12 18v.01"/></symbol>
+<symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.01"/></symbol>
+<symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></symbol>
+<symbol id="i-trash" viewBox="0 0 24 24"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></symbol>
+<symbol id="i-upload" viewBox="0 0 24 24"><path d="M12 16V4M7 9l5-5 5 5"/><path d="M4 20h16"/></symbol>
+<symbol id="i-download" viewBox="0 0 24 24"><path d="M12 4v12M7 11l5 5 5-5"/><path d="M4 20h16"/></symbol>
+<symbol id="i-copy" viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 012-2h9"/></symbol>
+<symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></symbol>
+<symbol id="i-server" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="7" rx="2"/><rect x="3" y="13" width="18" height="7" rx="2"/><path d="M7 7.5v.01M7 16.5v.01"/></symbol>
+</defs></svg>
+<div class="app">
+<aside class="nav">
+  <a class="brand" href="fleet.html" aria-label="de-esp32 Manager"><span class="logo"><svg class="i" aria-hidden="true"><use href="#i-chip"/></svg></span><span class="lbl">de-esp32 Manager</span></a>
+  <nav class="nav-list" aria-label="Main">
+    <a class="nav-item" href="fleet.html" title="Fleet"><svg class="i" aria-hidden="true"><use href="#i-fleet"/></svg><span class="lbl">Fleet</span><span class="badge">8</span></a>
+    <a class="nav-item" href="discover.html" title="Discover"><svg class="i" aria-hidden="true"><use href="#i-discover"/></svg><span class="lbl">Discover</span></a>
+    <a class="nav-item" href="firmware.html" title="Firmware"><svg class="i" aria-hidden="true"><use href="#i-firmware"/></svg><span class="lbl">Firmware</span></a>
+    <a class="nav-item on" href="backups.html" aria-current="page" title="Backups"><svg class="i" aria-hidden="true"><use href="#i-backups"/></svg><span class="lbl">Backups</span></a>
+    <a class="nav-item" href="settings.html" title="Settings"><svg class="i" aria-hidden="true"><use href="#i-settings"/></svg><span class="lbl">Settings</span></a>
+  </nav>
+  <div class="nav-foot">
+    <div class="srv" title="Server connected · localhost:5180"><span class="dot ok"></span><span class="lbl">Server connected · localhost:5180</span></div>
+    <button class="btn ghost" type="button" data-theme-toggle title="Theme: system" aria-label="Theme: system"><svg class="i" aria-hidden="true"><use href="#i-theme"/></svg><span class="lbl">Theme: system</span></button>
+  </div>
+</aside>
+<main class="page">
+<div class="page-head">
+  <div>
+    <h1>Backups</h1>
+    <p>Save a device's setup and copy it to others</p>
+  </div>
+  <div class="actions">
+    <button class="btn primary" type="button" data-open="backup-sheet"><svg class="i" aria-hidden="true"><use href="#i-backups"/></svg>Back up devices…</button>
+    <button class="btn" type="button" data-open="import-dlg"><svg class="i" aria-hidden="true"><use href="#i-upload"/></svg>Import file…</button>
+    <button class="btn" type="button" data-open="wizard"><svg class="i" aria-hidden="true"><use href="#i-copy"/></svg>Clone a device…</button>
+  </div>
+</div>
+
+<div class="banner info" role="note"><svg class="i" aria-hidden="true"><use href="#i-info"/></svg><div class="txt"><strong>What a backup can and can't hold.</strong> Devices have no export command, so the Manager reads pins, add-ons and rules from the live device. Wi-Fi details and MQTT logins can't be read back and are never included. Every backup lists its gaps.</div></div>
+
+<div class="table-wrap">
+  <table class="table">
+    <thead><tr><th>Device</th><th>Taken</th><th>Firmware</th><th>Contents</th><th>Gaps</th><th>Actions</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><span class="cell-main">Workshop node</span><span class="cell-sub">esp32-b3c4d5</span></td>
+        <td>Today 10:00</td>
+        <td><span class="chip mono">9dcba89</span></td>
+        <td>7 pins · 2 add-ons · 2 rules · MQTT</td>
+        <td><details class="gaps"><summary><span class="chip warn">3 gaps</span></summary><ul><li>Wi-Fi not included</li><li>MQTT login not included</li><li>GPIO 2, 13: invert / pull-up / start level unknown</li></ul></details></td>
+        <td><div class="actions">
+          <button class="btn sm" type="button" data-open="backup-detail">View</button>
+          <button class="btn sm" type="button"><svg class="i sm" aria-hidden="true"><use href="#i-download"/></svg>Download</button>
+          <button class="btn sm" type="button" data-open="wizard">Restore to…</button>
+          <button class="btn sm ghost icon" type="button" data-open="del-dlg" aria-label="Delete backup of Workshop node"><svg class="i sm" aria-hidden="true"><use href="#i-trash"/></svg></button>
+        </div></td>
+      </tr>
+      <tr>
+        <td><span class="cell-main">Greenhouse</span><span class="cell-sub">esp32-e81f20</span></td>
+        <td>Yesterday 18:22</td>
+        <td><span class="chip mono">9dcba89</span></td>
+        <td>1 pin · 1 add-on · 0 rules · MQTT</td>
+        <td><details class="gaps"><summary><span class="chip warn">2 gaps</span></summary><ul><li>Wi-Fi not included</li><li>MQTT login not included</li></ul></details></td>
+        <td><div class="actions">
+          <button class="btn sm" type="button">View</button>
+          <button class="btn sm" type="button"><svg class="i sm" aria-hidden="true"><use href="#i-download"/></svg>Download</button>
+          <button class="btn sm" type="button" data-open="wizard">Restore to…</button>
+          <button class="btn sm ghost icon" type="button" data-open="del-dlg" aria-label="Delete backup of Greenhouse"><svg class="i sm" aria-hidden="true"><use href="#i-trash"/></svg></button>
+        </div></td>
+      </tr>
+      <tr>
+        <td><span class="cell-main">Garage door</span><span class="cell-sub">esp32-0a9e11</span></td>
+        <td>Nov 2</td>
+        <td><span class="chip mono">0de951c</span></td>
+        <td>4 pins · 0 add-ons · 1 rule · MQTT</td>
+        <td><details class="gaps"><summary><span class="chip warn">3 gaps</span></summary><ul><li>Wi-Fi not included</li><li>MQTT login not included</li><li>GPIO 5, 13: invert / pull-up / start level unknown</li></ul></details></td>
+        <td><div class="actions">
+          <button class="btn sm" type="button">View</button>
+          <button class="btn sm" type="button"><svg class="i sm" aria-hidden="true"><use href="#i-download"/></svg>Download</button>
+          <button class="btn sm" type="button" data-open="wizard">Restore to…</button>
+          <button class="btn sm ghost icon" type="button" data-open="del-dlg" aria-label="Delete backup of Garage door"><svg class="i sm" aria-hidden="true"><use href="#i-trash"/></svg></button>
+        </div></td>
+      </tr>
+      <tr class="is-offline">
+        <td><span class="cell-main">Kitchen relay</span><span class="cell-sub">esp32-c0ffee · offline now</span></td>
+        <td>Oct 28</td>
+        <td><span class="chip mono">5e3c76f</span></td>
+        <td>2 pins · 0 add-ons · 0 rules · no MQTT</td>
+        <td><details class="gaps"><summary><span class="chip warn">1 gap</span></summary><ul><li>Wi-Fi not included</li></ul></details></td>
+        <td><div class="actions">
+          <button class="btn sm" type="button">View</button>
+          <button class="btn sm" type="button"><svg class="i sm" aria-hidden="true"><use href="#i-download"/></svg>Download</button>
+          <button class="btn sm" type="button" data-open="wizard" title="Kitchen relay is offline, but this backup can still be restored to other devices">Restore to…</button>
+          <button class="btn sm ghost icon" type="button" data-open="del-dlg" aria-label="Delete backup of Kitchen relay"><svg class="i sm" aria-hidden="true"><use href="#i-trash"/></svg></button>
+        </div></td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<hr class="divider">
+
+<section class="states" aria-labelledby="states-h">
+  <h2 id="states-h">States (prototype only)</h2>
+  <p class="mut" style="margin-top:4px;margin-bottom:var(--s4)">Compact mockups of the other states this screen must handle. Not part of the real page.</p>
+  <div class="grid" style="--min:420px">
+
+    <div class="card">
+      <h3 class="eyebrow">No backups yet</h3>
+      <div class="empty">
+        <span class="ico"><svg class="i" aria-hidden="true"><use href="#i-backups"/></svg></span>
+        <h3>No backups yet</h3>
+        <p>Back up a device to keep its pins, add-ons, rules and MQTT broker. You can restore them later or copy them to other devices.</p>
+        <div class="actions"><button class="btn primary" type="button" data-open="backup-sheet">Back up devices…</button><button class="btn" type="button" data-open="import-dlg">Import file…</button></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3 class="eyebrow">Backup in progress · 3 devices</h3>
+      <div class="progress" role="progressbar" aria-label="Backing up" aria-valuemin="0" aria-valuemax="3" aria-valuenow="1"><i style="width:36%"></i></div>
+      <div class="stack" style="gap:var(--s3)">
+        <div>
+          <div class="strong">Workshop node</div>
+          <ul class="run" style="margin-top:6px">
+            <li class="ok"><svg class="i" aria-hidden="true"><use href="#i-check"/></svg><span>Reading pins… done</span></li>
+            <li class="ok"><svg class="i" aria-hidden="true"><use href="#i-check"/></svg><span>Reading add-ons… done</span></li>
+            <li class="now"><svg class="i spin" aria-hidden="true"><use href="#i-refresh"/></svg><span>Reading rules…</span></li>
+          </ul>
+        </div>
+        <div>
+          <div class="strong">Greenhouse</div>
+          <ul class="run" style="margin-top:6px">
+            <li class="ok"><svg class="i" aria-hidden="true"><use href="#i-check"/></svg><span>Reading pins… done</span></li>
+            <li class="now"><svg class="i spin" aria-hidden="true"><use href="#i-refresh"/></svg><span>Reading add-ons…</span></li>
+            <li class="wait"><span class="dash">·</span><span>Reading rules…</span></li>
+          </ul>
+        </div>
+        <div>
+          <div class="strong">Garage door <span class="chip off" style="margin-left:6px">Waiting</span></div>
+        </div>
+      </div>
+      <div class="row"><span class="spacer"></span><button class="btn sm" type="button">Cancel</button></div>
+    </div>
+
+    <div class="card">
+      <h3 class="eyebrow">Backup failed</h3>
+      <div class="banner bad" role="alert"><svg class="i" aria-hidden="true"><use href="#i-alert"/></svg><div class="txt"><strong>Kitchen relay is offline.</strong> A backup reads the live device, so it has to be online. Last seen 2 h ago. Your Oct 28 backup is still available.</div><div class="act"><button class="btn sm" type="button"><svg class="i sm" aria-hidden="true"><use href="#i-refresh"/></svg>Retry</button></div></div>
+    </div>
+
+    <div class="card">
+      <h3 class="eyebrow">Import error</h3>
+      <div class="dropzone over" style="cursor:default">
+        <svg class="i" aria-hidden="true"><use href="#i-upload"/></svg>
+        <strong>notes.json</strong>
+        <span class="mut">Choose a different file</span>
+      </div>
+      <div class="field err">
+        <div class="msg" role="alert"><svg class="i sm" aria-hidden="true"><use href="#i-alert"/></svg>This file isn't a de-esp32 backup (missing kind: de-esp32-backup)</div>
+      </div>
+    </div>
+
+    <div class="full" style="grid-column:1/-1">
+      <h3 class="eyebrow" style="margin-bottom:var(--s3)">Clone / restore wizard · other steps</h3>
+      <div class="grid" style="--min:420px">
+
+        <div class="wiz-mock">
+          <ol class="steps"><li class="on">Source</li><li>Targets</li><li>What to copy</li><li>Review plan</li><li>Apply</li></ol>
+          <p class="strong">Where should the setup come from?</p>
+          <label class="check"><input type="radio" name="m-src" checked> A device (takes a fresh backup now)</label>
+          <div class="field"><label for="m-src-dev">Device</label><select id="m-src-dev"><option>Workshop node · 192.168.1.42</option><option>Greenhouse · 192.168.1.57</option><option>Garage door · 192.168.1.63</option><option>Pump controller · 192.168.1.90</option></select><div class="hint">Only online devices are listed.</div></div>
+          <label class="check"><input type="radio" name="m-src"> A saved backup</label>
+          <div class="field"><label for="m-src-bk">Backup</label><select id="m-src-bk" disabled><option>Workshop node · today 10:00</option><option>Greenhouse · yesterday 18:22</option><option>Garage door · Nov 2</option><option>Kitchen relay · Oct 28</option></select></div>
+          <div class="foot"><button class="btn" type="button">Cancel</button><button class="btn primary" type="button">Next</button></div>
+        </div>
+
+        <div class="wiz-mock">
+          <ol class="steps"><li class="done">Source</li><li class="on">Targets</li><li>What to copy</li><li>Review plan</li><li>Apply</li></ol>
+          <p class="strong">Which devices should receive it?</p>
+          <div class="stack" style="gap:var(--s2)">
+            <label class="pick"><input type="checkbox" checked><span class="grow"><span class="nm">Greenhouse</span><span class="sub">esp32-e81f20 · 192.168.1.57</span></span><span class="chip ok">Online</span></label>
+            <label class="pick"><input type="checkbox"><span class="grow"><span class="nm">Garage door</span><span class="sub">esp32-0a9e11 · 192.168.1.63</span></span><span class="chip ok">Online</span></label>
+            <label class="pick"><input type="checkbox"><span class="grow"><span class="nm">Front gate RFID</span><span class="sub">esp32-44d702 · 192.168.1.71</span></span><span class="chip bad">Safe mode</span></label>
+            <label class="pick"><input type="checkbox"><span class="grow"><span class="nm">Pump controller</span><span class="sub">esp32-11ab09 · 192.168.1.90</span></span><span class="chip ok">Online</span></label>
+            <label class="pick"><input type="checkbox"><span class="grow"><span class="nm">esp32-9a3b6c</span><span class="sub">esp32-9a3b6c · 192.168.1.104</span></span><span class="chip ok">Online</span></label>
+            <label class="pick dis"><input type="checkbox" disabled><span class="grow"><span class="nm">Desk lamp</span><span class="sub">esp32-22c4e7 · 192.168.1.112</span></span><span class="chip warn">Unreachable</span></label>
+            <label class="pick dis"><input type="checkbox" disabled><span class="grow"><span class="nm">Kitchen relay</span><span class="sub">esp32-c0ffee · 192.168.1.88</span></span><span class="chip off">Offline</span></label>
+          </div>
+          <div class="hint">Offline and unreachable devices can't be selected.</div>
+          <div class="foot"><button class="btn" type="button">Back</button><button class="btn primary" type="button">Next</button></div>
+        </div>
+
+        <div class="wiz-mock">
+          <ol class="steps"><li class="done">Source</li><li class="done">Targets</li><li class="on">What to copy</li><li>Review plan</li><li>Apply</li></ol>
+          <p class="strong">What should be copied?</p>
+          <label class="check"><input type="checkbox" checked> Pins</label>
+          <label class="check"><input type="checkbox" checked> Add-ons</label>
+          <label class="check"><input type="checkbox" checked> Rules</label>
+          <label class="check"><input type="checkbox" checked> MQTT broker <span class="mut">(shown ticked to reveal the login fields; off by default)</span></label>
+          <div class="grid" style="--min:180px;padding-left:28px">
+            <div class="field"><label for="m-mu">Username</label><input id="m-mu" autocomplete="off" spellcheck="false" placeholder="Optional"><div class="hint">Not stored in backups.</div></div>
+            <div class="field"><label for="m-mp">Password</label><input id="m-mp" type="password" autocomplete="new-password" placeholder="Optional"><div class="hint">Not stored in backups.</div></div>
+          </div>
+          <label class="check"><input type="checkbox"> Device name</label>
+          <div class="banner warn" role="note"><svg class="i" aria-hidden="true"><use href="#i-alert"/></svg><div class="txt">Two devices with the same name share MQTT topics.</div></div>
+          <div class="foot"><button class="btn" type="button">Back</button><button class="btn primary" type="button">Review plan</button></div>
+        </div>
+
+        <div class="wiz-mock">
+          <ol class="steps"><li class="done">Source</li><li class="done">Targets</li><li class="done">What to copy</li><li class="done">Review plan</li><li class="on">Apply</li></ol>
+          <div class="banner warn" role="alert"><svg class="i" aria-hidden="true"><use href="#i-alert"/></svg><div class="txt"><strong>Greenhouse was only partly updated.</strong> 1 of 2 devices finished.</div></div>
+          <div>
+            <div class="row" style="justify-content:space-between"><span class="strong">Greenhouse</span><span class="chip bad">Failed at step 7 of 10</span></div>
+            <ul class="run" style="margin-top:8px">
+              <li class="ok"><svg class="i" aria-hidden="true"><use href="#i-check"/></svg><span>Turn off GPIO 16</span></li>
+              <li class="ok"><svg class="i" aria-hidden="true"><use href="#i-check"/></svg><span>Set GPIO 2 Output</span></li>
+              <li class="ok"><svg class="i" aria-hidden="true"><use href="#i-check"/></svg><span>Set GPIO 4 Output (invert off, start High)</span></li>
+              <li class="ok"><svg class="i" aria-hidden="true"><use href="#i-check"/></svg><span>Set GPIO 13 Input, 25 PWM, 26 Servo, 32 and 34 Analog</span></li>
+              <li class="ok"><svg class="i" aria-hidden="true"><use href="#i-check"/></svg><span>Reconfigure add-on env0</span></li>
+              <li class="bad"><svg class="i" aria-hidden="true"><use href="#i-x"/></svg><span>Add add-on rfid0<span class="err-msg">cs must be unique per reader</span></span></li>
+              <li class="skip"><span class="dash">–</span><span>Add rule r32 · not run</span></li>
+              <li class="skip"><span class="dash">–</span><span>Add rule r13 · not run</span></li>
+            </ul>
+          </div>
+          <div>
+            <div class="row" style="justify-content:space-between"><span class="strong">Pump controller</span><span class="chip ok">Done</span></div>
+            <ul class="run" style="margin-top:8px">
+              <li class="ok"><svg class="i" aria-hidden="true"><use href="#i-check"/></svg><span>10 of 10 steps applied</span></li>
+            </ul>
+          </div>
+          <p class="hint">Devices don't support all-or-nothing changes; a failure leaves the device partly updated. You can re-run the restore.</p>
+          <div class="foot"><button class="btn" type="button">Done</button><button class="btn primary" type="button"><svg class="i sm" aria-hidden="true"><use href="#i-refresh"/></svg>Re-run for Greenhouse</button></div>
+        </div>
+
+      </div>
+    </div>
+
+  </div>
+</section>
+</main>
+</div>
+
+<!-- Back up devices: pick online devices -->
+<dialog class="sheet" id="backup-sheet" aria-labelledby="backup-sheet-t">
+  <form method="dialog" class="dlg">
+    <div class="dlg-head"><h2 id="backup-sheet-t">Back up devices</h2><button type="button" class="btn icon ghost" data-close aria-label="Close"><svg class="i" aria-hidden="true"><use href="#i-x"/></svg></button></div>
+    <div class="dlg-body" id="bk-list">
+      <p class="mut">The Manager reads each device's pins, add-ons, rules and MQTT broker and saves them on this PC. Only online devices are listed.</p>
+      <div class="stack" style="gap:var(--s2)">
+        <label class="pick"><input type="checkbox" checked><span class="grow"><span class="nm">Workshop node</span><span class="sub">esp32-b3c4d5 · 192.168.1.42</span></span><span class="chip ok">Online</span></label>
+        <label class="pick"><input type="checkbox" checked><span class="grow"><span class="nm">Greenhouse</span><span class="sub">esp32-e81f20 · 192.168.1.57</span></span><span class="chip ok">Online</span></label>
+        <label class="pick"><input type="checkbox"><span class="grow"><span class="nm">Garage door</span><span class="sub">esp32-0a9e11 · 192.168.1.63</span></span><span class="chip ok">Online</span></label>
+        <label class="pick"><input type="checkbox"><span class="grow"><span class="nm">Front gate RFID</span><span class="sub">esp32-44d702 · 192.168.1.71</span></span><span class="chip bad">Safe mode</span></label>
+        <label class="pick"><input type="checkbox"><span class="grow"><span class="nm">Pump controller</span><span class="sub">esp32-11ab09 · 192.168.1.90</span></span><span class="chip ok">Online</span></label>
+        <label class="pick"><input type="checkbox"><span class="grow"><span class="nm">esp32-9a3b6c</span><span class="sub">esp32-9a3b6c · 192.168.1.104</span></span><span class="chip ok">Online</span></label>
+        <label class="pick dis"><input type="checkbox" disabled><span class="grow"><span class="nm">Desk lamp</span><span class="sub">esp32-22c4e7 · 192.168.1.112</span></span><span class="chip warn">Unreachable</span></label>
+        <label class="pick dis"><input type="checkbox" disabled><span class="grow"><span class="nm">Kitchen relay</span><span class="sub">esp32-c0ffee · 192.168.1.88</span></span><span class="chip off">Offline</span></label>
+      </div>
+      <div class="banner warn" role="note"><svg class="i" aria-hidden="true"><use href="#i-alert"/></svg><div class="txt">Front gate RFID is in safe mode, so its I/O configuration was not applied. A backup of it will be incomplete.</div></div>
+    </div>
+    <div class="dlg-foot"><button type="button" class="btn" data-close>Cancel</button><button type="button" class="btn primary" id="bk-go" data-close>Back up 2 devices</button></div>
+  </form>
+</dialog>
+
+<!-- Backup detail (opens on load) -->
+<dialog class="sheet wide" id="backup-detail" aria-labelledby="backup-detail-t">
+  <div class="dlg">
+    <div class="dlg-head">
+      <div><h2 id="backup-detail-t">Workshop node</h2><p class="mut" style="font-size:var(--fs-sm);margin-top:2px">Backup taken today 10:00 · firmware <span class="mono">9dcba89</span></p></div>
+      <button type="button" class="btn icon ghost" data-close aria-label="Close"><svg class="i" aria-hidden="true"><use href="#i-x"/></svg></button>
+    </div>
+    <div class="dlg-body">
+      <div class="chips"><span class="chip">7 pins</span><span class="chip">2 add-ons</span><span class="chip">2 rules</span><span class="chip">MQTT</span><span class="chip warn">3 gaps</span></div>
+
+      <div class="sect"><h3>General</h3>
+        <dl class="kv">
+          <dt>Device name</dt><dd>Workshop node</dd>
+          <dt>MQTT broker</dt><dd class="mono">mqtt://192.168.1.10:1883</dd>
+          <dt>MQTT topic root</dt><dd class="mono">devices</dd>
+          <dt>Source device</dt><dd class="mono">a4cf12b3c4d5 · esp32-devkitc</dd>
+        </dl>
+      </div>
+
+      <div class="sect"><h3>Pins</h3>
+        <div class="table-wrap"><table class="table">
+          <thead><tr><th>GPIO</th><th>Mode</th><th>Settings</th><th>Source</th></tr></thead>
+          <tbody>
+            <tr><td class="num">2</td><td>Output</td><td class="mut">Invert, start level unknown</td><td><span class="chip">live</span></td></tr>
+            <tr><td class="num">4</td><td>Output</td><td>Invert off · start High</td><td><span class="chip acc">set via the Manager</span></td></tr>
+            <tr><td class="num">13</td><td>Input</td><td>Debounce 50 ms<span class="cell-sub" style="font-family:var(--font)">Pull-up / invert unknown</span></td><td><span class="chip">live</span></td></tr>
+            <tr><td class="num">32</td><td>Analog (ADC)</td><td>Sample 50 ms · hysteresis 20 mV · smoothing 70 %</td><td><span class="chip">live</span></td></tr>
+            <tr><td class="num">34</td><td>Analog (ADC)</td><td>Sample 50 ms · hysteresis 20 mV · smoothing 70 %</td><td><span class="chip">live</span></td></tr>
+            <tr><td class="num">25</td><td>PWM</td><td>5000 Hz · duty 350 of 1000</td><td><span class="chip">live</span></td></tr>
+            <tr><td class="num">26</td><td>Servo</td><td>90° · 500–2500 µs</td><td><span class="chip">live</span></td></tr>
+          </tbody>
+        </table></div>
+      </div>
+
+      <div class="sect"><h3>Add-ons</h3>
+        <div class="table-wrap"><table class="table">
+          <thead><tr><th>Add-on</th><th>Bus</th><th>Pins</th><th>Settings</th></tr></thead>
+          <tbody>
+            <tr><td><span class="cell-main" style="min-width:0">env0</span><span class="cell-sub">BME280</span></td><td class="mono">i2c0</td><td class="mono">SDA 21 · SCL 22</td><td>Address 0x76 · every 1000 ms · filter off</td></tr>
+            <tr><td><span class="cell-main" style="min-width:0">rfid0</span><span class="cell-sub">RC522</span></td><td class="mono">vspi</td><td class="mono">SCK 18 · MISO 19 · MOSI 23 · CS 5 · RST 27</td><td class="mut">Default settings</td></tr>
+          </tbody>
+        </table></div>
+      </div>
+
+      <div class="sect"><h3>Rules</h3>
+        <ul class="rules-list">
+          <li><span class="chip mono">r32</span><span>When GPIO 32 &gt; 1000 mV set GPIO 4 On, otherwise Off</span></li>
+          <li><span class="chip mono">r13</span><span>When GPIO 13 is High set GPIO 25 (PWM) to 80 %, otherwise 0 %</span></li>
+        </ul>
+      </div>
+
+      <div class="banner warn" role="note"><svg class="i" aria-hidden="true"><use href="#i-alert"/></svg><div class="txt"><strong>Not included</strong>
+        <ul style="margin:6px 0 0;padding-left:18px">
+          <li>Wi-Fi network and password. Devices can't read these back.</li>
+          <li>MQTT username and password.</li>
+          <li>GPIO 2, 13: invert / pull-up / start level unknown. Restoring sets the device's defaults.</li>
+        </ul>
+        <p class="mut" style="margin-top:6px;font-size:var(--fs-sm)">The Setup AP password is never read either.</p>
+      </div></div>
+    </div>
+    <div class="dlg-foot"><button type="button" class="btn" data-close>Close</button><button type="button" class="btn" data-open="wizard">Restore to…</button><button type="button" class="btn primary"><svg class="i" aria-hidden="true"><use href="#i-download"/></svg>Download JSON</button></div>
+  </div>
+</dialog>
+
+<!-- Clone / restore wizard: Review plan step -->
+<dialog class="sheet wide" id="wizard" aria-labelledby="wizard-t">
+  <form method="dialog" class="dlg">
+    <div class="dlg-head"><h2 id="wizard-t">Clone a device</h2><button type="button" class="btn icon ghost" data-close aria-label="Close"><svg class="i" aria-hidden="true"><use href="#i-x"/></svg></button></div>
+    <div class="dlg-body">
+      <ol class="steps"><li class="done">Source</li><li class="done">Targets</li><li class="done">What to copy</li><li class="on">Review plan</li><li>Apply</li></ol>
+      <p><span class="strong">Workshop node</span> <span class="mut">(fresh backup)</span> → <span class="strong">Greenhouse</span></p>
+      <div class="banner info" role="note"><svg class="i" aria-hidden="true"><use href="#i-info"/></svg><div class="txt">This is a dry run. Nothing has been changed yet. Steps are applied in this order.</div></div>
+
+      <div class="plan">
+        <div class="plan-step"><h4><span class="n">1</span>Remove rules:<span class="none">none</span></h4></div>
+        <div class="plan-step"><h4><span class="n">2</span>Remove add-ons:<span class="none">none (env0 BME280 already matches → reconfigure)</span></h4></div>
+        <div class="plan-step"><h4><span class="n">3</span>Turn off pins</h4>
+          <ul class="diff"><li class="del"><span class="mk">−</span><span>GPIO 16 (Output)</span></li></ul>
+        </div>
+        <div class="plan-step"><h4><span class="n">4</span>Set pins</h4>
+          <ul class="diff">
+            <li class="add"><span class="mk">+</span><span>GPIO 2 Output</span></li>
+            <li class="add"><span class="mk">+</span><span>GPIO 4 Output (invert off, start High)</span></li>
+            <li class="add"><span class="mk">+</span><span>GPIO 13 Input (debounce 50 ms)</span></li>
+            <li class="add"><span class="mk">+</span><span>GPIO 32 and GPIO 34 Analog (ADC) (sample 50 ms, hysteresis 20 mV, smoothing 70 %)</span></li>
+            <li class="add"><span class="mk">+</span><span>GPIO 25 PWM (5000 Hz, duty 350)</span></li>
+            <li class="add"><span class="mk">+</span><span>GPIO 26 Servo (90°, 500–2500 µs)</span></li>
+          </ul>
+        </div>
+        <div class="plan-step"><h4><span class="n">5</span>Add add-ons</h4>
+          <ul class="diff">
+            <li class="chg"><span class="mk">~</span><span>env0 BME280 (I²C i2c0, SDA 21, SCL 22) reconfigure<small>Same id and type, settings re-applied.</small></span></li>
+            <li class="add conflict"><span class="mk">+</span><span>rfid0 RC522 (SPI vspi, CS 5)
+              <small class="t-warn" style="display:flex;gap:6px;align-items:flex-start;margin-top:4px"><svg class="i sm" aria-hidden="true" style="margin-top:1px"><use href="#i-alert"/></svg><span><strong>Conflict.</strong> GPIO 27 is used by add-on env1 on Greenhouse, which isn't being removed — rfid0's RST pin can't be set. Fix: untick Add-ons or remove env1 first.</span></small></span></li>
+          </ul>
+        </div>
+        <div class="plan-step"><h4><span class="n">6</span>Add rules</h4>
+          <ul class="diff">
+            <li class="add"><span class="mk">+</span><span><span class="mono">r32</span> When GPIO 32 &gt; 1000 mV set GPIO 4 On, otherwise Off</span></li>
+            <li class="add"><span class="mk">+</span><span><span class="mono">r13</span> When GPIO 13 is High set GPIO 25 (PWM) to 80 %, otherwise 0 %</span></li>
+          </ul>
+        </div>
+        <p class="hint">Not changed: MQTT broker, device name.</p>
+      </div>
+    </div>
+    <div class="dlg-foot"><button type="button" class="btn" data-close>Back</button><button type="button" class="btn primary">Apply to 1 device</button></div>
+  </form>
+</dialog>
+
+<!-- Import -->
+<dialog class="modal" id="import-dlg" aria-labelledby="import-t">
+  <form method="dialog" class="dlg">
+    <div class="dlg-head"><h2 id="import-t">Import a backup file</h2><button type="button" class="btn icon ghost" data-close aria-label="Close"><svg class="i" aria-hidden="true"><use href="#i-x"/></svg></button></div>
+    <div class="dlg-body">
+      <label class="dropzone"><svg class="i" aria-hidden="true"><use href="#i-upload"/></svg><strong>Drop a backup .json here</strong><span>or choose a file</span><input type="file" accept="application/json,.json" aria-label="Backup file"></label>
+      <div class="hint">Files exported with Download JSON from this or another Manager.</div>
+    </div>
+    <div class="dlg-foot"><button type="button" class="btn" data-close>Cancel</button><button class="btn primary" value="import" disabled>Import</button></div>
+  </form>
+</dialog>
+
+<!-- Delete -->
+<dialog class="modal danger" id="del-dlg" aria-labelledby="del-t">
+  <form method="dialog" class="dlg">
+    <div class="dlg-head"><h2 id="del-t">Delete this backup?</h2><button type="button" class="btn icon ghost" data-close aria-label="Close"><svg class="i" aria-hidden="true"><use href="#i-x"/></svg></button></div>
+    <div class="dlg-body"><p>The saved file is removed from this PC. The device isn't touched. Download it first if you may need it again.</p></div>
+    <div class="dlg-foot"><button type="button" class="btn" data-close>Cancel</button><button class="btn danger" value="delete">Delete backup</button></div>
+  </form>
+</dialog>
+
+<script>
+(function(){
+  var root=document.documentElement,modes=['system','light','dark'],cur='system',KEY='deesp32-theme';
+  try{var s=localStorage.getItem(KEY);if(s==='light'||s==='dark')cur=s}catch(e){}
+  function apply(){
+    if(cur==='system')root.removeAttribute('data-theme');else root.setAttribute('data-theme',cur);
+    document.querySelectorAll('[data-theme-toggle]').forEach(function(b){
+      var l=b.querySelector('.lbl');if(l)l.textContent='Theme: '+cur;
+      b.title='Theme: '+cur;b.setAttribute('aria-label','Theme: '+cur+' (click to change)');
+    });
+  }
+  apply();
+  document.addEventListener('click',function(e){
+    var t=e.target.closest('[data-theme-toggle]');
+    if(t){cur=modes[(modes.indexOf(cur)+1)%3];try{localStorage.setItem(KEY,cur)}catch(x){}apply();return}
+    var o=e.target.closest('[data-open]');
+    if(o){var d=document.getElementById(o.getAttribute('data-open'));if(d&&d.showModal){var cd=o.closest('dialog');if(cd&&cd!==d)cd.close();d.showModal()}return}
+    var c=e.target.closest('[data-close]');
+    if(c){var dd=c.closest('dialog');if(dd)dd.close();return}
+    if(e.target.tagName==='DIALOG'&&e.target.open){e.target.close();return}
+    var sg=e.target.closest('.seg button');
+    if(sg){sg.parentNode.querySelectorAll('button').forEach(function(b){var on=b===sg;b.classList.toggle('on',on);b.setAttribute('aria-pressed',on)});return}
+    var fc=e.target.closest('.filter-chip');
+    if(fc){
+      var grp=fc.closest('[data-single]');
+      if(grp){grp.querySelectorAll('.filter-chip').forEach(function(b){var on=b===fc;b.classList.toggle('on',on);b.setAttribute('aria-pressed',on)})}
+      else{var on=fc.classList.toggle('on');fc.setAttribute('aria-pressed',on)}
+      return;
+    }
+    var sw=e.target.closest('.switch');
+    if(sw){sw.setAttribute('aria-checked',sw.getAttribute('aria-checked')!=='true');return}
+    var dm=e.target.closest('[data-dismiss]');
+    if(dm){var tt=dm.closest('.toast');if(tt)tt.remove()}
+  });
+})();
+(function(){
+  /* picker count on the "Back up devices" sheet */
+  var box=document.getElementById('bk-list'),go=document.getElementById('bk-go');
+  function upd(){
+    var n=box.querySelectorAll('input[type=checkbox]:checked:not(:disabled)').length;
+    go.textContent=n===1?'Back up 1 device':'Back up '+n+' devices';
+    go.disabled=n===0;
+  }
+  box.addEventListener('change',upd);upd();
+  /* open a dialog from the URL hash, e.g. backups.html#backup-detail or #wizard */
+  var det=location.hash&&document.getElementById(location.hash.slice(1));
+  if(det&&det.showModal&&!det.open)det.showModal();
+})();
+</script>
+</body>
+</html>

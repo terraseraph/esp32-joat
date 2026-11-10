@@ -1,0 +1,62 @@
+/* Firmware screen and the update sheet (batch 3). Token-based, from proto/firmware.html. */
+.fw-stack { display: grid; gap: var(--s4); }
+.fw-hint-line { margin-top: var(--s3); font-size: var(--fs-sm); color: var(--mut); }
+
+.opts { display: grid; gap: var(--s2); margin: 0; padding: 0; border: 0; min-width: 0; }
+.opt { display: flex; align-items: flex-start; gap: var(--s3); padding: var(--s3) var(--s4); background: var(--card); border: 1px solid var(--line); border-radius: var(--r-sm); cursor: pointer; }
+.opt:hover { border-color: var(--mut); }
+.opt:has(input:checked) { border-color: var(--acc); background: var(--acc-bg); }
+.opt:has(input:focus-visible) { outline: 2px solid var(--acc); outline-offset: 2px; }
+.opt > input { width: 18px; height: 18px; margin: 3px 0 0; flex: none; accent-color: var(--acc); }
+.opt-main { flex: 1; min-width: 0; display: grid; gap: 4px; }
+.opt-title { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2); font-weight: 650; }
+.opt-meta { display: flex; flex-wrap: wrap; gap: 2px 14px; font-size: var(--fs-sm); color: var(--mut); }
+.opt-src { font-family: var(--mono); font-size: var(--fs-xs); color: var(--mut); overflow-wrap: anywhere; }
+.opt-side { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2); justify-content: flex-end; }
+
+.fw-latest { display: grid; gap: var(--s3); margin-bottom: var(--s4); padding: var(--s3) var(--s4); background: var(--in); border: 1px solid var(--line); border-radius: var(--r-sm); }
+.fw-latest-row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2) var(--s4); }
+.fw-latest-row .spacer { flex: 1; }
+
+.dropzone.sm { padding: var(--s4) var(--s5); }
+.dz-err .dropzone { border-color: var(--bad); background: var(--bad-bg); color: var(--fg); }
+.dz-busy { display: grid; gap: var(--s2); margin-top: var(--s3); }
+
+.fw-summary { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2) var(--s4); margin: 0; }
+.fw-linkbtn { background: none; border: 0; padding: 0; min-height: 32px; color: var(--acc); font-weight: 600; font-size: var(--fs-sm); text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
+.fw-head { padding: var(--s5) var(--s5) var(--s3); }
+.fw-head .card-head { margin-bottom: var(--s2); }
+.card.flush .toolbar { padding: var(--s3) var(--s4); border-bottom: 1px solid var(--line); }
+.table.fw-table { min-width: 0; width: 100%; }
+.fw-table .elig { font-size: var(--fs-sm); }
+.fw-table tr.cant td { color: var(--mut); }
+.fw-table .ver { display: flex; align-items: center; gap: var(--s2); flex-wrap: wrap; }
+
+.fw-options { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: var(--s4) var(--s5); align-items: start; }
+.fw-go { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s3); margin-top: var(--s5); padding-top: var(--s4); border-top: 1px solid var(--line); }
+
+.fw-job-top { display: grid; gap: var(--s2); margin-bottom: var(--s4); }
+.fw-job-top .row { justify-content: space-between; flex-wrap: wrap; }
+
+.fw-hist { width: 100%; }
+.fw-hist > summary { cursor: pointer; min-height: 44px; display: flex; align-items: center; gap: var(--s2); font-weight: 650; list-style: none; }
+.fw-hist > summary::-webkit-details-marker { display: none; }
+.fw-hist > summary::before { content: "\25B8"; color: var(--mut); transition: transform .15s; }
+.fw-hist[open] > summary::before { transform: rotate(90deg); }
+
+.fw-kvl { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; font-size: 14px; }
+.fw-kvl li { display: flex; justify-content: space-between; gap: var(--s3); }
+
+.fw-sheet { display: grid; gap: var(--s4); }
+.fw-fromto { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2); padding: var(--s3) var(--s4); background: var(--in); border: 1px solid var(--line); border-radius: var(--r-sm); }
+.fw-fromto .arrow { color: var(--mut); }
+
+/* Narrow windows: the Status chip repeats what Eligibility says, so drop it to keep the table inside the card. */
+@media (max-width: 899.98px) {
+  .fw-table .fw-col-status { display: none; }
+}
+
+@media (max-width: 767.98px) {
+  .opt { flex-wrap: wrap; }
+  .opt-side { width: 100%; justify-content: flex-start; }
+}

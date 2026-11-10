@@ -1,0 +1,24 @@
+
+W systemie jest 1 interfejs:
+
+    Nazwa                  : Wi-Fi
+    Opis                   : Example(R) Wi-Fi 6 Wireless Network Adapter
+    GUID                   : 00000000-0000-0000-0000-00000000000a
+    Adres fizyczny         : aa:bb:cc:00:11:66
+    Typ interfejsu         : Podstawowy
+    Stan                   : poà•czono
+    SSID                   : ù¢d´-Wi-Fi
+    BSSID punktu dost©pu   : 02:00:00:00:00:0a
+    Pasmo                  : 2,4 GHz
+    Kanaà                  : 6
+    Typ sieci              : Infrastruktura
+    Typ radia              : 802.11n
+    Uwierzytelnianie       : WPA2-Personal
+    Szyfr                  : CCMP
+    Tryb poà•czenia        : Profil
+    SzybkoòÜ odbierania    : 144,4
+    SzybkoòÜ transmisji    : 144,4
+    Sygnaà                 : 83%
+    Profil                 : ù¢d´-Wi-Fi
+
+    Stan sieci hostowanej  : Niedost©pna

@@ -1,0 +1,501 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>Firmware - de-esp32 Manager</title>
+<script>try{var t=localStorage.getItem('deesp32-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t)}catch(e){}</script>
+<link rel="stylesheet" href="tokens.css">
+<style>
+/* page-specific, token-based */
+.opts{display:grid;gap:var(--s2);margin:0;padding:0;border:0}
+.opt{display:flex;align-items:flex-start;gap:var(--s3);padding:var(--s3) var(--s4);background:var(--card);border:1px solid var(--line);border-radius:var(--r-sm);cursor:pointer}
+.opt:hover{border-color:var(--mut)}
+.opt:has(input:checked){border-color:var(--acc);background:var(--acc-bg)}
+.opt:has(input:focus-visible){outline:2px solid var(--acc);outline-offset:2px}
+.opt>input{width:18px;height:18px;margin:3px 0 0;flex:none;accent-color:var(--acc)}
+.opt-main{flex:1;min-width:0;display:grid;gap:4px}
+.opt-title{display:flex;flex-wrap:wrap;align-items:center;gap:var(--s2);font-weight:650}
+.opt-meta{display:flex;flex-wrap:wrap;gap:2px 14px;font-size:var(--fs-sm);color:var(--mut)}
+.opt-src{font-family:var(--mono);font-size:var(--fs-xs);color:var(--mut);overflow-wrap:anywhere}
+.opt-side{display:flex;flex-wrap:wrap;align-items:center;gap:var(--s2);justify-content:flex-end}
+.dropzone.sm{padding:var(--s4) var(--s5)}
+.dz-err .dropzone{border-color:var(--bad);background:var(--bad-bg);color:var(--fg)}
+.summary-line{display:flex;flex-wrap:wrap;align-items:center;gap:var(--s2) var(--s4);margin-bottom:var(--s3)}
+.link-btn{background:none;border:0;padding:0;min-height:32px;color:var(--acc);font-weight:600;font-size:var(--fs-sm);text-decoration:underline;text-underline-offset:2px}
+.card.flush .toolbar{padding:var(--s3) var(--s4);border-bottom:1px solid var(--line)}
+.card.flush .table-wrap{border:0;border-radius:0;box-shadow:none}
+.table .elig{font-size:var(--fs-sm);white-space:nowrap}
+.table tr.cant td{color:var(--mut)}
+.table .ver{display:flex;align-items:center;gap:var(--s2)}
+.opt-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:var(--s4) var(--s5);align-items:start}
+.job-top{display:grid;gap:var(--s2);margin-bottom:var(--s4)}
+.segbar{display:flex;height:10px;overflow:hidden;background:var(--in);border:1px solid var(--line);border-radius:var(--r-pill)}
+.segbar i{display:block;height:100%}
+.segbar .s-ok{background:var(--ok)}.segbar .s-bad{background:var(--bad)}.segbar .s-act{background:var(--acc)}
+.legend{display:flex;flex-wrap:wrap;gap:4px var(--s4);font-size:var(--fs-xs);color:var(--mut)}
+.legend span::before{content:"";display:inline-block;width:8px;height:8px;margin-right:6px;border-radius:50%;background:var(--line)}
+.legend .l-ok::before{background:var(--ok)}.legend .l-bad::before{background:var(--bad)}.legend .l-act::before{background:var(--acc)}
+.jobs{margin:0;padding:0;list-style:none;border:1px solid var(--line);border-radius:var(--r-sm);overflow:hidden}
+.job{display:grid;grid-template-columns:minmax(150px,1.1fr) 130px minmax(180px,2fr) auto;gap:var(--s2) var(--s4);align-items:center;padding:var(--s3) var(--s4);background:var(--card)}
+.job+.job{border-top:1px solid var(--line)}
+.job.bad{background:var(--bad-bg)}
+.job .who strong{display:block}
+.job .detail{display:grid;gap:4px;min-width:0;font-size:var(--fs-sm);color:var(--mut)}
+.job .detail .err{color:var(--bad);font-weight:600}
+.job .acts{display:flex;gap:var(--s2);justify-content:flex-end}
+.job .progress{height:8px}
+@media(max-width:767.98px){.job{grid-template-columns:minmax(0,1fr) auto}.job .detail{grid-column:1/-1}.job .acts{grid-column:1/-1;justify-content:flex-start}}
+details.hist>summary{cursor:pointer;min-height:44px;display:flex;align-items:center;gap:var(--s2);font-weight:650;list-style:none}
+details.hist>summary::-webkit-details-marker{display:none}
+details.hist>summary::before{content:"\25B8";color:var(--mut);transition:transform .15s}
+details.hist[open]>summary::before{transform:rotate(90deg)}
+.kvl{display:grid;gap:6px;margin:0;padding:0;list-style:none;font-size:14px}
+.kvl li{display:flex;justify-content:space-between;gap:var(--s3)}
+.states h3.eyebrow{margin-bottom:var(--s3)}
+.states>.grid>.card{display:flex;flex-direction:column;gap:var(--s3)}
+.states .full{grid-column:1/-1}
+.outcomes{display:grid;gap:var(--s2)}
+.outcomes .job{border:1px solid var(--line);border-radius:var(--r-sm);grid-template-columns:minmax(130px,1fr) 150px minmax(180px,2.4fr)}
+.outcomes .job.bad{border-color:var(--bad-bd)}
+.outcomes .job.warn{background:var(--warn-bg);border-color:var(--warn-bd)}
+.outcomes .job+.job{border-top-width:1px}
+@media(max-width:767.98px){.outcomes .job{grid-template-columns:minmax(0,1fr) auto}}
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false"><defs>
+<symbol id="i-chip" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2"/><path d="M9 2v4M15 2v4M9 18v4M15 18v4M2 9h4M2 15h4M18 9h4M18 15h4"/></symbol>
+<symbol id="i-fleet" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></symbol>
+<symbol id="i-discover" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4"/><path d="M12 12l5-5"/></symbol>
+<symbol id="i-firmware" viewBox="0 0 24 24"><path d="M12 3v12M7 10l5 5 5-5"/><path d="M4 20h16"/></symbol>
+<symbol id="i-backups" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="5" rx="1.5"/><path d="M5 9v9a2 2 0 002 2h10a2 2 0 002-2V9M10 13h4"/></symbol>
+<symbol id="i-settings" viewBox="0 0 24 24"><path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="17" r="2"/></symbol>
+<symbol id="i-theme" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 010 18z" fill="currentColor"/></symbol>
+<symbol id="i-refresh" viewBox="0 0 24 24"><path d="M20 11a8 8 0 00-14-4L4 9"/><path d="M4 4v5h5"/><path d="M4 13a8 8 0 0014 4l2-2"/><path d="M20 20v-5h-5"/></symbol>
+<symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12l5 5 9-10"/></symbol>
+<symbol id="i-alert" viewBox="0 0 24 24"><path d="M12 3l10 18H2z"/><path d="M12 10v5M12 18v.01"/></symbol>
+<symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.01"/></symbol>
+<symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></symbol>
+<symbol id="i-trash" viewBox="0 0 24 24"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></symbol>
+<symbol id="i-upload" viewBox="0 0 24 24"><path d="M12 16V4M7 9l5-5 5 5"/><path d="M4 20h16"/></symbol>
+<symbol id="i-wifi" viewBox="0 0 24 24"><path d="M2 9a15 15 0 0120 0M5 12.5a10 10 0 0114 0M8.5 16a5 5 0 017 0"/><path d="M12 19.5v.01"/></symbol>
+<symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></symbol>
+<symbol id="i-pause" viewBox="0 0 24 24"><path d="M8 5v14M16 5v14"/></symbol>
+<symbol id="i-play" viewBox="0 0 24 24"><path d="M7 4l13 8-13 8z"/></symbol>
+</defs></svg>
+<div class="app">
+<aside class="nav">
+  <a class="brand" href="fleet.html" aria-label="de-esp32 Manager"><span class="logo"><svg class="i" aria-hidden="true"><use href="#i-chip"/></svg></span><span class="lbl">de-esp32 Manager</span></a>
+  <nav class="nav-list" aria-label="Main">
+    <a class="nav-item" href="fleet.html" title="Fleet"><svg class="i" aria-hidden="true"><use href="#i-fleet"/></svg><span class="lbl">Fleet</span><span class="badge">8</span></a>
+    <a class="nav-item" href="discover.html" title="Discover"><svg class="i" aria-hidden="true"><use href="#i-discover"/></svg><span class="lbl">Discover</span></a>
+    <a class="nav-item on" href="firmware.html" aria-current="page" title="Firmware"><svg class="i" aria-hidden="true"><use href="#i-firmware"/></svg><span class="lbl">Firmware</span></a>
+    <a class="nav-item" href="backups.html" title="Backups"><svg class="i" aria-hidden="true"><use href="#i-backups"/></svg><span class="lbl">Backups</span></a>
+    <a class="nav-item" href="settings.html" title="Settings"><svg class="i" aria-hidden="true"><use href="#i-settings"/></svg><span class="lbl">Settings</span></a>
+  </nav>
+  <div class="nav-foot">
+    <div class="srv" title="Server connected · localhost:5180"><span class="dot ok"></span><span class="lbl">Server connected · localhost:5180</span></div>
+    <button class="btn ghost" type="button" data-theme-toggle title="Theme: system" aria-label="Theme: system"><svg class="i" aria-hidden="true"><use href="#i-theme"/></svg><span class="lbl">Theme: system</span></button>
+  </div>
+</aside>
+<main class="page">
+<div class="page-head">
+  <div>
+    <h1>Firmware</h1>
+    <p>Choose a target image and update devices over Wi-Fi</p>
+  </div>
+  <div class="actions">
+    <label class="btn" style="position:relative"><svg class="i" aria-hidden="true"><use href="#i-upload"/></svg>Upload .bin…<input class="sr" type="file" accept=".bin" aria-label="Upload a firmware .bin file"></label>
+  </div>
+</div>
+
+<!-- 1. Target firmware -->
+<section class="card" aria-labelledby="target-h">
+  <div class="card-head"><h2 id="target-h">Target firmware</h2><span class="mut" style="font-size:var(--fs-sm)">Devices are compared by build (<code>app_version</code>), not by version number.</span></div>
+  <fieldset class="opts" style="min-width:0">
+    <legend class="sr">Target firmware image</legend>
+    <label class="opt">
+      <input type="radio" name="fw" value="latest" checked>
+      <span class="opt-main">
+        <span class="opt-title">Latest CI build <span class="chip mono">9dcba89</span><span class="chip ok"><svg class="i" aria-hidden="true"><use href="#i-check"/></svg>de_esp32_runtime</span></span>
+        <span class="opt-meta"><span>Built Nov 10 2026 09:12</span><span>ESP-IDF v5.4.2</span><span>1.41 MB</span></span>
+        <span class="opt-src">terraseraph.github.io/esp32-joat/firmware/de_esp32_runtime.bin</span>
+      </span>
+      <span class="opt-side"><span class="mut" style="font-size:var(--fs-sm)">Checked 12 min ago</span><button class="btn sm" type="button"><svg class="i sm" aria-hidden="true"><use href="#i-refresh"/></svg>Check again</button></span>
+    </label>
+    <label class="opt">
+      <input type="radio" name="fw" value="upload">
+      <span class="opt-main">
+        <span class="opt-title">de_esp32_runtime.bin (uploaded) <span class="chip mono">0de951c</span></span>
+        <span class="opt-meta"><span>Built Nov 8 2026</span><span>1.40 MB</span><span>Uploaded today 10:41</span></span>
+      </span>
+      <span class="opt-side"><button class="btn sm ghost" type="button" aria-label="Remove uploaded image de_esp32_runtime.bin"><svg class="i sm" aria-hidden="true"><use href="#i-trash"/></svg>Remove</button></span>
+    </label>
+  </fieldset>
+  <label class="dropzone sm" style="margin-top:var(--s3)">
+    <input type="file" accept=".bin" aria-label="Choose a firmware .bin file">
+    <svg class="i" aria-hidden="true"><use href="#i-upload"/></svg>
+    <strong>Drop a .bin here or choose a file</strong>
+    <span class="hint">Checked before use: ESP32 app image, project de_esp32_runtime, fits the OTA slot (1.75 MB).</span>
+  </label>
+</section>
+
+<!-- 2. Devices -->
+<section class="card flush" aria-labelledby="dev-h">
+  <div style="padding:var(--s5) var(--s5) var(--s3)">
+    <div class="card-head" style="margin-bottom:var(--s2)"><h2 id="dev-h">Devices</h2><button class="link-btn" type="button" id="sel-differ">Select all that differ</button></div>
+    <p class="summary-line mut" style="margin:0">
+      <span><strong class="t-ok">5</strong> can be updated</span><span>·</span><span>1 differs from 9dcba89</span><span>·</span><span>4 already up to date (can be reinstalled)</span><span>·</span><span>3 can't be updated right now</span>
+    </p>
+  </div>
+  <div class="toolbar">
+    <div class="chips" data-single role="group" aria-label="Filter devices">
+      <button type="button" class="filter-chip on" data-flt="all" aria-pressed="true">All <span class="count">8</span></button>
+      <button type="button" class="filter-chip" data-flt="differs" aria-pressed="false">Differs <span class="count">2</span></button>
+      <button type="button" class="filter-chip" data-flt="same" aria-pressed="false">Up to date <span class="count">6</span></button>
+      <button type="button" class="filter-chip" data-flt="cant" aria-pressed="false">Can't update <span class="count">3</span></button>
+    </div>
+  </div>
+  <div class="table-wrap">
+    <table class="table" id="dev-table">
+      <thead><tr>
+        <th class="sel"><label class="check"><input type="checkbox" id="sel-all" aria-label="Select all updatable devices"></label></th>
+        <th>Device</th><th>Current</th><th>Status</th><th>Eligibility</th>
+      </tr></thead>
+      <tbody>
+        <tr data-name="Garage door" data-fw="0de951c" data-cls="differs">
+          <td class="sel"><label class="check"><input type="checkbox" data-sel checked aria-label="Select Garage door"></label></td>
+          <td><a class="cell-main" href="device-live.html">Garage door</a><span class="cell-sub">esp32-0a9e11 · 192.168.1.63</span></td>
+          <td><span class="ver"><span class="chip warn mono">0de951c</span><span class="t-warn strong" style="font-size:var(--fs-sm)">Differs</span></span></td>
+          <td><span class="chip ok">Online</span></td>
+          <td class="elig"><span class="t-ok strong">Ready to update</span></td>
+        </tr>
+        <tr class="cant is-offline" data-name="Kitchen relay" data-fw="5e3c76f" data-cls="differs cant">
+          <td class="sel"><label class="check"><input type="checkbox" data-sel disabled aria-label="Kitchen relay can't be updated: offline"></label></td>
+          <td><a class="cell-main" href="device-live.html">Kitchen relay</a><span class="cell-sub">esp32-c0ffee · 192.168.1.88</span></td>
+          <td><span class="ver"><span class="chip warn mono">5e3c76f</span><span class="t-warn strong" style="font-size:var(--fs-sm)">Differs</span></span></td>
+          <td><span class="chip off">Offline</span></td>
+          <td class="elig">Offline — can't update</td>
+        </tr>
+        <tr data-name="Workshop node" data-fw="9dcba89" data-cls="same">
+          <td class="sel"><label class="check"><input type="checkbox" data-sel aria-label="Select Workshop node"></label></td>
+          <td><a class="cell-main" href="device-live.html">Workshop node</a><span class="cell-sub">esp32-b3c4d5 · 192.168.1.42</span></td>
+          <td><span class="ver"><span class="chip mono">9dcba89</span><span class="mut" style="font-size:var(--fs-sm)">Up to date</span></span></td>
+          <td><span class="chip ok">Online</span></td>
+          <td class="elig mut">Up to date · select to reinstall</td>
+        </tr>
+        <tr data-name="Greenhouse" data-fw="9dcba89" data-cls="same">
+          <td class="sel"><label class="check"><input type="checkbox" data-sel aria-label="Select Greenhouse"></label></td>
+          <td><a class="cell-main" href="device-live.html">Greenhouse</a><span class="cell-sub">esp32-e81f20 · 192.168.1.57</span></td>
+          <td><span class="ver"><span class="chip mono">9dcba89</span><span class="mut" style="font-size:var(--fs-sm)">Up to date</span></span></td>
+          <td><span class="chip ok">Online</span></td>
+          <td class="elig mut">Up to date · select to reinstall</td>
+        </tr>
+        <tr data-name="Pump controller" data-fw="9dcba89" data-cls="same">
+          <td class="sel"><label class="check"><input type="checkbox" data-sel aria-label="Select Pump controller"></label></td>
+          <td><a class="cell-main" href="device-live.html">Pump controller</a><span class="cell-sub">esp32-11ab09 · 192.168.1.90</span></td>
+          <td><span class="ver"><span class="chip mono">9dcba89</span><span class="mut" style="font-size:var(--fs-sm)">Up to date</span></span></td>
+          <td><span class="chip ok">Online</span></td>
+          <td class="elig mut">Up to date · select to reinstall</td>
+        </tr>
+        <tr data-name="Front gate RFID" data-fw="9dcba89" data-cls="same">
+          <td class="sel"><label class="check"><input type="checkbox" data-sel aria-label="Select Front gate RFID"></label></td>
+          <td><a class="cell-main" href="device-live.html">Front gate RFID</a><span class="cell-sub">esp32-44d702 · 192.168.1.71</span></td>
+          <td><span class="ver"><span class="chip mono">9dcba89</span><span class="mut" style="font-size:var(--fs-sm)">Up to date</span></span></td>
+          <td><span class="chip ok">Online</span> <span class="chip bad">Safe mode</span></td>
+          <td class="elig mut">Up to date · select to reinstall</td>
+        </tr>
+        <tr class="cant is-offline" data-name="Desk lamp" data-fw="9dcba89" data-cls="same cant">
+          <td class="sel"><label class="check"><input type="checkbox" data-sel disabled aria-label="Desk lamp can't be updated: unreachable"></label></td>
+          <td><a class="cell-main" href="device-live.html">Desk lamp</a><span class="cell-sub">esp32-22c4e7 · 192.168.1.112</span></td>
+          <td><span class="ver"><span class="chip mono">9dcba89</span><span class="mut" style="font-size:var(--fs-sm)">Up to date</span></span></td>
+          <td><span class="chip warn">Unreachable</span></td>
+          <td class="elig">Unreachable — can't update</td>
+        </tr>
+        <tr class="cant" data-name="esp32-9a3b6c" data-fw="9dcba89" data-cls="same cant">
+          <td class="sel"><label class="check"><input type="checkbox" data-sel disabled aria-label="esp32-9a3b6c can't be updated: still verifying its last update"></label></td>
+          <td><a class="cell-main" href="device-live.html">esp32-9a3b6c</a><span class="cell-sub">esp32-9a3b6c · 192.168.1.104</span></td>
+          <td><span class="ver"><span class="chip mono">9dcba89</span><span class="mut" style="font-size:var(--fs-sm)">Up to date</span></span></td>
+          <td><span class="chip ok">Online</span> <span class="chip warn">Verifying</span></td>
+          <td class="elig"><span class="t-warn">Still verifying its last update</span></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- 3. Options -->
+<section class="card" aria-labelledby="opt-h">
+  <div class="card-head"><h2 id="opt-h">Options</h2></div>
+  <div class="opt-row">
+    <div class="field">
+      <span class="label" id="method-l">Method</span>
+      <div class="seg" role="group" aria-labelledby="method-l" id="method">
+        <button type="button" class="on" aria-pressed="true" data-method="Push from this PC" data-hint="Works without internet on the devices. ~1.4 MB per device over your network.">Push from this PC</button>
+        <button type="button" aria-pressed="false" data-method="Device downloads it" data-hint="Each device fetches the https URL itself. Needs internet access on the device network.">Device downloads it</button>
+      </div>
+      <div class="hint" id="method-hint">Works without internet on the devices. ~1.4 MB per device over your network.</div>
+    </div>
+    <div class="field">
+      <label for="par">Parallel updates</label>
+      <select id="par"><option>1</option><option selected>2</option><option>3</option><option>4</option></select>
+      <div class="hint">Devices updated at the same time.</div>
+    </div>
+    <div class="field">
+      <span class="label">When something goes wrong</span>
+      <label class="check"><input type="checkbox" id="pause-fail" checked>Pause after 1 failure</label>
+    </div>
+  </div>
+  <hr class="divider" style="margin:var(--s5) 0 var(--s4)">
+  <div class="row">
+    <button class="btn primary" type="button" id="go" data-open="confirm-update"><svg class="i" aria-hidden="true"><use href="#i-firmware"/></svg><span id="go-label">Update 1 device</span></button>
+    <span class="mut" style="font-size:var(--fs-sm)" id="go-note">Devices restart during the update and are offline for ~30 s each.</span>
+  </div>
+</section>
+
+<!-- 4. Running job -->
+<section class="card" aria-labelledby="job-h">
+  <div class="card-head">
+    <div class="row" style="gap:var(--s2)"><h2 id="job-h">Update in progress</h2><span class="chip warn">Paused</span></div>
+    <div class="actions">
+      <button class="btn sm primary" type="button"><svg class="i sm" aria-hidden="true"><use href="#i-play"/></svg>Resume</button>
+      <button class="btn sm" type="button"><svg class="i sm" aria-hidden="true"><use href="#i-refresh"/></svg>Retry failed</button>
+      <button class="btn sm danger" type="button">Cancel</button>
+    </div>
+  </div>
+  <div class="banner warn" role="status" style="margin-bottom:var(--s4)"><svg class="i" aria-hidden="true"><use href="#i-pause"/></svg><div class="txt"><strong>Paused after 1 failure.</strong> Resume to continue with the remaining devices.</div></div>
+  <div class="job-top">
+    <div class="row" style="justify-content:space-between"><strong>2 of 5 finished · 1 failed</strong><span class="mut" style="font-size:var(--fs-sm)">Target 9dcba89 · Push from this PC · 2 at a time · started 10:52</span></div>
+    <div class="segbar" role="progressbar" aria-label="Job progress" aria-valuemin="0" aria-valuemax="5" aria-valuenow="2"><i class="s-ok" style="width:20%"></i><i class="s-bad" style="width:20%"></i><i class="s-act" style="width:40%;opacity:.55"></i></div>
+    <div class="legend"><span class="l-ok">1 done</span><span class="l-bad">1 failed</span><span class="l-act">2 in progress</span><span>1 queued</span></div>
+  </div>
+  <ul class="jobs" aria-label="Per-device progress">
+    <li class="job">
+      <div class="who"><strong>Garage door</strong><span class="cell-sub">esp32-0a9e11</span></div>
+      <div><span class="chip ok"><svg class="i" aria-hidden="true"><use href="#i-check"/></svg>Done</span></div>
+      <div class="detail"><span class="mono">9dcba89 · image valid</span></div>
+      <div class="acts"></div>
+    </li>
+    <li class="job">
+      <div class="who"><strong>Workshop node</strong><span class="cell-sub">esp32-b3c4d5 · reinstall</span></div>
+      <div><span class="chip acc">Uploading <span class="num">64 %</span></span></div>
+      <div class="detail"><div class="progress" role="progressbar" aria-label="Workshop node upload" aria-valuemin="0" aria-valuemax="100" aria-valuenow="64"><i style="width:64%"></i></div><span class="num">0.90 of 1.41 MB</span></div>
+      <div class="acts"></div>
+    </li>
+    <li class="job">
+      <div class="who"><strong>Greenhouse</strong><span class="cell-sub">esp32-e81f20 · reinstall</span></div>
+      <div><span class="chip acc">Restarting</span></div>
+      <div class="detail"><div class="progress ind" role="progressbar" aria-label="Greenhouse restarting"><i></i></div><span>Waiting for it to come back · up to 2 min</span></div>
+      <div class="acts"></div>
+    </li>
+    <li class="job bad">
+      <div class="who"><strong>Pump controller</strong><span class="cell-sub">esp32-11ab09 · reinstall</span></div>
+      <div><span class="chip bad">Failed</span></div>
+      <div class="detail"><span class="err">Failed at Uploading: upload interrupted</span><span>Still running 9dcba89 — nothing changed on the device.</span></div>
+      <div class="acts"><button class="btn sm" type="button">Retry</button></div>
+    </li>
+    <li class="job">
+      <div class="who"><strong>Front gate RFID</strong><span class="cell-sub">esp32-44d702 · reinstall</span></div>
+      <div><span class="chip off">Queued</span></div>
+      <div class="detail"><span>Waiting — job is paused</span></div>
+      <div class="acts"></div>
+    </li>
+  </ul>
+</section>
+
+<!-- 5. History -->
+<section class="card" aria-label="Update history">
+  <details class="hist">
+    <summary>History <span class="badge">4</span></summary>
+    <div class="table-wrap" style="margin-top:var(--s3)">
+      <table class="table" style="min-width:640px">
+        <thead><tr><th>When</th><th>Target</th><th class="num">Devices</th><th>Result</th></tr></thead>
+        <tbody>
+          <tr><td>Today 10:52</td><td><span class="chip mono">9dcba89</span></td><td class="num">5</td><td><span class="chip warn">Paused after 1 failure</span></td></tr>
+          <tr><td>Nov 8 2026 18:20</td><td><span class="chip mono">0de951c</span></td><td class="num">5</td><td><span class="chip ok">5 updated</span></td></tr>
+          <tr><td>Nov 6 2026 21:04</td><td><span class="chip mono">5e3c76f</span></td><td class="num">4</td><td><span class="chip warn">3 updated · 1 rolled back</span></td></tr>
+          <tr><td>Nov 2 2026 09:31</td><td><span class="chip mono">5e3c76f</span></td><td class="num">3</td><td><span class="chip off">Cancelled</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="hint" style="margin-top:var(--s2)">The last 20 jobs are kept.</p>
+  </details>
+</section>
+
+<hr class="divider">
+
+<section class="states" aria-labelledby="states-h">
+  <h2 id="states-h">States (prototype only)</h2>
+  <p class="mut" style="margin-top:4px;margin-bottom:var(--s4)">Compact mockups of the other states this screen must handle. Not part of the real page.</p>
+  <div class="grid" style="--min:420px">
+
+    <div class="card">
+      <h3 class="eyebrow">Latest CI build not fetched (no internet)</h3>
+      <div class="banner warn" role="alert"><svg class="i" aria-hidden="true"><use href="#i-wifi"/></svg><div class="txt"><strong>Couldn't reach terraseraph.github.io</strong> — check this PC's internet connection. Uploaded images are still usable.</div><div class="act"><button class="btn sm" type="button"><svg class="i sm" aria-hidden="true"><use href="#i-refresh"/></svg>Retry</button></div></div>
+      <div class="opt" style="opacity:.7;cursor:default"><input type="radio" disabled aria-label="Latest CI build (not available)"><span class="opt-main"><span class="opt-title">Latest CI build <span class="chip off">Not fetched</span></span><span class="opt-src">terraseraph.github.io/esp32-joat/firmware/de_esp32_runtime.bin</span></span></div>
+    </div>
+
+    <div class="card">
+      <h3 class="eyebrow">Nothing to update</h3>
+      <div class="empty">
+        <span class="ico"><svg class="i" aria-hidden="true"><use href="#i-check"/></svg></span>
+        <h3>All online devices already run 9dcba89</h3>
+        <p>Nothing differs from the target firmware. You can still select devices above to reinstall it.</p>
+      </div>
+    </div>
+
+    <div class="card full">
+      <h3 class="eyebrow">Rejected upload — verbatim messages</h3>
+      <div class="grid" style="--min:300px">
+        <div class="field err dz-err">
+          <label class="dropzone sm" aria-describedby="rj1"><input type="file" accept=".bin" aria-label="Choose a firmware .bin file" aria-invalid="true"><svg class="i" aria-hidden="true"><use href="#i-upload"/></svg><strong>notes.txt</strong></label>
+          <div class="msg" id="rj1"><svg class="i sm" aria-hidden="true"><use href="#i-alert"/></svg>Not an ESP32 app image (bad magic)</div>
+        </div>
+        <div class="field err dz-err">
+          <label class="dropzone sm" aria-describedby="rj2"><input type="file" accept=".bin" aria-label="Choose a firmware .bin file" aria-invalid="true"><svg class="i" aria-hidden="true"><use href="#i-upload"/></svg><strong>blink.bin</strong></label>
+          <div class="msg" id="rj2"><svg class="i sm" aria-hidden="true"><use href="#i-alert"/></svg>Project is 'blink', not de_esp32_runtime</div>
+        </div>
+        <div class="field err dz-err">
+          <label class="dropzone sm" aria-describedby="rj3"><input type="file" accept=".bin" aria-label="Choose a firmware .bin file" aria-invalid="true"><svg class="i" aria-hidden="true"><use href="#i-upload"/></svg><strong>de_esp32_runtime_big.bin</strong></label>
+          <div class="msg" id="rj3"><svg class="i sm" aria-hidden="true"><use href="#i-alert"/></svg>Image is 1.92 MB; the OTA slot is 1.75 MB</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card full">
+      <h3 class="eyebrow">Per-device outcomes</h3>
+      <div class="outcomes">
+        <div class="job"><div class="who"><strong>Workshop node</strong><span class="cell-sub">esp32-b3c4d5</span></div><div><span class="chip off">Skipped</span></div><div class="detail"><span>Already up to date</span></div></div>
+        <div class="job bad"><div class="who"><strong>Greenhouse</strong><span class="cell-sub">esp32-e81f20</span></div><div><span class="chip bad">Failed</span></div><div class="detail"><span class="err">Failed at Verifying: Didn't come back within 2 min</span></div></div>
+        <div class="job warn"><div class="who"><strong>Garage door</strong><span class="cell-sub">esp32-0a9e11</span></div><div><span class="chip warn">Rolled back</span></div><div class="detail"><span>Came back on 0de951c — new image failed its health check</span></div></div>
+        <div class="job bad"><div class="who"><strong>Pump controller</strong><span class="cell-sub">esp32-11ab09</span></div><div><span class="chip bad">Failed</span></div><div class="detail"><span class="err">Failed at Checking: ota busy</span></div></div>
+        <div class="job bad"><div class="who"><strong>esp32-9a3b6c</strong><span class="cell-sub">esp32-9a3b6c</span></div><div><span class="chip bad">Failed</span></div><div class="detail"><span class="err">Failed: running image still pending verify</span></div></div>
+        <div class="job"><div class="who"><strong>Front gate RFID</strong><span class="cell-sub">esp32-44d702</span></div><div><span class="chip off">Cancelled</span></div><div class="detail"><span>Not started</span></div></div>
+      </div>
+      <p class="hint">Stage vocabulary: Queued, Checking, Uploading, Downloading (device pull), Restarting, Verifying, Done, Skipped, Failed, Rolled back, Cancelled.</p>
+      <div class="chips"><span class="chip off">Queued</span><span class="chip acc">Checking</span><span class="chip acc">Uploading 64 %</span><span class="chip acc">Downloading</span><span class="chip acc">Restarting</span><span class="chip acc">Verifying</span><span class="chip ok"><svg class="i" aria-hidden="true"><use href="#i-check"/></svg>Done</span><span class="chip off">Skipped</span><span class="chip bad">Failed</span><span class="chip warn">Rolled back</span><span class="chip off">Cancelled</span></div>
+    </div>
+
+    <div class="card">
+      <h3 class="eyebrow">Job finished</h3>
+      <div class="banner bad" role="status"><svg class="i" aria-hidden="true"><use href="#i-alert"/></svg><div class="txt"><strong>4 updated · 1 failed</strong><br><span class="mut">Target 9dcba89 · finished 10:58</span></div></div>
+      <div class="segbar" aria-label="4 updated, 1 failed"><i class="s-ok" style="width:80%"></i><i class="s-bad" style="width:20%"></i></div>
+      <div class="actions"><button class="btn primary" type="button"><svg class="i" aria-hidden="true"><use href="#i-refresh"/></svg>Retry failed</button><a class="btn" href="fleet.html">Back to fleet</a></div>
+    </div>
+
+    <div class="card">
+      <h3 class="eyebrow">Cancelled job</h3>
+      <div class="banner" role="status"><svg class="i" aria-hidden="true"><use href="#i-info"/></svg><div class="txt"><strong>Cancelled</strong> — 2 updated, 3 not started</div></div>
+      <div class="segbar" aria-label="2 updated, 3 not started"><i class="s-ok" style="width:40%"></i></div>
+      <div class="actions"><button class="btn" type="button">Update the remaining 3</button><a class="btn ghost" href="fleet.html">Back to fleet</a></div>
+    </div>
+
+  </div>
+</section>
+</main>
+</div>
+
+<dialog class="modal" id="confirm-update" aria-labelledby="cu-t">
+  <form method="dialog" class="dlg">
+    <div class="dlg-head"><h2 id="cu-t">Update <span id="cu-n">1 device</span>?</h2><button type="button" class="btn icon ghost" data-close aria-label="Close"><svg class="i" aria-hidden="true"><use href="#i-x"/></svg></button></div>
+    <div class="dlg-body">
+      <ul class="kvl">
+        <li><span class="mut">Target firmware</span><span><span class="mono strong">9dcba89</span> · Latest CI build</span></li>
+        <li><span class="mut">Method</span><span class="strong" id="cu-method">Push from this PC</span></li>
+        <li><span class="mut">Parallel updates</span><span class="strong" id="cu-par">2</span></li>
+      </ul>
+      <div>
+        <div class="eyebrow" style="margin-bottom:var(--s2)">Devices</div>
+        <ul class="kvl" id="cu-list"></ul>
+      </div>
+      <p class="hint" id="cu-reinstall" hidden></p>
+      <div class="banner"><svg class="i" aria-hidden="true"><use href="#i-clock"/></svg><div class="txt">Devices restart during the update and are offline for ~30 s each.</div></div>
+    </div>
+    <div class="dlg-foot"><button type="button" class="btn" data-close>Cancel</button><button class="btn primary" value="start" id="cu-go">Start update</button></div>
+  </form>
+</dialog>
+
+<script>
+(function(){
+  var root=document.documentElement,modes=['system','light','dark'],cur='system',KEY='deesp32-theme';
+  try{var s=localStorage.getItem(KEY);if(s==='light'||s==='dark')cur=s}catch(e){}
+  function apply(){
+    if(cur==='system')root.removeAttribute('data-theme');else root.setAttribute('data-theme',cur);
+    document.querySelectorAll('[data-theme-toggle]').forEach(function(b){
+      var l=b.querySelector('.lbl');if(l)l.textContent='Theme: '+cur;
+      b.title='Theme: '+cur;b.setAttribute('aria-label','Theme: '+cur+' (click to change)');
+    });
+  }
+  apply();
+  document.addEventListener('click',function(e){
+    var t=e.target.closest('[data-theme-toggle]');
+    if(t){cur=modes[(modes.indexOf(cur)+1)%3];try{localStorage.setItem(KEY,cur)}catch(x){}apply();return}
+    var o=e.target.closest('[data-open]');
+    if(o){var d=document.getElementById(o.getAttribute('data-open'));if(d&&d.showModal)d.showModal();return}
+    var c=e.target.closest('[data-close]');
+    if(c){var dd=c.closest('dialog');if(dd)dd.close();return}
+    if(e.target.tagName==='DIALOG'&&e.target.open){e.target.close();return}
+    var sg=e.target.closest('.seg button');
+    if(sg){sg.parentNode.querySelectorAll('button').forEach(function(b){var on=b===sg;b.classList.toggle('on',on);b.setAttribute('aria-pressed',on)});return}
+    var fc=e.target.closest('.filter-chip');
+    if(fc){
+      var grp=fc.closest('[data-single]');
+      if(grp){grp.querySelectorAll('.filter-chip').forEach(function(b){var on=b===fc;b.classList.toggle('on',on);b.setAttribute('aria-pressed',on)})}
+      else{var on=fc.classList.toggle('on');fc.setAttribute('aria-pressed',on)}
+      return;
+    }
+    var sw=e.target.closest('.switch');
+    if(sw){sw.setAttribute('aria-checked',sw.getAttribute('aria-checked')!=='true');return}
+    var dm=e.target.closest('[data-dismiss]');
+    if(dm){var tt=dm.closest('.toast');if(tt)tt.remove()}
+  });
+})();
+(function(){
+  var rows=[].slice.call(document.querySelectorAll('#dev-table tbody tr'));
+  var selAll=document.getElementById('sel-all');
+  function boxes(){return rows.map(function(r){return r.querySelector('[data-sel]')})}
+  function picked(){return rows.filter(function(r){return r.querySelector('[data-sel]').checked})}
+  function label(n){return n+(n===1?' device':' devices')}
+  function sync(){
+    var p=picked(),n=p.length;
+    rows.forEach(function(r){r.classList.toggle('sel',r.querySelector('[data-sel]').checked)});
+    var go=document.getElementById('go');
+    document.getElementById('go-label').textContent=n?'Update '+label(n):'Choose devices to update';
+    go.disabled=n===0;
+    var ok=rows.filter(function(r){return !r.querySelector('[data-sel]').disabled});
+    selAll.checked=ok.length>0&&ok.every(function(r){return r.querySelector('[data-sel]').checked});
+  }
+  document.addEventListener('change',function(e){
+    var t=e.target;
+    if(t===selAll){rows.forEach(function(r){var b=r.querySelector('[data-sel]');if(!b.disabled&&!r.hidden)b.checked=t.checked});sync()}
+    else if(t.matches&&t.matches('[data-sel]'))sync();
+  });
+  document.getElementById('sel-differ').addEventListener('click',function(){
+    rows.forEach(function(r){var b=r.querySelector('[data-sel]');b.checked=!b.disabled&&r.dataset.cls.indexOf('differs')>-1});sync();
+  });
+  document.addEventListener('click',function(e){
+    var f=e.target.closest('[data-flt]');
+    if(f){var k=f.getAttribute('data-flt');rows.forEach(function(r){r.hidden=k!=='all'&&r.dataset.cls.split(' ').indexOf(k)<0});return}
+    var m=e.target.closest('#method button');
+    if(m){document.getElementById('method-hint').textContent=m.getAttribute('data-hint');return}
+    if(e.target.closest('#go')){
+      var p=picked(),n=p.length,same=p.filter(function(r){return r.dataset.cls.indexOf('same')>-1}).length;
+      var cm=document.querySelector('#method button.on');
+      document.getElementById('cu-n').textContent=label(n);
+      document.getElementById('cu-go').textContent='Update '+label(n);
+      document.getElementById('cu-method').textContent=cm?cm.getAttribute('data-method'):'';
+      document.getElementById('cu-par').textContent=document.getElementById('par').value;
+      var ul=document.getElementById('cu-list');ul.innerHTML='';
+      p.forEach(function(r){var li=document.createElement('li'),a=document.createElement('span'),b=document.createElement('span');
+        a.className='strong';a.textContent=r.dataset.name;b.className='mono mut';b.textContent=r.dataset.fw+' → 9dcba89';li.appendChild(a);li.appendChild(b);ul.appendChild(li)});
+      var h=document.getElementById('cu-reinstall');
+      h.hidden=same===0;h.textContent=same+(same===1?' device already runs':' devices already run')+' 9dcba89 and will be reinstalled.';
+    }
+  });
+  sync();
+})();
+</script>
+</body>
+</html>

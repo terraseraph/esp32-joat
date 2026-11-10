@@ -1,0 +1,96 @@
+/* App-level styles that are not part of the shared design tokens (tokens.css).
+   Order: shell, overlays (tooltip/menu), device header, settings bits, motion. */
+
+/* ---- Shell ------------------------------------------------------------------ */
+a.nav-item, a.brand { text-decoration: none; }
+.nav-item:focus-visible, .brand:focus-visible { outline-offset: -2px; }
+.page:focus { outline: none; }                       /* programmatic focus target for the skip link */
+.page-body > * { max-width: var(--page-w); margin-left: auto; margin-right: auto; }
+.page-body > * + * { margin-top: var(--s5); }
+
+.skip-link { position: fixed; top: var(--s2); left: var(--s2); z-index: 200; padding: 10px 16px; border-radius: var(--r-sm);
+  background: var(--acc); color: var(--on); font-weight: 650; text-decoration: none; transform: translateY(-200%); }
+.skip-link:focus-visible { transform: none; outline-offset: 2px; }
+
+.nav-foot .btn { justify-content: flex-start; }
+.nav-foot .srv { min-height: 24px; align-items: center; border-radius: var(--r-sm); }
+.nav-foot .srv .dot { margin-top: 0; }
+.lan-badge { align-self: flex-start; margin-left: var(--s2); }
+
+@media (max-width: 1023.98px) {
+  .nav-foot .btn { justify-content: center; }
+  .nav-foot .srv { justify-content: center; min-height: 28px; min-width: 28px; }
+  .lan-badge { align-self: center; margin: 0; padding: 0 6px; min-height: 18px; font-size: 10px; }
+}
+@media (max-width: 767.98px) {
+  .nav-foot { align-items: center; gap: 6px; }
+  .nav-foot .srv { display: flex; }                  /* tokens hide it in the top bar; keep the dot */
+  .nav-list { min-width: 0; gap: 2px; }
+  .page-head { align-items: flex-start; }
+}
+@media (max-width: 479.98px) {
+  .nav { gap: 4px; padding-left: var(--s2); padding-right: var(--s2); }
+  .nav-item { width: 38px; }
+  .nav-foot .btn { width: 36px; }
+}
+
+/* ---- Tooltip and dropdown menu (Radix) -------------------------------------------- */
+.tip { z-index: 300; max-width: 300px; padding: 6px 10px; border-radius: 8px; background: var(--fg); color: var(--bg);
+  font-size: var(--fs-xs); font-weight: 550; line-height: 1.4; box-shadow: var(--sh-2); animation: fade-in .12s ease-out; }
+.tip-kv { display: grid; gap: 2px; overflow-wrap: anywhere; }
+
+.menu { z-index: 300; min-width: 200px; max-width: calc(100vw - 16px); padding: 4px; background: var(--card); border: 1px solid var(--line);
+  border-radius: var(--r-sm); box-shadow: var(--sh-2); animation: rise-in .14s ease-out; }
+.menu-item { display: flex; align-items: center; gap: 10px; min-height: 40px; padding: 0 10px; border-radius: 8px; color: var(--fg);
+  font-size: var(--fs-sm); font-weight: 600; text-decoration: none; cursor: pointer; outline: none; user-select: none; }
+.menu-item[data-highlighted] { background: var(--in); }
+.menu-item[data-disabled] { opacity: .45; cursor: not-allowed; pointer-events: none; }
+.menu-item.danger { color: var(--bad); }
+.menu-item .i { color: var(--mut); }
+.menu-item.danger .i { color: var(--bad); }
+@media (pointer: coarse) { .menu-item { min-height: 44px; } }
+
+/* ---- Device header (shared by every device screen) -----------------------------------
+   The header lays itself out from its OWN width (container query), not the viewport, because the
+   usable width depends on the nav mode:  viewport = container + nav (232 / 68 / 0) + page padding.
+     >= 880px   title + chips left, all five actions inline right
+     520-879px  title + chips left, primary action + "More" menu right
+     <  520px   one column: back, title, chips, then primary action + "More" */
+.device-head-box { container: device-head / inline-size; }
+.device-head-box .device-head { display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "back back" "id actions";
+  gap: var(--s2) var(--s4); align-items: start; }
+.device-head .back { grid-area: back; }
+.dh-id { grid-area: id; min-width: 0; }
+.dh-actions { grid-area: actions; display: flex; justify-content: flex-end; min-width: 0; }
+.dh-full { display: flex; flex-wrap: nowrap; gap: var(--s2); }
+.dh-compact { display: none; align-items: center; gap: var(--s2); }
+.device-head .device-title { display: block; min-width: 0; }
+.device-head .device-title h1 { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.device-head .device-sub { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; overflow-wrap: normal; }
+.device-head .chips { margin-top: var(--s3); }
+
+@container device-head (max-width: 879.98px) {
+  .dh-full { display: none; }
+  .dh-compact { display: flex; }
+}
+@container device-head (max-width: 519.98px) {
+  .device-head-box .device-head { grid-template-columns: minmax(0, 1fr); grid-template-areas: "back" "id" "actions"; }
+  .dh-actions { justify-content: flex-start; margin-top: var(--s1); }
+}
+.tab-panel > * + * { margin-top: var(--s4); }
+.tabs { margin-top: var(--s4); }
+.tabs a:focus-visible { outline-offset: -3px; border-radius: 6px; }
+
+/* ---- Settings: access card ---------------------------------------------------------- */
+.token-row { display: flex; align-items: center; gap: var(--s1); min-width: 0; }
+.token { min-width: 0; overflow-wrap: anywhere; letter-spacing: .04em; }
+.plain-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+.plain-list li { display: flex; align-items: center; flex-wrap: wrap; gap: var(--s1); }
+.kv dd .btn.sm.icon { width: 32px; }
+
+/* ---- Motion ----------------------------------------------------------------------------- */
+@keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  *, *::before, *::after { animation-duration: .001ms !important; animation-iteration-count: 1 !important; transition-duration: .001ms !important; }
+}

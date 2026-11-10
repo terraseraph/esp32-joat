@@ -1,0 +1,144 @@
+/* =============================================================================
+   Shared UI kit (components/ui). Tokens only: no hard-coded colours except the scrim.
+   Reuses token classes where they exist (.field .input .seg .switch .progress .banner .toast .skeleton .kv .search .dlg-*).
+   New classes are prefixed `ui-`. Imported once from main.tsx after app.css.
+   ========================================================================== */
+:root { --scrim: rgb(8 12 18 / .5); }
+
+/* ---- Overlays: Dialog (modal) and Sheet ----------------------------------------------------- */
+.ui-overlay { position: fixed; inset: 0; z-index: 150; background: var(--scrim); }
+.ui-overlay[data-state="open"] { animation: ui-fade-in .18s ease-out; }
+.ui-overlay[data-state="closed"] { animation: ui-fade-out .16s ease-in forwards; }
+
+.ui-panel { position: fixed; z-index: 160; display: flex; flex-direction: column; min-height: 0; padding: 0; color: var(--fg);
+  background: var(--card); border: 1px solid var(--line); box-shadow: var(--sh-3); overflow: hidden; outline: none; }
+.ui-modal { inset: 0; margin: auto; width: min(var(--ui-w, 480px), calc(100vw - 32px)); height: fit-content; max-height: calc(100vh - 32px); max-height: calc(100dvh - 32px); border-radius: var(--r-lg); }
+.ui-modal[data-state="open"] { animation: ui-pop-in .18s ease-out; }
+.ui-modal[data-state="closed"] { animation: ui-pop-out .14s ease-in forwards; }
+.ui-modal.danger { border-color: var(--bad-bd); }
+.ui-modal.danger .dlg-head h2 { color: var(--bad); }
+
+.ui-sheet { inset: 0 0 0 auto; width: min(var(--ui-w, 480px), 100vw); height: 100vh; height: 100dvh; border-width: 0 0 0 1px; border-radius: var(--r-lg) 0 0 var(--r-lg); }
+.ui-sheet[data-state="open"] { animation: ui-slide-in .24s cubic-bezier(.2, .8, .2, 1); }
+.ui-sheet[data-state="closed"] { animation: ui-slide-out .18s ease-in forwards; }
+
+.ui-panel .dlg-head { align-items: flex-start; flex: none; }
+.ui-dlg-titles { display: grid; gap: 4px; min-width: 0; }
+.ui-dlg-titles h2 { overflow-wrap: anywhere; }
+.ui-dlg-body { flex: 1 1 auto; overscroll-behavior: contain; }
+.ui-panel .dlg-foot { flex: none; background: var(--card); }
+.ui-confirm-body { overflow-wrap: anywhere; }
+
+@media (max-width: 767.98px) {              /* sheet becomes a full-width bottom sheet */
+  .ui-sheet { inset: auto 0 0 0; width: 100%; height: auto; max-height: 90vh; max-height: 90dvh; border-width: 1px 0 0; border-radius: var(--r-lg) var(--r-lg) 0 0; }
+  .ui-sheet[data-state="open"] { animation-name: ui-rise-in; }
+  .ui-sheet[data-state="closed"] { animation-name: ui-rise-out; }
+}
+@media (max-width: 479.98px) { .ui-panel .dlg-head, .ui-dlg-body, .ui-panel .dlg-foot { padding-left: var(--s4); padding-right: var(--s4); } }
+
+@keyframes ui-fade-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes ui-fade-out { from { opacity: 1; } to { opacity: 0; } }
+@keyframes ui-pop-in { from { opacity: 0; transform: translateY(10px) scale(.97); } to { opacity: 1; transform: none; } }
+@keyframes ui-pop-out { from { opacity: 1; transform: none; } to { opacity: 0; transform: translateY(6px) scale(.98); } }
+@keyframes ui-slide-in { from { opacity: .6; transform: translateX(40px); } to { opacity: 1; transform: none; } }
+@keyframes ui-slide-out { from { opacity: 1; transform: none; } to { opacity: 0; transform: translateX(40px); } }
+@keyframes ui-rise-in { from { opacity: .6; transform: translateY(40px); } to { opacity: 1; transform: none; } }
+@keyframes ui-rise-out { from { opacity: 1; transform: none; } to { opacity: 0; transform: translateY(40px); } }
+@keyframes ui-spin { to { transform: rotate(360deg); } }
+
+/* ---- Toasts (motion drives enter/exit; tokens.css .toast supplies the look) -------------------- */
+.toasts { z-index: 350; pointer-events: none; bottom: calc(var(--s4) + var(--toast-lift, 0px)); }
+/* While a sheet or dialog is open its footer buttons sit at the bottom: move the stack to the top centre. */
+:root:has(.ui-overlay) .toasts { top: var(--s4); bottom: auto; right: 50%; transform: translateX(50%); }
+html.ui-scroll-locked { overflow: hidden; scrollbar-gutter: stable; }
+.toasts > * { pointer-events: auto; }
+.toasts .toast { animation: none; }
+.toast.warn { border-left-color: var(--warn); } .toast.warn > .i { color: var(--warn); }
+.ui-toast-desc { margin-top: 2px; overflow-wrap: anywhere; font-size: var(--fs-xs); }
+.ui-toast-action { margin-top: var(--s2); }
+
+/* ---- Tabs --------------------------------------------------------------------------------------- */
+.ui-tabs-list { display: flex; gap: 4px; border-bottom: 1px solid var(--line); overflow-x: auto; scrollbar-width: none; }
+.ui-tab { position: relative; display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 var(--s4); border: 0; background: none;
+  color: var(--mut); font-weight: 600; font-size: var(--fs-md); white-space: nowrap; }
+.ui-tab:hover { color: var(--fg); }
+.ui-tab[data-state="active"] { color: var(--acc); }
+.ui-tab[data-disabled] { opacity: .45; cursor: not-allowed; }
+.ui-tab:focus-visible { outline-offset: -3px; border-radius: 6px; }
+.ui-tab-ind { position: absolute; left: var(--s2); right: var(--s2); bottom: -1px; height: 2px; border-radius: 2px; background: var(--acc); }
+.ui-tab-panel { padding-top: var(--s4); outline: none; }
+.ui-tab-panel > * + * { margin-top: var(--s4); }
+@media (pointer: coarse) { .ui-tab { min-height: 48px; } }
+
+/* ---- Form controls -------------------------------------------------------------------------------- */
+.ui-req { color: var(--bad); }
+.ui-affix { position: relative; display: flex; align-items: center; min-width: 0; }
+.ui-affix .input { flex: 1; min-width: 0; }
+.ui-affix:has(.ui-affix-unit) .input { padding-right: 52px; }
+.ui-password .input { padding-right: 44px; }
+.ui-affix-unit { position: absolute; right: 12px; font-size: var(--fs-sm); pointer-events: none; }
+.ui-affix-btn { position: absolute; right: 4px; }
+.ui-affix input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
+.ui-affix input[type="number"]::-webkit-inner-spin-button, .ui-affix input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+.input[aria-invalid="true"] { border-color: var(--bad); background: var(--bad-bg); }
+.input:disabled { opacity: .55; cursor: not-allowed; }
+.field .hint { margin-top: -2px; }
+
+.ui-select { position: relative; min-width: 0; }
+.ui-select select { appearance: none; -webkit-appearance: none; padding-right: 36px; cursor: pointer; }
+.ui-select-chev { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); color: var(--mut); pointer-events: none; }
+
+.search input { padding-right: 40px; }
+.search input::-webkit-search-cancel-button { display: none; }
+.ui-search-clear { position: absolute; right: 4px; }
+
+.ui-check .ui-check-hint, .ui-switch-label .ui-check-hint { display: block; font-size: var(--fs-sm); }
+.ui-check { align-items: flex-start; padding: 8px 0; }
+.ui-check input { margin-top: 2px; }
+.ui-check.is-disabled, .ui-switch-row.is-disabled { opacity: .55; cursor: not-allowed; }
+.ui-switch-row { display: flex; align-items: flex-start; gap: var(--s2); min-height: 40px; }
+.ui-switch-label { padding-top: 8px; cursor: pointer; font-size: var(--fs-md); }
+.ui-switch-row .switch { margin-top: 0; }
+.switch:focus-visible { outline-offset: -2px; border-radius: var(--r-pill); }
+
+.ui-seg button[aria-disabled="true"] { opacity: .45; cursor: not-allowed; }
+.ui-seg button[aria-disabled="true"]:hover { color: var(--mut); }
+.ui-seg[aria-invalid="true"] { border-color: var(--bad); }
+
+.ui-slider { display: flex; align-items: center; gap: var(--s3); min-width: 0; }
+.ui-slider-root { position: relative; display: flex; align-items: center; flex: 1; min-width: 0; height: 40px; touch-action: none; user-select: none; }
+.ui-slider-track { position: relative; flex-grow: 1; height: 6px; background: var(--in); border: 1px solid var(--line); border-radius: var(--r-pill); }
+.ui-slider-range { position: absolute; height: 100%; background: var(--acc); border-radius: var(--r-pill); }
+.ui-slider-thumb { display: block; width: 20px; height: 20px; background: var(--card); border: 2px solid var(--acc); border-radius: 50%; box-shadow: var(--sh-1);
+  transition: transform .12s, box-shadow .12s; cursor: grab; }
+.ui-slider-thumb:hover { transform: scale(1.1); }
+.ui-slider-thumb:active { cursor: grabbing; transform: scale(1.15); }
+.ui-slider-thumb:focus-visible { outline: 2px solid var(--acc); outline-offset: 3px; }
+.ui-slider-val { min-width: 4ch; text-align: right; font-weight: 600; font-size: var(--fs-sm); }
+.ui-slider.is-disabled { opacity: .45; } .ui-slider.is-disabled .ui-slider-thumb { cursor: not-allowed; }
+@media (pointer: coarse) { .ui-slider-root { height: 44px; } .ui-slider-thumb { width: 24px; height: 24px; } }
+
+/* ---- Feedback --------------------------------------------------------------------------------------- */
+.ui-spinner { display: inline-flex; flex: none; color: currentColor; animation: ui-spin .9s linear infinite; }
+.skeleton.ui-skel-circle { border-radius: 50%; flex: none; }
+.progress > i { transition: none; }                          /* motion drives the width */
+.ui-banner-body { margin-top: 2px; color: var(--mut); }
+.banner .txt strong { display: block; }
+.ui-inline-error { display: flex; align-items: flex-start; gap: var(--s2); padding: 8px 12px; border: 1px solid var(--bad-bd); border-radius: var(--r-sm);
+  background: var(--bad-bg); color: var(--bad); font-size: var(--fs-sm); }
+.ui-inline-error > .i { margin-top: 2px; }
+.ui-inline-error-msg { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.ui-pulse { display: inline-block; border-radius: 6px; }
+
+/* ---- Key/value ------------------------------------------------------------------------------------------ */
+.ui-kv-row { display: contents; }
+
+/* ---- Menu ------------------------------------------------------------------------------------------------- */
+.ui-menu-sep { height: 1px; margin: 4px; background: var(--line); }
+
+@media (prefers-reduced-motion: reduce) {
+  .ui-spinner { animation: none; }
+  .skeleton { animation: none; background: var(--in); }
+  .progress.ind > i { animation: none; margin-left: 0; width: 100%; opacity: .5; }
+  .ui-slider-thumb { transition: none; }
+}

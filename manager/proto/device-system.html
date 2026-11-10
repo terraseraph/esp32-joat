@@ -1,0 +1,521 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>Workshop node · System - de-esp32 Manager</title>
+<script>try{var t=localStorage.getItem('deesp32-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t)}catch(e){}</script>
+<link rel="stylesheet" href="tokens.css">
+<style>
+/* page-specific, built from tokens only */
+.cols{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:var(--s4);align-items:start}
+.cols>.stack{min-width:0;gap:var(--s4)}
+@media(max-width:1099.98px){.cols{grid-template-columns:minmax(0,1fr)}}
+.sub{margin-top:var(--s5);padding-top:var(--s4);border-top:1px solid var(--line);display:grid;gap:var(--s3)}
+.sub h3{font-size:var(--fs-md)}
+.pick{display:flex;flex-wrap:wrap;align-items:center;gap:var(--s2) var(--s3);padding:var(--s3) var(--s4);background:var(--in);border:1px solid var(--line);border-radius:var(--r-sm)}
+.pick .strong{flex:1 1 auto}
+.note{display:flex;align-items:center;gap:8px;font-size:var(--fs-sm);color:var(--mut)}
+.note .i{width:16px;height:16px}
+.btns{display:flex;flex-wrap:wrap;gap:var(--s2)}
+details.fold{margin-top:var(--s3);border:1px solid var(--line);border-radius:var(--r-sm);background:var(--card)}
+details.fold>summary{display:flex;align-items:center;min-height:40px;padding:0 var(--s3);cursor:pointer;font-size:var(--fs-sm);font-weight:600}
+details.fold[open]>summary{border-bottom:1px solid var(--line)}
+details.fold .table-wrap{border:0;border-radius:0 0 var(--r-sm) var(--r-sm);box-shadow:none}
+details.fold .table{min-width:0}
+details.fold p{padding:var(--s2) var(--s3) var(--s3);font-size:var(--fs-sm);color:var(--mut)}
+.field .rename{display:flex;flex-wrap:wrap;gap:var(--s2)}
+.field .rename input{flex:1 1 220px;width:auto}
+.log-tools{margin-bottom:var(--s3)}
+.log-foot{margin-top:var(--s3);font-size:var(--fs-sm);color:var(--mut)}
+.card.danger{border-color:var(--bad-bd);border-top:3px solid var(--bad)}
+.card.danger h2{color:var(--bad)}
+.dz-row{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:var(--s3);padding:var(--s3) 0}
+.dz-row+.dz-row{border-top:1px solid var(--line)}
+.dz-row p{max-width:62ch}
+.banner.ok{border-color:var(--ok-bd);background:var(--ok-bg)}
+.banner.ok>.i{color:var(--ok)}
+.mock-off{opacity:.55}
+.states h3.eyebrow{margin-bottom:var(--s1)}
+.states>.grid>.card{display:flex;flex-direction:column;gap:var(--s3)}
+.states .card .log{max-height:160px}
+.errline{font-family:var(--mono);font-size:var(--fs-sm)}
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false"><defs>
+<symbol id="i-chip" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2"/><path d="M9 2v4M15 2v4M9 18v4M15 18v4M2 9h4M2 15h4M18 9h4M18 15h4"/></symbol>
+<symbol id="i-fleet" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></symbol>
+<symbol id="i-discover" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4"/><path d="M12 12l5-5"/></symbol>
+<symbol id="i-firmware" viewBox="0 0 24 24"><path d="M12 3v12M7 10l5 5 5-5"/><path d="M4 20h16"/></symbol>
+<symbol id="i-backups" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="5" rx="1.5"/><path d="M5 9v9a2 2 0 002 2h10a2 2 0 002-2V9M10 13h4"/></symbol>
+<symbol id="i-settings" viewBox="0 0 24 24"><path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="17" r="2"/></symbol>
+<symbol id="i-theme" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 010 18z" fill="currentColor"/></symbol>
+<symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></symbol>
+<symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+<symbol id="i-refresh" viewBox="0 0 24 24"><path d="M20 11a8 8 0 00-14-4L4 9"/><path d="M4 4v5h5"/><path d="M4 13a8 8 0 0014 4l2-2"/><path d="M20 20v-5h-5"/></symbol>
+<symbol id="i-ext" viewBox="0 0 24 24"><path d="M14 4h6v6M20 4l-9 9"/><path d="M18 14v5a1 1 0 01-1 1H5a1 1 0 01-1-1V7a1 1 0 011-1h5"/></symbol>
+<symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12l5 5 9-10"/></symbol>
+<symbol id="i-alert" viewBox="0 0 24 24"><path d="M12 3l10 18H2z"/><path d="M12 10v5M12 18v.01"/></symbol>
+<symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.01"/></symbol>
+<symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></symbol>
+<symbol id="i-trash" viewBox="0 0 24 24"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></symbol>
+<symbol id="i-list" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/></symbol>
+<symbol id="i-upload" viewBox="0 0 24 24"><path d="M12 16V4M7 9l5-5 5 5"/><path d="M4 20h16"/></symbol>
+<symbol id="i-wifi" viewBox="0 0 24 24"><path d="M2 9a15 15 0 0120 0M5 12.5a10 10 0 0114 0M8.5 16a5 5 0 017 0"/><path d="M12 19.5v.01"/></symbol>
+<symbol id="i-power" viewBox="0 0 24 24"><path d="M12 3v9"/><path d="M6.3 7a8 8 0 1011.4 0"/></symbol>
+<symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></symbol>
+<symbol id="i-server" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="7" rx="2"/><rect x="3" y="13" width="18" height="7" rx="2"/><path d="M7 7.5v.01M7 16.5v.01"/></symbol>
+</defs></svg>
+<div class="app">
+<aside class="nav">
+  <a class="brand" href="fleet.html" aria-label="de-esp32 Manager"><span class="logo"><svg class="i" aria-hidden="true"><use href="#i-chip"/></svg></span><span class="lbl">de-esp32 Manager</span></a>
+  <nav class="nav-list" aria-label="Main">
+    <a class="nav-item on" href="fleet.html" aria-current="page" title="Fleet"><svg class="i" aria-hidden="true"><use href="#i-fleet"/></svg><span class="lbl">Fleet</span><span class="badge">8</span></a>
+    <a class="nav-item" href="discover.html" title="Discover"><svg class="i" aria-hidden="true"><use href="#i-discover"/></svg><span class="lbl">Discover</span></a>
+    <a class="nav-item" href="firmware.html" title="Firmware"><svg class="i" aria-hidden="true"><use href="#i-firmware"/></svg><span class="lbl">Firmware</span></a>
+    <a class="nav-item" href="backups.html" title="Backups"><svg class="i" aria-hidden="true"><use href="#i-backups"/></svg><span class="lbl">Backups</span></a>
+    <a class="nav-item" href="settings.html" title="Settings"><svg class="i" aria-hidden="true"><use href="#i-settings"/></svg><span class="lbl">Settings</span></a>
+  </nav>
+  <div class="nav-foot">
+    <div class="srv" title="Server connected · localhost:5180"><span class="dot ok"></span><span class="lbl">Server connected · localhost:5180</span></div>
+    <button class="btn ghost" type="button" data-theme-toggle title="Theme: system" aria-label="Theme: system"><svg class="i" aria-hidden="true"><use href="#i-theme"/></svg><span class="lbl">Theme: system</span></button>
+  </div>
+</aside>
+<main class="page">
+<header class="device-head">
+  <a class="back" href="fleet.html"><span aria-hidden="true">←</span> Fleet</a>
+  <div>
+    <div class="device-title"><h1>Workshop node</h1></div>
+    <p class="device-sub mono">esp32-b3c4d5 · 192.168.1.42 · a4cf12b3c4d5</p>
+    <div class="chips">
+      <span class="chip ok">Online</span>
+      <span class="chip"><svg class="i" aria-hidden="true"><use href="#i-wifi"/></svg>Wi-Fi -58 dBm</span>
+      <span class="chip ok">MQTT connected</span>
+      <span class="chip ok">Memory ok</span>
+      <span class="chip mono">9dcba89</span>
+    </div>
+  </div>
+  <div class="device-actions">
+    <a class="btn" href="http://192.168.1.42/" target="_blank" rel="noopener">Open device page ↗</a>
+    <button class="btn" type="button"><svg class="i" aria-hidden="true"><use href="#i-refresh"/></svg>Refresh</button>
+    <button class="btn" type="button"><svg class="i" aria-hidden="true"><use href="#i-backups"/></svg>Back up</button>
+    <a class="btn primary" href="firmware.html"><svg class="i" aria-hidden="true"><use href="#i-firmware"/></svg>Update</a>
+    <button class="btn" type="button" data-open="reboot-dlg"><svg class="i" aria-hidden="true"><use href="#i-power"/></svg>Reboot</button>
+  </div>
+</header>
+<nav class="tabs" aria-label="Device sections">
+  <a href="device-live.html">Live</a>
+  <a href="device-pins.html">Pins &amp; add-ons</a>
+  <a href="device-network.html">Network</a>
+  <a class="on" href="device-system.html" aria-current="page">System</a>
+</nav>
+
+<div class="cols">
+  <div class="stack">
+
+    <!-- 1. Identity -->
+    <section class="card" aria-labelledby="id-h">
+      <div class="card-head"><h2 id="id-h">Identity</h2></div>
+      <div class="field">
+        <label for="name">Name</label>
+        <div class="rename">
+          <input id="name" value="Workshop node" maxlength="31" autocomplete="off" spellcheck="false" aria-describedby="name-hint">
+          <button class="btn" type="button" id="rename-btn" disabled>Rename</button>
+        </div>
+        <div class="hint" id="name-hint">Up to 31 characters. MQTT topics become <span class="mono">devices/<span id="topic">Workshop_node</span>/…</span></div>
+      </div>
+      <dl class="kv" style="margin-top:var(--s4)">
+        <dt>Device ID</dt><dd class="mono">a4cf12b3c4d5</dd>
+        <dt>MAC</dt><dd class="mono">a4:cf:12:b3:c4:d5</dd>
+        <dt>Hostname</dt><dd class="mono">esp32-b3c4d5.local</dd>
+        <dt>Chip</dt><dd>ESP32 rev 3 · 2 cores · Wi-Fi, BT, BLE</dd>
+        <dt>Board</dt><dd>ESP32-WROOM-32 DevKitC</dd>
+        <dt>Config schema</dt><dd>4 · generation 37</dd>
+      </dl>
+    </section>
+
+    <!-- 2. Firmware -->
+    <section class="card" aria-labelledby="fw-h">
+      <div class="card-head"><h2 id="fw-h">Firmware</h2></div>
+      <dl class="kv">
+        <dt>Version</dt><dd><span class="mono">9dcba89</span> <span class="chip ok" style="margin-left:6px">Up to date</span></dd>
+        <dt>Built</dt><dd>Nov 10 2026 09:12:44</dd>
+        <dt>ESP-IDF</dt><dd class="mono">v5.4.2</dd>
+        <dt>Runtime</dt><dd>0.1.0<div class="hint">Constant in this firmware; not used for comparison.</div></dd>
+        <dt>Running slot</dt><dd>ota_0 · image valid</dd>
+        <dt>Rollback</dt><dd>Available (ota_1)</dd>
+      </dl>
+
+      <div class="sub">
+        <h3>Update</h3>
+        <div class="seg" role="group" aria-label="Update from" style="width:fit-content;max-width:100%">
+          <button type="button" class="on" aria-pressed="true" data-src="target">Target firmware</button>
+          <button type="button" aria-pressed="false" data-src="file">Local file</button>
+          <button type="button" aria-pressed="false" data-src="url">URL</button>
+        </div>
+
+        <div id="src-target" class="stack" style="gap:var(--s3)">
+          <div class="pick"><span class="strong">Latest CI build</span><span class="mut num"><span class="mono">9dcba89</span> · Nov 10 2026 · 1.41 MB</span></div>
+          <p class="note"><svg class="i" aria-hidden="true"><use href="#i-check"/></svg>Already running this version</p>
+          <div class="btns"><button class="btn primary" type="button" disabled>Update…</button></div>
+        </div>
+
+        <div id="src-file" class="stack" style="gap:var(--s3)" hidden>
+          <label class="dropzone">
+            <input type="file" accept=".bin" aria-label="Choose a firmware .bin file">
+            <svg class="i" aria-hidden="true"><use href="#i-upload"/></svg>
+            <strong>Drop a firmware .bin here</strong>
+            <span>or click to choose a file</span>
+          </label>
+          <div class="btns"><button class="btn primary" type="button" disabled>Update…</button></div>
+        </div>
+
+        <div id="src-url" class="stack" style="gap:var(--s3)" hidden>
+          <div class="field">
+            <label for="ota-url">URL</label>
+            <input id="ota-url" type="url" placeholder="http(s)://…" autocomplete="off" spellcheck="false" aria-describedby="ota-url-h">
+            <div class="hint" id="ota-url-h">Device downloads it itself — it needs internet access for https URLs.</div>
+          </div>
+          <div class="btns"><button class="btn primary" type="button" id="url-go" disabled>Update…</button></div>
+        </div>
+
+        <div class="btns" style="padding-top:var(--s2);border-top:1px dashed var(--line)">
+          <button class="btn" type="button" data-open="rollback-dlg">Roll back to previous firmware…</button>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <div class="stack">
+
+    <!-- 3. Memory -->
+    <section class="card" aria-labelledby="mem-h">
+      <div class="card-head"><h2 id="mem-h">Memory</h2><span class="chip ok">OK</span></div>
+      <div class="row" style="margin-bottom:var(--s2)"><span class="strong">Internal heap</span><span class="spacer"></span><span class="mut num">172 KB used of 320 KB</span></div>
+      <div class="progress" role="progressbar" aria-label="Internal heap used" aria-valuemin="0" aria-valuemax="100" aria-valuenow="54"><i style="width:54%"></i></div>
+      <dl class="kv" style="margin-top:var(--s4)">
+        <dt>Free</dt><dd>148 KB</dd>
+        <dt>Lowest ever</dt><dd>116 KB</dd>
+        <dt>Largest block</dt><dd>88 KB</dd>
+        <dt>Reserve</dt><dd>24 KB</dd>
+        <dt>DMA free</dt><dd>137 KB <span class="mut">(largest 84 KB)</span></dd>
+        <dt>PSRAM</dt><dd>None</dd>
+        <dt>Allocation failures</dt><dd>None</dd>
+      </dl>
+      <details class="fold">
+        <summary>Boot stages</summary>
+        <div class="table-wrap">
+          <table class="table">
+            <thead><tr><th>Stage</th><th class="num">Free</th><th class="num">Largest block</th></tr></thead>
+            <tbody>
+              <tr><td class="mono">identity</td><td class="num">283 KB</td><td class="num">108 KB</td></tr>
+              <tr><td class="mono">config</td><td class="num">278 KB</td><td class="num">108 KB</td></tr>
+              <tr><td class="mono">network</td><td class="num">216 KB</td><td class="num">96 KB</td></tr>
+              <tr><td class="mono">management</td><td class="num">182 KB</td><td class="num">92 KB</td></tr>
+              <tr><td class="mono">components</td><td class="num">160 KB</td><td class="num">88 KB</td></tr>
+              <tr><td class="mono">healthy</td><td class="num">154 KB</td><td class="num">88 KB</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </details>
+      <details class="fold">
+        <summary>Task stacks</summary>
+        <div class="table-wrap">
+          <table class="table">
+            <thead><tr><th>Task</th><th class="num">Lowest free stack</th><th></th></tr></thead>
+            <tbody>
+              <tr><td class="mono">httpd</td><td class="num">2,412 B</td><td></td></tr>
+              <tr><td class="mono">tcpip_thread</td><td class="num">2,150 B</td><td></td></tr>
+              <tr><td class="mono">esp_timer</td><td class="num">2,050 B</td><td></td></tr>
+              <tr><td class="mono">gpio_irq</td><td class="num">1,910 B</td><td></td></tr>
+              <tr><td class="mono">mqtt_task</td><td class="num">1,880 B</td><td></td></tr>
+              <tr><td class="mono">telemetry</td><td class="num">1,630 B</td><td></td></tr>
+              <tr><td class="mono">mdns</td><td class="num t-warn strong">1,320 B</td><td><span class="chip warn">Low</span></td></tr>
+              <tr><td class="mono">io_rules</td><td class="num t-warn strong">1,204 B</td><td><span class="chip warn">Low</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p>Smallest amount of stack each task has ever had left, in bytes. Values under 1,500 are highlighted.</p>
+      </details>
+    </section>
+
+    <!-- 4. Uptime & resets -->
+    <section class="card" aria-labelledby="up-h">
+      <div class="card-head"><h2 id="up-h">Uptime &amp; resets</h2></div>
+      <dl class="kv">
+        <dt>Uptime</dt><dd>1 h 27 m</dd>
+        <dt>Boot count</dt><dd>12</dd>
+        <dt>Last reset</dt><dd>Power-on</dd>
+        <dt>Boot state</dt><dd><span class="chip ok">Healthy</span></dd>
+        <dt>Safe mode</dt><dd>Off</dd>
+      </dl>
+    </section>
+  </div>
+</div>
+
+<!-- 5. Logs -->
+<section class="card" aria-labelledby="log-h" id="logs">
+  <div class="card-head"><h2 id="log-h">Logs</h2></div>
+  <div class="toolbar log-tools" role="toolbar" aria-label="Log tools">
+    <button class="btn" type="button" id="log-load"><svg class="i" aria-hidden="true"><use href="#i-refresh"/></svg>Refresh</button>
+    <div class="chips" data-single role="group" aria-label="Filter by level">
+      <button type="button" class="filter-chip on" aria-pressed="true" data-lvl="all">All</button>
+      <button type="button" class="filter-chip" aria-pressed="false" data-lvl="e">Errors</button>
+      <button type="button" class="filter-chip" aria-pressed="false" data-lvl="w" title="Warnings and errors">Warnings</button>
+    </div>
+    <span class="spacer"></span>
+    <button class="btn" type="button" id="log-copy">Copy</button>
+    <button class="btn" type="button" id="log-dl"><svg class="i" aria-hidden="true"><use href="#i-firmware"/></svg>Download .txt</button>
+  </div>
+  <div class="log" id="log-view" role="log" aria-label="Device log">
+    <div class="lv-i" data-lv="i">I (312) boot: stage=identity</div>
+    <div class="lv-i" data-lv="i">I (640) boot: stage=config</div>
+    <div class="lv-i" data-lv="i">I (1204) boot: stage=network</div>
+    <div class="lv-i" data-lv="i">I (2210) net: got IP 192.168.1.42 rssi=-58</div>
+    <div class="lv-i" data-lv="i">I (2304) mdns: hostname esp32-b3c4d5</div>
+    <div class="lv-i" data-lv="i">I (2500) mqtt: connected</div>
+    <div class="lv-i" data-lv="i">I (3100) modules: type bme280</div>
+    <div class="lv-i" data-lv="i">I (3142) modules: bme280 env0 addr=0x76 ok</div>
+    <div class="lv-i" data-lv="i">I (3320) modules: type mfrc522</div>
+    <div class="lv-i" data-lv="i">I (4010) boot: stage=healthy</div>
+    <div class="lv-w" data-lv="w">W (9020) io_rules: rule dest GPIO 33 is not an output (mode=?)</div>
+    <div class="lv-e" data-lv="e">E (12011) mqtt: error</div>
+    <div class="lv-i" data-lv="i">I (12980) mqtt: connected</div>
+    <div class="lv-i" data-lv="i">I (15200) telemetry: heap_free=151200 heap_min=118400</div>
+  </div>
+  <p class="log-foot">The device keeps the last 80 lines in RAM; they're cleared on restart.</p>
+</section>
+
+<!-- 6. Danger zone -->
+<section class="card danger" aria-labelledby="dz-h">
+  <div class="card-head"><h2 id="dz-h">Danger zone</h2></div>
+  <div class="dz-row">
+    <div><div class="strong">Reboot</div><p class="mut">Restarts the device. It will be offline for about 10 seconds.</p></div>
+    <button class="btn" type="button" data-open="reboot-dlg"><svg class="i" aria-hidden="true"><use href="#i-power"/></svg>Reboot</button>
+  </div>
+  <div class="dz-row">
+    <div><div class="strong">Factory reset</div><p class="mut">Erases Wi-Fi, pins, add-ons, rules, MQTT settings, the name and the Setup AP password. The device leaves this network.</p></div>
+    <button class="btn danger" type="button" data-open="reset-dlg">Factory reset…</button>
+  </div>
+</section>
+
+<hr class="divider">
+
+<section class="states" aria-labelledby="states-h">
+  <h2 id="states-h">States (prototype only)</h2>
+  <p class="mut" style="margin-top:4px;margin-bottom:var(--s4)">Compact mockups of the other states this screen must handle. Not part of the real page.</p>
+  <div class="grid" style="--min:420px">
+
+    <div class="card">
+      <h3 class="eyebrow">Update in progress · uploading</h3>
+      <div class="row"><strong>Uploading 62 % · 0.87 of 1.41 MB</strong></div>
+      <div class="progress" role="progressbar" aria-label="Upload progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="62"><i style="width:62%"></i></div>
+      <ol class="steps"><li class="on">Uploading</li><li>Restarting</li><li>Verifying</li></ol>
+      <p class="hint">Don't close the Manager until it finishes.</p>
+    </div>
+
+    <div class="card">
+      <h3 class="eyebrow">Update in progress · restarting</h3>
+      <div class="row"><strong>Waiting for Workshop node to come back… 14 s</strong></div>
+      <div class="progress ind" role="progressbar" aria-label="Waiting for the device"><i></i></div>
+      <ol class="steps"><li class="done">Uploading</li><li class="on">Restarting</li><li>Verifying</li></ol>
+      <p class="hint">Don't close the Manager until it finishes.</p>
+    </div>
+
+    <div class="card">
+      <h3 class="eyebrow">Update result · success</h3>
+      <div class="banner ok" role="status"><svg class="i" aria-hidden="true"><use href="#i-check"/></svg><div class="txt"><strong>Updated to <span class="mono">9dcba89</span> · image valid</strong></div></div>
+      <ol class="steps"><li class="done">Uploading</li><li class="done">Restarting</li><li class="done">Verifying</li></ol>
+    </div>
+
+    <div class="card">
+      <h3 class="eyebrow">Update result · rolled back</h3>
+      <div class="banner warn" role="alert"><svg class="i" aria-hidden="true"><use href="#i-alert"/></svg><div class="txt"><strong>Workshop node came back on its previous firmware <span class="mono">0de951c</span></strong> — the new image didn't pass its health check.</div><div class="act"><a class="btn sm" href="#logs">View logs</a></div></div>
+    </div>
+
+    <div class="card">
+      <h3 class="eyebrow">Update blocked · pending verify</h3>
+      <dl class="kv"><dt>Running slot</dt><dd>ota_0 · <span class="chip warn">Image pending verify</span></dd></dl>
+      <div class="banner warn" role="status"><svg class="i" aria-hidden="true"><use href="#i-clock"/></svg><div class="txt">The device is still verifying its last update; try again once it reports healthy.</div></div>
+      <div class="btns"><button class="btn primary" type="button" disabled>Update…</button><button class="btn" type="button" disabled>Roll back to previous firmware…</button></div>
+    </div>
+
+    <div class="card">
+      <h3 class="eyebrow">Update failed · device error, verbatim</h3>
+      <div class="banner bad" role="alert"><svg class="i" aria-hidden="true"><use href="#i-alert"/></svg><div class="txt"><strong>Update failed.</strong> The device said: <span class="errline">image project name does not match de_esp32_runtime</span></div></div>
+      <div class="banner bad" role="alert"><svg class="i" aria-hidden="true"><use href="#i-alert"/></svg><div class="txt"><strong>Update failed.</strong> The device said: <span class="errline">image larger than OTA slot</span></div></div>
+      <div class="banner bad" role="alert"><svg class="i" aria-hidden="true"><use href="#i-alert"/></svg><div class="txt"><strong>Update failed.</strong> The device said: <span class="errline">ota busy</span></div><div class="act"><button class="btn sm" type="button">Retry</button></div></div>
+    </div>
+
+    <div class="card">
+      <h3 class="eyebrow">Firmware differs from target</h3>
+      <dl class="kv"><dt>Version</dt><dd><span class="mono">0de951c</span> <span class="chip warn" style="margin-left:6px">Differs from target <span class="mono">9dcba89</span></span></dd></dl>
+      <div class="pick"><span class="strong">Latest CI build</span><span class="mut num"><span class="mono">9dcba89</span> · Nov 10 2026 · 1.41 MB</span></div>
+      <div class="btns"><button class="btn primary" type="button">Update…</button><button class="btn" type="button">Roll back to previous firmware…</button></div>
+    </div>
+
+    <div class="card">
+      <h3 class="eyebrow">Memory pressure · warn</h3>
+      <div class="card-head" style="margin:0"><strong>Memory</strong><span class="chip warn">Warn</span></div>
+      <div class="row"><span class="strong">Internal heap</span><span class="spacer"></span><span class="mut num">279 KB used of 320 KB</span></div>
+      <div class="progress warn" role="progressbar" aria-label="Internal heap used" aria-valuemin="0" aria-valuemax="100" aria-valuenow="87"><i style="width:87%"></i></div>
+      <dl class="kv"><dt>Free</dt><dd>41 KB</dd><dt>Largest block</dt><dd class="t-warn strong">38 KB</dd></dl>
+      <div class="banner warn" role="status"><svg class="i" aria-hidden="true"><use href="#i-alert"/></svg><div class="txt">Largest free block under 48 KB — adding add-ons may fail.</div></div>
+    </div>
+
+    <div class="card">
+      <h3 class="eyebrow">Update from · Local file</h3>
+      <div class="seg" role="group" aria-label="Update from (mockup)" style="width:fit-content;max-width:100%"><button type="button" aria-pressed="false">Target firmware</button><button type="button" class="on" aria-pressed="true">Local file</button><button type="button" aria-pressed="false">URL</button></div>
+      <label class="dropzone">
+        <input type="file" accept=".bin" aria-label="Choose a firmware .bin file (mockup)">
+        <svg class="i" aria-hidden="true"><use href="#i-upload"/></svg>
+        <strong>Drop a firmware .bin here</strong>
+        <span>or click to choose a file</span>
+      </label>
+      <p class="hint">After choosing a file, the Manager checks it before enabling Update…</p>
+      <div class="pick"><span class="strong mono">de_esp32_runtime.bin</span><span class="mut num">1.41 MB · <span class="mono">0de951c</span></span><span class="chip ok">ESP32 image · project matches · fits slot</span></div>
+      <div class="btns"><button class="btn primary" type="button">Update…</button></div>
+    </div>
+
+    <div class="card">
+      <h3 class="eyebrow">Update from · URL</h3>
+      <div class="seg" role="group" aria-label="Update from (mockup)" style="width:fit-content;max-width:100%"><button type="button" aria-pressed="false">Target firmware</button><button type="button" aria-pressed="false">Local file</button><button type="button" class="on" aria-pressed="true">URL</button></div>
+      <div class="field">
+        <label for="url-m">URL</label>
+        <input id="url-m" type="url" placeholder="http(s)://…" autocomplete="off" spellcheck="false" aria-describedby="url-m-h">
+        <div class="hint" id="url-m-h">Device downloads it itself — it needs internet access for https URLs.</div>
+      </div>
+      <div class="field err">
+        <label for="url-m2">URL</label>
+        <input id="url-m2" type="url" value="ftp://files.local/runtime.bin" aria-invalid="true" aria-describedby="url-m2-m" spellcheck="false">
+        <div class="msg" id="url-m2-m"><svg class="i sm" aria-hidden="true"><use href="#i-alert"/></svg>url must be http:// or https://</div>
+      </div>
+      <div class="btns"><button class="btn primary" type="button" disabled>Update…</button></div>
+    </div>
+
+    <div class="card">
+      <h3 class="eyebrow">Logs not loaded yet</h3>
+      <div class="empty">
+        <span class="ico"><svg class="i" aria-hidden="true"><use href="#i-list"/></svg></span>
+        <h3>Logs load on demand</h3>
+        <p>The device keeps the last 80 lines in RAM; they're cleared on restart.</p>
+        <button class="btn primary" type="button">Load logs</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3 class="eyebrow">Device offline</h3>
+      <div class="banner warn" role="status"><svg class="i" aria-hidden="true"><use href="#i-clock"/></svg><div class="txt"><strong>Workshop node is offline.</strong> Showing the last values the Manager saw · last seen 5 min ago.</div><div class="act"><button class="btn sm" type="button"><svg class="i sm" aria-hidden="true"><use href="#i-refresh"/></svg>Retry</button></div></div>
+      <div class="mock-off stack" style="gap:var(--s3)" aria-disabled="true">
+        <dl class="kv"><dt>Device ID</dt><dd class="mono">a4cf12b3c4d5</dd><dt>Version</dt><dd class="mono">9dcba89</dd><dt>Uptime</dt><dd>—</dd></dl>
+        <div class="btns"><button class="btn" type="button" disabled>Rename</button><button class="btn primary" type="button" disabled>Update…</button><button class="btn" type="button" disabled>Reboot</button><button class="btn danger" type="button" disabled>Factory reset…</button></div>
+      </div>
+    </div>
+
+  </div>
+</section>
+</main>
+</div>
+
+<dialog class="modal" id="reboot-dlg" aria-labelledby="reboot-t">
+  <form method="dialog" class="dlg">
+    <div class="dlg-head"><h2 id="reboot-t">Reboot Workshop node?</h2><button type="button" class="btn icon ghost" data-close aria-label="Close"><svg class="i" aria-hidden="true"><use href="#i-x"/></svg></button></div>
+    <div class="dlg-body"><p>It will be offline for about 10 seconds.</p></div>
+    <div class="dlg-foot"><button type="button" class="btn" data-close>Cancel</button><button class="btn primary" value="reboot">Reboot</button></div>
+  </form>
+</dialog>
+
+<dialog class="modal" id="rollback-dlg" aria-labelledby="rollback-t">
+  <form method="dialog" class="dlg">
+    <div class="dlg-head"><h2 id="rollback-t">Roll back Workshop node?</h2><button type="button" class="btn icon ghost" data-close aria-label="Close"><svg class="i" aria-hidden="true"><use href="#i-x"/></svg></button></div>
+    <div class="dlg-body"><p>The device restarts on the previous firmware in slot <span class="mono">ota_1</span>. It will be offline for about 10 seconds.</p></div>
+    <div class="dlg-foot"><button type="button" class="btn" data-close>Cancel</button><button class="btn primary" value="rollback">Roll back</button></div>
+  </form>
+</dialog>
+
+<dialog class="modal danger" id="reset-dlg" aria-labelledby="reset-t">
+  <form method="dialog" class="dlg">
+    <div class="dlg-head"><h2 id="reset-t">Factory reset Workshop node?</h2><button type="button" class="btn icon ghost" data-close aria-label="Close"><svg class="i" aria-hidden="true"><use href="#i-x"/></svg></button></div>
+    <div class="dlg-body">
+      <p>Erases Wi-Fi, pins, add-ons, rules, MQTT settings, the name and the Setup AP password, then restarts. The device leaves this network and comes back as open Wi-Fi network <span class="mono">esp32-b3c4d5</span>. This can't be undone. <a href="backups.html">Back up first</a>?</p>
+      <div class="field"><label for="reset-confirm">Type <strong>Workshop node</strong> to confirm</label><input id="reset-confirm" autocomplete="off" spellcheck="false" data-confirm="Workshop node"></div>
+    </div>
+    <div class="dlg-foot"><button type="button" class="btn" data-close>Cancel</button><button class="btn danger" value="reset" id="reset-btn" disabled>Factory reset</button></div>
+  </form>
+</dialog>
+
+<script>
+(function(){
+  var root=document.documentElement,modes=['system','light','dark'],cur='system',KEY='deesp32-theme';
+  try{var s=localStorage.getItem(KEY);if(s==='light'||s==='dark')cur=s}catch(e){}
+  function apply(){
+    if(cur==='system')root.removeAttribute('data-theme');else root.setAttribute('data-theme',cur);
+    document.querySelectorAll('[data-theme-toggle]').forEach(function(b){
+      var l=b.querySelector('.lbl');if(l)l.textContent='Theme: '+cur;
+      b.title='Theme: '+cur;b.setAttribute('aria-label','Theme: '+cur+' (click to change)');
+    });
+  }
+  apply();
+  document.addEventListener('click',function(e){
+    var t=e.target.closest('[data-theme-toggle]');
+    if(t){cur=modes[(modes.indexOf(cur)+1)%3];try{localStorage.setItem(KEY,cur)}catch(x){}apply();return}
+    var o=e.target.closest('[data-open]');
+    if(o){var d=document.getElementById(o.getAttribute('data-open'));if(d&&d.showModal)d.showModal();return}
+    var c=e.target.closest('[data-close]');
+    if(c){var dd=c.closest('dialog');if(dd)dd.close();return}
+    if(e.target.tagName==='DIALOG'&&e.target.open){e.target.close();return}
+    var sg=e.target.closest('.seg button');
+    if(sg){sg.parentNode.querySelectorAll('button').forEach(function(b){var on=b===sg;b.classList.toggle('on',on);b.setAttribute('aria-pressed',on)});return}
+    var fc=e.target.closest('.filter-chip');
+    if(fc){
+      var grp=fc.closest('[data-single]');
+      if(grp){grp.querySelectorAll('.filter-chip').forEach(function(b){var on=b===fc;b.classList.toggle('on',on);b.setAttribute('aria-pressed',on)})}
+      else{var on=fc.classList.toggle('on');fc.setAttribute('aria-pressed',on)}
+      return;
+    }
+    var sw=e.target.closest('.switch');
+    if(sw){sw.setAttribute('aria-checked',sw.getAttribute('aria-checked')!=='true');return}
+    var dm=e.target.closest('[data-dismiss]');
+    if(dm){var tt=dm.closest('.toast');if(tt)tt.remove()}
+  });
+})();
+(function(){
+  var $=function(id){return document.getElementById(id)};
+  /* rename: enable only when changed, keep the topic hint in sync */
+  var nm=$('name'),rb=$('rename-btn'),tp=$('topic'),orig=nm.value;
+  nm.addEventListener('input',function(){
+    var v=nm.value.trim();
+    rb.disabled=!v||v===orig;
+    tp.textContent=v?v.replace(/[ .]/g,'_').replace(/[^A-Za-z0-9_-]/g,''):'esp32-b3c4d5';
+  });
+  /* update source panels */
+  document.addEventListener('click',function(e){
+    var b=e.target.closest('[data-src]');if(!b)return;
+    ['target','file','url'].forEach(function(k){$('src-'+k).hidden=k!==b.getAttribute('data-src')});
+  });
+  $('ota-url').addEventListener('input',function(e){$('url-go').disabled=!/^https?:\/\/\S+/i.test(e.target.value.trim())});
+  /* logs: level filter, copy, download */
+  var view=$('log-view'),lvl='all';
+  function lines(){return [].slice.call(view.children).filter(function(d){return !d.hidden})}
+  document.addEventListener('click',function(e){
+    var f=e.target.closest('[data-lvl]');if(!f)return;
+    lvl=f.getAttribute('data-lvl');
+    [].forEach.call(view.children,function(d){var v=d.getAttribute('data-lv');d.hidden=!(lvl==='all'||(lvl==='e'&&v==='e')||(lvl==='w'&&(v==='w'||v==='e')))});
+  });
+  function text(){return lines().map(function(d){return d.textContent}).join('\n')+'\n'}
+  $('log-copy').addEventListener('click',function(){
+    var b=this;try{navigator.clipboard.writeText(text()).then(function(){b.textContent='Copied';setTimeout(function(){b.textContent='Copy'},1500)})}catch(x){}
+  });
+  $('log-dl').addEventListener('click',function(){
+    try{var a=document.createElement('a');a.href=URL.createObjectURL(new Blob([text()],{type:'text/plain'}));a.download='esp32-b3c4d5-logs.txt';document.body.appendChild(a);a.click();a.remove()}catch(x){}
+  });
+  /* factory reset: type-to-confirm */
+  var rc=$('reset-confirm'),rbtn=$('reset-btn');
+  rc.addEventListener('input',function(){rbtn.disabled=rc.value.trim()!==rc.getAttribute('data-confirm')});
+  $('reset-dlg').addEventListener('close',function(){rc.value='';rbtn.disabled=true});
+})();
+</script>
+</body>
+</html>

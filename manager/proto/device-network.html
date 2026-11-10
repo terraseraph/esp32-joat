@@ -1,0 +1,503 @@
+<!doctype html>
+<!--
+Device · Network (spec §4.4 screen 5). Canonical device: Workshop node, id a4cf12b3c4d5, hostname esp32-b3c4d5, 192.168.1.42.
+Mock data (exact API shapes):
+GET /network  {state:"sta_connected", sta_ip:"192.168.1.42", ap_ip:"192.168.4.1", ap_ssid:"esp32-b3c4d5", ap_open:true, hostname:"esp32-b3c4d5", rssi:-58, provisioned:true, sta_connected:true}
+GET /mqtt     {connected:true, uri:"mqtt://192.168.1.10:1883", reconnects:1, published:1840, publish_fail:0, received:3, last_error:"", root:"devices", prefix:"devices/Workshop_node", topic_id:"Workshop_node", sub:[...], pub:[...]}
+GET /network/scan  [{ssid:"HomeNet", rssi:-52, channel:6, auth:3}, {ssid:"Workshop-IoT", rssi:-61, channel:11, auth:3}, {ssid:"Neighbour 5G", rssi:-78, channel:1, auth:4}, {ssid:"CafeOpen", rssi:-83, channel:6, auth:0}]
+Not readable from the device (so not shown): saved Wi-Fi SSID, Wi-Fi password, AP password (only ap_open), MQTT user/password.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>Network - Workshop node - de-esp32 Manager</title>
+<script>try{var t=localStorage.getItem('deesp32-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t)}catch(e){}</script>
+<link rel="stylesheet" href="tokens.css">
+<style>
+/* page-specific, built from tokens only */
+.net-grid{display:grid;gap:var(--s4);grid-template-columns:repeat(auto-fit,minmax(min(100%,460px),1fr));align-items:start}
+.net-grid>*{min-width:0}
+.card>.stack>.row .btn,.card .row .btn{flex:none}
+.card .explain{font-size:var(--fs-sm);color:var(--mut)}
+.card .sub{margin-top:var(--s4);padding-top:var(--s4);border-top:1px solid var(--line);display:grid;gap:var(--s3)}
+.card .sub h4{font-size:var(--fs-sm);font-weight:650}
+.form-grid{display:grid;gap:var(--s3);grid-template-columns:repeat(auto-fit,minmax(min(100%,220px),1fr))}
+.table.topics{min-width:560px}
+.table.topics td.num,.table.topics th.num{text-align:left}
+details.ref{border:1px solid var(--line);border-radius:var(--r-sm);background:var(--card)}
+details.ref>summary{cursor:pointer;min-height:40px;display:flex;align-items:center;padding:0 var(--s3);font-weight:600;font-size:var(--fs-sm)}
+details.ref .table-wrap{border:0;border-top:1px solid var(--line);border-radius:0 0 var(--r-sm) var(--r-sm);box-shadow:none}
+/* scan list */
+.ap-list{display:grid;gap:var(--s2);margin:0;padding:0;list-style:none}
+.ap{display:flex;align-items:center;gap:var(--s3);min-height:56px;padding:var(--s2) var(--s3);border:1px solid var(--line);border-radius:var(--r-sm);background:var(--card);cursor:pointer}
+.ap:hover{border-color:var(--mut)}
+.ap:has(input:checked){border-color:var(--acc);background:var(--acc-bg)}
+.ap input{accent-color:var(--acc);width:18px;height:18px;flex:none}
+.ap .nm{flex:1;min-width:0;display:grid}
+.ap .nm strong{overflow-wrap:anywhere}
+.ap .nm span{font-size:var(--fs-xs);color:var(--mut)}
+.ap .lock{color:var(--mut)}
+.sig{display:inline-flex;align-items:flex-end;gap:2px;height:16px;flex:none}
+.sig i{display:block;width:4px;border-radius:1px;background:var(--line)}
+.sig i:nth-child(1){height:5px}.sig i:nth-child(2){height:8px}.sig i:nth-child(3){height:12px}.sig i:nth-child(4){height:16px}
+.sig[data-l="1"] i:nth-child(-n+1),.sig[data-l="2"] i:nth-child(-n+2),.sig[data-l="3"] i:nth-child(-n+3),.sig[data-l="4"] i:nth-child(-n+4){background:var(--fg)}
+.sig-txt{font-size:var(--fs-xs);color:var(--mut);min-width:54px;text-align:right}
+/* banner ok variant (tokens.css has info/warn/bad only) */
+.banner.ok{border-color:var(--ok-bd);background:var(--ok-bg)}.banner.ok>.i{color:var(--ok)}
+/* states */
+.states h3.eyebrow{margin-bottom:var(--s3)}
+.states .full{grid-column:1/-1}
+.states>.grid>.card,.states>.grid>.mock{display:flex;flex-direction:column;gap:var(--s3)}
+.mock{background:var(--card);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--sh-1);overflow:hidden;min-width:0}
+.mock .eyebrow{padding:var(--s3) var(--s5) 0}
+.mock .dlg{border-top:0}
+.mock .dlg-head h4{font-size:var(--fs-lg);font-weight:650}
+.is-offline-card{opacity:.6}
+.is-offline-card .chip.ok{color:var(--mut);background:var(--in);border-color:var(--line)}
+.watch{display:grid;gap:var(--s3);justify-items:start}
+@media(max-width:767.98px){.card .actions .btn{flex:1 1 auto}}
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false"><defs>
+<symbol id="i-chip" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2"/><path d="M9 2v4M15 2v4M9 18v4M15 18v4M2 9h4M2 15h4M18 9h4M18 15h4"/></symbol>
+<symbol id="i-fleet" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></symbol>
+<symbol id="i-discover" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4"/><path d="M12 12l5-5"/></symbol>
+<symbol id="i-firmware" viewBox="0 0 24 24"><path d="M12 3v12M7 10l5 5 5-5"/><path d="M4 20h16"/></symbol>
+<symbol id="i-backups" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="5" rx="1.5"/><path d="M5 9v9a2 2 0 002 2h10a2 2 0 002-2V9M10 13h4"/></symbol>
+<symbol id="i-settings" viewBox="0 0 24 24"><path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="17" r="2"/></symbol>
+<symbol id="i-theme" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 010 18z" fill="currentColor"/></symbol>
+<symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></symbol>
+<symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+<symbol id="i-refresh" viewBox="0 0 24 24"><path d="M20 11a8 8 0 00-14-4L4 9"/><path d="M4 4v5h5"/><path d="M4 13a8 8 0 0014 4l2-2"/><path d="M20 20v-5h-5"/></symbol>
+<symbol id="i-ext" viewBox="0 0 24 24"><path d="M14 4h6v6M20 4l-9 9"/><path d="M18 14v5a1 1 0 01-1 1H5a1 1 0 01-1-1V7a1 1 0 011-1h5"/></symbol>
+<symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12l5 5 9-10"/></symbol>
+<symbol id="i-alert" viewBox="0 0 24 24"><path d="M12 3l10 18H2z"/><path d="M12 10v5M12 18v.01"/></symbol>
+<symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.01"/></symbol>
+<symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></symbol>
+<symbol id="i-trash" viewBox="0 0 24 24"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></symbol>
+<symbol id="i-list" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/></symbol>
+<symbol id="i-upload" viewBox="0 0 24 24"><path d="M12 16V4M7 9l5-5 5 5"/><path d="M4 20h16"/></symbol>
+<symbol id="i-wifi" viewBox="0 0 24 24"><path d="M2 9a15 15 0 0120 0M5 12.5a10 10 0 0114 0M8.5 16a5 5 0 017 0"/><path d="M12 19.5v.01"/></symbol>
+<symbol id="i-power" viewBox="0 0 24 24"><path d="M12 3v9"/><path d="M6.3 7a8 8 0 1011.4 0"/></symbol>
+<symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></symbol>
+<symbol id="i-server" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="7" rx="2"/><rect x="3" y="13" width="18" height="7" rx="2"/><path d="M7 7.5v.01M7 16.5v.01"/></symbol>
+<symbol id="i-lock" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 018 0v3"/></symbol>
+</defs></svg>
+<div class="app">
+<aside class="nav">
+  <a class="brand" href="fleet.html" aria-label="de-esp32 Manager"><span class="logo"><svg class="i" aria-hidden="true"><use href="#i-chip"/></svg></span><span class="lbl">de-esp32 Manager</span></a>
+  <nav class="nav-list" aria-label="Main">
+    <a class="nav-item on" href="fleet.html" aria-current="page" title="Fleet"><svg class="i" aria-hidden="true"><use href="#i-fleet"/></svg><span class="lbl">Fleet</span><span class="badge">8</span></a>
+    <a class="nav-item" href="discover.html" title="Discover"><svg class="i" aria-hidden="true"><use href="#i-discover"/></svg><span class="lbl">Discover</span></a>
+    <a class="nav-item" href="firmware.html" title="Firmware"><svg class="i" aria-hidden="true"><use href="#i-firmware"/></svg><span class="lbl">Firmware</span></a>
+    <a class="nav-item" href="backups.html" title="Backups"><svg class="i" aria-hidden="true"><use href="#i-backups"/></svg><span class="lbl">Backups</span></a>
+    <a class="nav-item" href="settings.html" title="Settings"><svg class="i" aria-hidden="true"><use href="#i-settings"/></svg><span class="lbl">Settings</span></a>
+  </nav>
+  <div class="nav-foot">
+    <div class="srv" title="Server connected · localhost:5180"><span class="dot ok"></span><span class="lbl">Server connected · localhost:5180</span></div>
+    <button class="btn ghost" type="button" data-theme-toggle title="Theme: system" aria-label="Theme: system"><svg class="i" aria-hidden="true"><use href="#i-theme"/></svg><span class="lbl">Theme: system</span></button>
+  </div>
+</aside>
+<main class="page">
+<header class="device-head">
+  <a class="back" href="fleet.html"><span aria-hidden="true">←</span> Fleet</a>
+  <div>
+    <div class="device-title"><h1>Workshop node</h1></div>
+    <p class="device-sub mono">esp32-b3c4d5 · 192.168.1.42 · a4cf12b3c4d5</p>
+    <div class="chips">
+      <span class="chip ok">Online</span>
+      <span class="chip"><svg class="i" aria-hidden="true"><use href="#i-wifi"/></svg>Wi-Fi -58 dBm</span>
+      <span class="chip ok">MQTT connected</span>
+      <span class="chip ok">Memory ok</span>
+      <span class="chip mono">9dcba89</span>
+    </div>
+  </div>
+  <div class="device-actions">
+    <a class="btn" href="http://192.168.1.42/" target="_blank" rel="noopener">Open device page ↗</a>
+    <button class="btn" type="button"><svg class="i" aria-hidden="true"><use href="#i-refresh"/></svg>Refresh</button>
+    <button class="btn" type="button"><svg class="i" aria-hidden="true"><use href="#i-backups"/></svg>Back up</button>
+    <a class="btn primary" href="firmware.html"><svg class="i" aria-hidden="true"><use href="#i-firmware"/></svg>Update</a>
+    <button class="btn" type="button" data-open="reboot-modal"><svg class="i" aria-hidden="true"><use href="#i-power"/></svg>Reboot</button>
+  </div>
+</header>
+<nav class="tabs" aria-label="Device sections">
+  <a href="device-live.html">Live</a>
+  <a href="device-pins.html">Pins &amp; add-ons</a>
+  <a class="on" href="device-network.html" aria-current="page">Network</a>
+  <a href="device-system.html">System</a>
+</nav>
+
+<div class="net-grid">
+
+  <!-- 1. Wi-Fi -->
+  <section class="card" aria-labelledby="wifi-h">
+    <div class="card-head"><h2 id="wifi-h">Wi-Fi</h2><span class="chip ok">Connected</span></div>
+    <dl class="kv">
+      <dt>Status</dt><dd>Connected</dd>
+      <dt>IP address</dt><dd class="mono">192.168.1.42</dd>
+      <dt>Hostname</dt><dd class="mono">esp32-b3c4d5.local</dd>
+      <dt>Signal at connect</dt><dd>-58 dBm</dd>
+      <dt>Provisioned</dt><dd>Yes</dd>
+    </dl>
+    <p class="explain" style="margin-top:var(--s3)">The device doesn't report which network it joined, so the network name isn't shown here.</p>
+    <div class="sub">
+      <h4>Change or remove the network</h4>
+      <div class="actions">
+        <button class="btn" type="button" data-open="move-sheet">Move to another network…</button>
+        <button class="btn danger" type="button" data-open="forget-modal">Forget Wi-Fi…</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- 3. Setup AP -->
+  <section class="card" aria-labelledby="ap-h">
+    <div class="card-head"><h2 id="ap-h">Setup AP</h2><span class="chip warn">Open</span></div>
+    <dl class="kv">
+      <dt>Network name</dt><dd class="mono">esp32-b3c4d5</dd>
+      <dt>Address</dt><dd class="mono">192.168.4.1</dd>
+      <dt>Security</dt><dd><span class="chip warn">Open (no password)</span></dd>
+    </dl>
+    <p class="explain" style="margin-top:var(--s3)">The device opens this network when it can't join Wi-Fi, for setup and recovery.</p>
+    <form class="sub" onsubmit="return false">
+      <h4>Setup AP password</h4>
+      <div class="field">
+        <label for="ap-pw">Setup AP password</label>
+        <input id="ap-pw" type="password" autocomplete="new-password" spellcheck="false" aria-describedby="ap-pw-h">
+        <div class="hint" id="ap-pw-h">8–63 characters. Leave empty to make it open.</div>
+      </div>
+      <div class="actions">
+        <button class="btn primary" type="submit">Set password</button>
+        <button class="btn" type="button">Make open</button>
+      </div>
+    </form>
+    <div class="sub">
+      <h4>Recovery</h4>
+      <div class="row"><button class="btn" type="button">Open Setup AP now</button></div>
+      <p class="hint">Turns on the Setup AP alongside the current Wi-Fi connection.</p>
+    </div>
+  </section>
+
+  <!-- 4. MQTT -->
+  <section class="card full" aria-labelledby="mqtt-h" style="grid-column:1/-1">
+    <div class="card-head"><h2 id="mqtt-h">MQTT</h2><span class="chip ok">Connected</span></div>
+    <div class="net-grid" style="grid-template-columns:repeat(auto-fit,minmax(min(100%,380px),1fr));gap:var(--s5)">
+      <div>
+        <dl class="kv">
+          <dt>Broker</dt><dd class="mono">mqtt://192.168.1.10:1883</dd>
+          <dt>Topic prefix</dt><dd class="mono">devices/Workshop_node</dd>
+          <dt>Published</dt><dd>1840</dd>
+          <dt>Failed</dt><dd>0</dd>
+          <dt>Received</dt><dd>3</dd>
+          <dt>Reconnects</dt><dd>1</dd>
+          <dt>Last error</dt><dd>—</dd>
+        </dl>
+      </div>
+      <form class="stack" onsubmit="return false" aria-label="MQTT settings">
+        <div class="field">
+          <label for="mq-uri">Broker URI</label>
+          <input id="mq-uri" class="mono" placeholder="mqtt://192.168.1.10:1883" autocomplete="off" spellcheck="false">
+        </div>
+        <div class="field">
+          <label for="mq-root">Topic root</label>
+          <input id="mq-root" class="mono" value="devices" autocomplete="off" spellcheck="false" aria-describedby="mq-root-h">
+          <div class="hint" id="mq-root-h">Letters, numbers, _ - and /. Topics become <span class="mono">{root}/Workshop_node/…</span></div>
+        </div>
+        <div class="form-grid">
+          <div class="field"><label for="mq-user">Username</label><input id="mq-user" placeholder="Unchanged — not readable from the device" autocomplete="off" spellcheck="false"></div>
+          <div class="field"><label for="mq-pass">Password</label><input id="mq-pass" type="password" placeholder="Unchanged — not readable from the device" autocomplete="new-password"></div>
+        </div>
+        <div class="row"><button class="btn primary" type="submit">Save &amp; reconnect</button></div>
+        <p class="hint">Once a broker is set, MQTT can't be turned off from the API — set a different broker or factory-reset the device.</p>
+      </form>
+    </div>
+    <div class="sub">
+      <details class="ref">
+        <summary>Topic reference (9 topics)</summary>
+        <div class="table-wrap">
+          <table class="table topics">
+            <thead><tr><th>Topic</th><th>Direction</th><th>Retained</th><th>Summary</th></tr></thead>
+            <tbody>
+              <tr><td class="mono">devices/Workshop_node/system/command</td><td>Subscribe</td><td class="mut">—</td><td>JSON command — same body as <code>POST /api/v1/command</code></td></tr>
+              <tr><td class="mono">devices/Workshop_node/config/set</td><td>Subscribe</td><td class="mut">—</td><td>Alias of <span class="mono">system/command</span></td></tr>
+              <tr><td class="mono">devices/Workshop_node/components/+/set</td><td>Subscribe</td><td class="mut">—</td><td>Alias of <span class="mono">system/command</span></td></tr>
+              <tr><td class="mono">devices/Workshop_node/availability</td><td>Publish</td><td>Yes</td><td>online / offline (last will)</td></tr>
+              <tr><td class="mono">devices/Workshop_node/status</td><td>Publish</td><td>Yes</td><td>Identity snapshot</td></tr>
+              <tr><td class="mono">devices/Workshop_node/telemetry</td><td>Publish</td><td class="mut">—</td><td>Every 15 s</td></tr>
+              <tr><td class="mono">devices/Workshop_node/io</td><td>Publish</td><td class="mut">—</td><td>Live pin and add-on changes</td></tr>
+              <tr><td class="mono">devices/Workshop_node/events</td><td>Publish</td><td class="mut">—</td><td>Command replies</td></tr>
+              <tr><td class="mono">devices/Workshop_node/api</td><td>Publish</td><td>Yes</td><td>Pointer to the OpenAPI document</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </details>
+    </div>
+  </section>
+</div>
+
+<hr class="divider">
+
+<section class="states" aria-labelledby="states-h">
+  <h2 id="states-h">States (prototype only)</h2>
+  <p class="mut" style="margin-top:4px;margin-bottom:var(--s4)">Compact mockups of the other states this screen must handle. Not part of the real page.</p>
+  <div class="grid" style="--min:440px">
+
+    <!-- (a) MQTT never configured -->
+    <div class="card">
+      <h3 class="eyebrow">MQTT never configured</h3>
+      <div class="card-head" style="margin-bottom:0"><h4 style="font-size:var(--fs-md)">MQTT</h4><span class="chip off">Not set</span></div>
+      <div class="empty" style="padding:var(--s4)">
+        <h3>No broker set</h3>
+        <p>Set a broker to publish this device's state and accept commands over MQTT.</p>
+      </div>
+      <form class="stack" onsubmit="return false">
+        <div class="field"><label for="a-uri">Broker URI</label><input id="a-uri" class="mono" placeholder="mqtt://192.168.1.10:1883" autocomplete="off" spellcheck="false"></div>
+        <div class="field"><label for="a-root">Topic root</label><input id="a-root" class="mono" value="devices" autocomplete="off"><div class="hint">Letters, numbers, _ - and /. Topics become <span class="mono">{root}/Workshop_node/…</span></div></div>
+        <div class="form-grid">
+          <div class="field"><label for="a-user">Username</label><input id="a-user" autocomplete="off"></div>
+          <div class="field"><label for="a-pass">Password</label><input id="a-pass" type="password" autocomplete="new-password"></div>
+        </div>
+        <div class="row"><button class="btn primary" type="submit">Save &amp; connect</button></div>
+        <p class="hint">Once a broker is set, MQTT can't be turned off from the API — set a different broker or factory-reset the device.</p>
+      </form>
+    </div>
+
+    <!-- (b) MQTT disconnected -->
+    <div class="card">
+      <h3 class="eyebrow">MQTT disconnected</h3>
+      <div class="card-head" style="margin-bottom:0"><h4 style="font-size:var(--fs-md)">MQTT</h4><span class="chip bad">Disconnected</span></div>
+      <div class="banner warn" role="status"><svg class="i" aria-hidden="true"><use href="#i-alert"/></svg><div class="txt"><strong>Can't reach the broker.</strong> Check the broker address and that it's reachable from the device's network.</div></div>
+      <dl class="kv">
+        <dt>Broker</dt><dd class="mono">mqtt://192.168.1.10:1883</dd>
+        <dt>Topic prefix</dt><dd class="mono">devices/Workshop_node</dd>
+        <dt>Published</dt><dd>1840</dd>
+        <dt>Failed</dt><dd>0</dd>
+        <dt>Received</dt><dd>3</dd>
+        <dt>Reconnects</dt><dd>1</dd>
+        <dt>Last error</dt><dd class="mono t-warn">disconnected</dd>
+      </dl>
+    </div>
+
+    <!-- (c) Wi-Fi recovery -->
+    <div class="card">
+      <h3 class="eyebrow">Wi-Fi in recovery (state apsta_recovery)</h3>
+      <div class="card-head" style="margin-bottom:0"><h4 style="font-size:var(--fs-md)">Wi-Fi</h4><span class="chip warn">Setup AP also on</span></div>
+      <dl class="kv">
+        <dt>Status</dt><dd><span class="chip warn">Connected · Setup AP also on</span></dd>
+        <dt>IP address</dt><dd class="mono">192.168.1.42</dd>
+        <dt>Hostname</dt><dd class="mono">esp32-b3c4d5.local</dd>
+        <dt>Signal at connect</dt><dd>-58 dBm</dd>
+        <dt>Provisioned</dt><dd>Yes</dd>
+      </dl>
+      <div class="banner warn" role="status"><svg class="i" aria-hidden="true"><use href="#i-alert"/></svg><div class="txt"><strong>The Setup AP is on next to your Wi-Fi.</strong> The device opened it for recovery (or a network change). Anyone nearby can see <span class="mono">esp32-b3c4d5</span>. It goes away when the device restarts.</div><div class="act"><button class="btn sm" type="button">Reboot</button></div></div>
+    </div>
+
+    <!-- (d) offline -->
+    <div class="card">
+      <h3 class="eyebrow">Device offline</h3>
+      <div class="banner warn" role="status"><svg class="i" aria-hidden="true"><use href="#i-clock"/></svg><div class="txt"><strong>Workshop node isn't answering.</strong> Showing the last values the Manager saw, 2 h ago. Network changes are unavailable.</div><div class="act"><button class="btn sm" type="button"><svg class="i sm" aria-hidden="true"><use href="#i-refresh"/></svg>Retry</button></div></div>
+      <div class="is-offline-card stack" aria-disabled="true">
+        <div class="card-head" style="margin-bottom:0"><h4 style="font-size:var(--fs-md)">Wi-Fi</h4><span class="chip off">Offline</span></div>
+        <dl class="kv">
+          <dt>Status</dt><dd>Connected (last seen)</dd>
+          <dt>IP address</dt><dd class="mono">192.168.1.42</dd>
+          <dt>Hostname</dt><dd class="mono">esp32-b3c4d5.local</dd>
+          <dt>Signal at connect</dt><dd>-58 dBm</dd>
+        </dl>
+        <div class="actions"><button class="btn" type="button" disabled>Move to another network…</button><button class="btn danger" type="button" disabled>Forget Wi-Fi…</button></div>
+        <div class="actions"><button class="btn" type="button" disabled>Set password</button><button class="btn" type="button" disabled>Save &amp; reconnect</button></div>
+      </div>
+    </div>
+
+    <!-- (e) save errors verbatim -->
+    <div class="card">
+      <h3 class="eyebrow">Save error · Setup AP password</h3>
+      <div class="field err">
+        <label for="e-pw">Setup AP password</label>
+        <input id="e-pw" type="password" value="hunter2" aria-invalid="true" aria-describedby="e-pw-m e-pw-h">
+        <div class="msg" id="e-pw-m"><svg class="i sm" aria-hidden="true"><use href="#i-alert"/></svg>AP password must be empty (open) or 8-63 characters</div>
+        <div class="hint" id="e-pw-h">8–63 characters. Leave empty to make it open.</div>
+      </div>
+      <div class="actions"><button class="btn primary" type="button">Set password</button><button class="btn" type="button">Retry</button></div>
+    </div>
+    <div class="card">
+      <h3 class="eyebrow">Save error · MQTT broker</h3>
+      <div class="field err">
+        <label for="e-uri">Broker URI</label>
+        <input id="e-uri" class="mono" value="" placeholder="mqtt://192.168.1.10:1883" aria-invalid="true" aria-describedby="e-uri-m">
+        <div class="msg" id="e-uri-m"><svg class="i sm" aria-hidden="true"><use href="#i-alert"/></svg>uri required (mqtt://host:1883)</div>
+      </div>
+      <div class="actions"><button class="btn primary" type="button">Save &amp; connect</button></div>
+    </div>
+
+    <!-- (f) scan in progress -->
+    <div class="card">
+      <h3 class="eyebrow">Scan in progress</h3>
+      <div class="banner info" role="status"><svg class="i" aria-hidden="true"><use href="#i-info"/></svg><div class="txt"><strong>Scanning…</strong> the device is busy for a few seconds.</div></div>
+      <div class="ap-list" aria-busy="true" aria-label="Scanning for networks">
+        <div class="ap" style="cursor:default"><span class="skeleton" style="width:18px;height:18px;border-radius:50%"></span><span class="nm"><span class="skeleton line" style="width:50%"></span><span class="skeleton line" style="width:30%;margin-top:6px"></span></span></div>
+        <div class="ap" style="cursor:default"><span class="skeleton" style="width:18px;height:18px;border-radius:50%"></span><span class="nm"><span class="skeleton line" style="width:40%"></span><span class="skeleton line" style="width:30%;margin-top:6px"></span></span></div>
+        <div class="ap" style="cursor:default"><span class="skeleton" style="width:18px;height:18px;border-radius:50%"></span><span class="nm"><span class="skeleton line" style="width:60%"></span><span class="skeleton line" style="width:30%;margin-top:6px"></span></span></div>
+      </div>
+      <div class="progress ind" role="progressbar" aria-label="Scanning"><i></i></div>
+    </div>
+  </div>
+
+  <h3 style="margin:var(--s6) 0 var(--s3)">Move to another network — steps 2 to 4</h3>
+  <p class="mut" style="margin-bottom:var(--s4)">Step 1 (choose network) opens from <strong>Move to another network…</strong> above.</p>
+  <div class="grid" style="--min:420px">
+
+    <!-- step 2 -->
+    <div class="mock">
+      <div class="dlg">
+        <div class="dlg-head"><h4>Move to another network</h4><span class="btn icon ghost" aria-hidden="true"><svg class="i" aria-hidden="true"><use href="#i-x"/></svg></span></div>
+        <div class="dlg-body">
+          <ol class="steps"><li class="done">Choose network</li><li class="on">Password</li><li>Confirm</li><li>Watching</li></ol>
+          <p>Network <strong>HomeNet</strong> <span class="mut">· channel 6 · -52 dBm · secured</span></p>
+          <div class="field">
+            <label for="s2-pw">Wi-Fi password</label>
+            <input id="s2-pw" type="password" autocomplete="off" spellcheck="false" aria-describedby="s2-pw-h">
+            <div class="hint" id="s2-pw-h">Sent to the device only, to test the network. For an open network, leave it empty.</div>
+          </div>
+        </div>
+        <div class="dlg-foot"><button type="button" class="btn">Back</button><button type="button" class="btn primary">Next</button></div>
+      </div>
+    </div>
+
+    <!-- step 3 -->
+    <div class="mock">
+      <div class="dlg">
+        <div class="dlg-head"><h4>Move to another network</h4><span class="btn icon ghost" aria-hidden="true"><svg class="i" aria-hidden="true"><use href="#i-x"/></svg></span></div>
+        <div class="dlg-body">
+          <ol class="steps"><li class="done">Choose network</li><li class="done">Password</li><li class="on">Confirm</li><li>Watching</li></ol>
+          <div class="banner bad" role="alert"><svg class="i" aria-hidden="true"><use href="#i-alert"/></svg><div class="txt"><strong>This can take Workshop node off your network.</strong> The device drops its current connection to test the new network. If the test works it joins the new network — it may get a new IP or end up somewhere this PC can't reach. If the test fails it stays on its Setup AP (<span class="mono">esp32-b3c4d5</span>) until it's restarted by hand (power-cycle), then it reconnects to the current network.</div></div>
+          <p>Moving to <strong>HomeNet</strong></p>
+          <div class="field"><label for="s3-tc">Type <strong>Workshop node</strong> to confirm</label><input id="s3-tc" autocomplete="off" data-confirm="Workshop node" data-target="s3-go"></div>
+        </div>
+        <div class="dlg-foot"><button type="button" class="btn">Back</button><button type="button" class="btn danger" id="s3-go" disabled>Move Workshop node</button></div>
+      </div>
+    </div>
+
+    <!-- step 4 -->
+    <div class="mock full">
+      <div class="dlg">
+        <div class="dlg-head"><h4>Move to another network</h4><span class="btn icon ghost" aria-hidden="true"><svg class="i" aria-hidden="true"><use href="#i-x"/></svg></span></div>
+        <div class="dlg-body">
+          <ol class="steps"><li class="done">Choose network</li><li class="done">Password</li><li class="done">Confirm</li><li class="on">Watching</li></ol>
+          <div class="watch" style="width:100%">
+            <h3>Watching for Workshop node…</h3>
+            <div class="progress ind" role="progressbar" aria-label="Watching for Workshop node" style="width:100%"><i></i></div>
+            <p class="mut">The Manager is rescanning for device <span class="mono">a4cf12b3c4d5</span>. This can take up to 2 minutes (0:42 so far).</p>
+          </div>
+          <div class="eyebrow">Possible outcomes</div>
+          <div class="grid" style="--min:280px">
+            <div class="banner ok" role="status"><svg class="i" aria-hidden="true"><use href="#i-check"/></svg><div class="txt"><strong>Found.</strong> Found at <span class="mono">192.168.20.17</span> on the new network.</div><div class="act"><a class="btn sm" href="device-live.html">Open device</a></div></div>
+            <div class="banner warn" role="status"><svg class="i" aria-hidden="true"><use href="#i-alert"/></svg><div class="txt"><strong>Not found after 2 min.</strong> If it joined a network this PC isn't on, that's expected. Otherwise power-cycle it to return to the old network.</div><div class="act"><button class="btn sm" type="button">Keep watching</button></div></div>
+          </div>
+        </div>
+        <div class="dlg-foot"><button type="button" class="btn">Stop watching</button></div>
+      </div>
+    </div>
+  </div>
+</section>
+</main>
+</div>
+
+<!-- Move to another network: step 1 (sheet) -->
+<dialog class="sheet" id="move-sheet" aria-labelledby="move-sheet-t">
+  <div class="dlg">
+    <div class="dlg-head"><h2 id="move-sheet-t">Move to another network</h2><button type="button" class="btn icon ghost" data-close aria-label="Close"><svg class="i" aria-hidden="true"><use href="#i-x"/></svg></button></div>
+    <div class="dlg-body">
+      <ol class="steps"><li class="on">Choose network</li><li>Password</li><li>Confirm</li><li>Watching</li></ol>
+      <div class="row">
+        <strong>Networks the device can see</strong>
+        <span class="spacer"></span>
+        <button class="btn sm" type="button"><svg class="i sm" aria-hidden="true"><use href="#i-refresh"/></svg>Scan again</button>
+      </div>
+      <p class="hint">Scanning pauses the device for a few seconds.</p>
+      <div class="ap-list" role="radiogroup" aria-label="Wi-Fi networks">
+        <label class="ap"><input type="radio" name="ap" value="HomeNet"><span class="nm"><strong>HomeNet</strong><span>Channel 6 · secured</span></span><svg class="i sm lock" aria-label="Secured"><use href="#i-lock"/></svg><span class="sig" data-l="4" aria-hidden="true"><i></i><i></i><i></i><i></i></span><span class="sig-txt num">-52 dBm</span></label>
+        <label class="ap"><input type="radio" name="ap" value="Workshop-IoT"><span class="nm"><strong>Workshop-IoT</strong><span>Channel 11 · secured</span></span><svg class="i sm lock" aria-label="Secured"><use href="#i-lock"/></svg><span class="sig" data-l="3" aria-hidden="true"><i></i><i></i><i></i><i></i></span><span class="sig-txt num">-61 dBm</span></label>
+        <label class="ap"><input type="radio" name="ap" value="Neighbour 5G"><span class="nm"><strong>Neighbour 5G</strong><span>Channel 1 · secured</span></span><svg class="i sm lock" aria-label="Secured"><use href="#i-lock"/></svg><span class="sig" data-l="2" aria-hidden="true"><i></i><i></i><i></i><i></i></span><span class="sig-txt num">-78 dBm</span></label>
+        <label class="ap"><input type="radio" name="ap" value="CafeOpen"><span class="nm"><strong>CafeOpen</strong><span>Channel 6 · open</span></span><span class="sig" data-l="1" aria-hidden="true"><i></i><i></i><i></i><i></i></span><span class="sig-txt num">-83 dBm</span></label>
+      </div>
+    </div>
+    <div class="dlg-foot"><button type="button" class="btn" data-close>Cancel</button><button type="button" class="btn primary" id="move-next" disabled>Next</button></div>
+  </div>
+</dialog>
+
+<dialog class="modal" id="reboot-modal" aria-labelledby="reboot-modal-t">
+  <form method="dialog" class="dlg">
+    <div class="dlg-head"><h2 id="reboot-modal-t">Reboot Workshop node?</h2><button type="button" class="btn icon ghost" data-close aria-label="Close"><svg class="i" aria-hidden="true"><use href="#i-x"/></svg></button></div>
+    <div class="dlg-body"><p>Reboot Workshop node? It will be offline for about 10 seconds.</p></div>
+    <div class="dlg-foot"><button type="button" class="btn" data-close>Cancel</button><button class="btn primary" value="reboot">Reboot</button></div>
+  </form>
+</dialog>
+
+<dialog class="modal danger" id="forget-modal" aria-labelledby="forget-modal-t">
+  <form method="dialog" class="dlg">
+    <div class="dlg-head"><h2 id="forget-modal-t">Forget Wi-Fi on Workshop node?</h2><button type="button" class="btn icon ghost" data-close aria-label="Close"><svg class="i" aria-hidden="true"><use href="#i-x"/></svg></button></div>
+    <div class="dlg-body">
+      <p>Workshop node will leave this network and come back as Wi-Fi network <span class="mono">esp32-b3c4d5</span> (Setup AP). The Manager won't be able to reach it until it's set up again.</p>
+      <div class="field"><label for="forget-tc">Type <strong>Workshop node</strong> to confirm</label><input id="forget-tc" autocomplete="off" data-confirm="Workshop node"></div>
+    </div>
+    <div class="dlg-foot"><button type="button" class="btn" data-close>Cancel</button><button class="btn danger" value="forget" data-confirm-btn disabled>Forget Wi-Fi</button></div>
+  </form>
+</dialog>
+
+<script>
+(function(){
+  var root=document.documentElement,modes=['system','light','dark'],cur='system',KEY='deesp32-theme';
+  try{var s=localStorage.getItem(KEY);if(s==='light'||s==='dark')cur=s}catch(e){}
+  function apply(){
+    if(cur==='system')root.removeAttribute('data-theme');else root.setAttribute('data-theme',cur);
+    document.querySelectorAll('[data-theme-toggle]').forEach(function(b){
+      var l=b.querySelector('.lbl');if(l)l.textContent='Theme: '+cur;
+      b.title='Theme: '+cur;b.setAttribute('aria-label','Theme: '+cur+' (click to change)');
+    });
+  }
+  apply();
+  document.addEventListener('click',function(e){
+    var t=e.target.closest('[data-theme-toggle]');
+    if(t){cur=modes[(modes.indexOf(cur)+1)%3];try{localStorage.setItem(KEY,cur)}catch(x){}apply();return}
+    var o=e.target.closest('[data-open]');
+    if(o){var d=document.getElementById(o.getAttribute('data-open'));if(d&&d.showModal)d.showModal();return}
+    var c=e.target.closest('[data-close]');
+    if(c){var dd=c.closest('dialog');if(dd)dd.close();return}
+    if(e.target.tagName==='DIALOG'&&e.target.open){e.target.close();return}
+    var sg=e.target.closest('.seg button');
+    if(sg){sg.parentNode.querySelectorAll('button').forEach(function(b){var on=b===sg;b.classList.toggle('on',on);b.setAttribute('aria-pressed',on)});return}
+    var fc=e.target.closest('.filter-chip');
+    if(fc){
+      var grp=fc.closest('[data-single]');
+      if(grp){grp.querySelectorAll('.filter-chip').forEach(function(b){var on=b===fc;b.classList.toggle('on',on);b.setAttribute('aria-pressed',on)})}
+      else{var on=fc.classList.toggle('on');fc.setAttribute('aria-pressed',on)}
+      return;
+    }
+    var sw=e.target.closest('.switch');
+    if(sw){sw.setAttribute('aria-checked',sw.getAttribute('aria-checked')!=='true');return}
+    var dm=e.target.closest('[data-dismiss]');
+    if(dm){var tt=dm.closest('.toast');if(tt)tt.remove()}
+  });
+})();
+(function(){
+  document.addEventListener('input',function(e){
+    var t=e.target;if(!t.matches||!t.matches('[data-confirm]'))return;
+    var ok=t.value.trim()===t.getAttribute('data-confirm');
+    var tg=t.getAttribute('data-target');
+    var b=tg?document.getElementById(tg):t.closest('dialog').querySelector('[data-confirm-btn]');
+    if(b)b.disabled=!ok;
+  });
+  document.addEventListener('close',function(e){
+    var i=e.target.querySelector&&e.target.querySelector('[data-confirm]');
+    if(i){i.value='';var b=e.target.querySelector('[data-confirm-btn]');if(b)b.disabled=true}
+  },true);
+  document.addEventListener('change',function(e){
+    if(e.target.name==='ap'){var n=document.getElementById('move-next');if(n)n.disabled=false}
+  });
+})();
+</script>
+</body>
+</html>

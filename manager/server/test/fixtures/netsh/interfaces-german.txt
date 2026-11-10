@@ -1,0 +1,20 @@
+Auf dem System ist 1 Schnittstelle vorhanden:
+
+    Name                   : WLAN
+    Beschreibung           : Example(R) Wi-Fi 6 Wireless Network Adapter
+    GUID                   : 00000000-0000-0000-0000-000000000003
+    Physische Adresse      : aa:bb:cc:00:11:44
+    Schnittstellentyp      : Primär
+    Status                 : Verbunden
+    SSID                   : Heimnetz
+    AP-BSSID               : 02:00:00:00:00:03
+    Band                   : 2,4 GHz
+    Kanal                  : 11
+    Netzwerktyp            : Infrastruktur
+    Funktyp                : 802.11n
+    Authentifizierung      : WPA2-Personal
+    Verschlüsselung        : CCMP
+    Verbindungsmodus       : Automatische Verbindung
+    Signal                 : 88%
+    Profil                 : Heimnetz
+

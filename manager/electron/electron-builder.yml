@@ -1,0 +1,24 @@
+# Portable Windows build. Run through `npm run dist:win` (scripts/electron.mjs stages the app dir first).
+# The staged app dir holds main.cjs (server + shell bundled by esbuild), public/ (the SPA) and a package.json
+# without dependencies, so no node_modules is shipped.
+appId: de.esp32.manager
+productName: de-esp32 Manager
+# directories.output is passed by scripts/electron.mjs (manager/release)
+asar: true
+compression: normal
+npmRebuild: false
+nodeGypRebuild: false
+buildDependenciesFromSource: false
+electronLanguages: [en-US]
+files:
+  - main.cjs
+  - package.json
+  - public/**/*
+  - "!**/node_modules"
+win:
+  target:
+    - target: portable
+      arch: [x64]
+  signAndEditExecutable: false
+  forceCodeSigning: false
+artifactName: de-esp32-manager-${version}-portable.${ext}

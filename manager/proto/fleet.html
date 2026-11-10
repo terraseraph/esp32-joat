@@ -1,0 +1,525 @@
+<!doctype html>
+<!--
+CANONICAL MOCK FLEET (all Manager prototypes use exactly these 8 devices)
+Target firmware = "Latest CI build", app_version 9dcba89, built Nov 10 2026.
+
+id (MAC hex)   hostname      name                IP              health                         app_version        other
+a4cf12b3c4d5  esp32-b3c4d5  Workshop node       192.168.1.42    online                         9dcba89            uptime 1h 27m, RSSI -58, MQTT connected, memory ok (151 KB free of 320 KB), 7 I/O, 2 add-ons
+a4cf12e81f20  esp32-e81f20  Greenhouse          192.168.1.57    online                         9dcba89            uptime 6d 4h, RSSI -71, MQTT connected, memory ok, BME280 23.4 C
+3c71bf0a9e11  esp32-0a9e11  Garage door         192.168.1.63    online, needs attention        0de951c (differs)  MQTT configured but disconnected (last_error "disconnected"), RSSI -66
+3c71bf44d702  esp32-44d702  Front gate RFID     192.168.1.71    online, needs attention        9dcba89            SAFE MODE, safe_reason "boot loop: 3 resets before healthy", boot_state safe_mode
+246f28c0ffee  esp32-c0ffee  Kitchen relay       192.168.1.88    offline                        5e3c76f (differs)  last seen 2 h ago; cached values greyed
+246f2811ab09  esp32-11ab09  Pump controller     192.168.1.90    online, needs attention        9dcba89            memory pressure warn (41 KB free, largest block 38 KB)
+7821849a3b6c  esp32-9a3b6c  (no name -> hostname) 192.168.1.104  online, needs attention        9dcba89            ota.image_state pending_verify ("Verifying new firmware"), uptime 42 s
+08b61f22c4e7  esp32-22c4e7  Desk lamp           192.168.1.112   unreachable (1 missed poll)    9dcba89            last seen 45 s ago
+
+Values NOT in the canonical table that fleet.html invented for display only (other screens may reuse):
+uptime Garage door 12d 2h, Front gate RFID 1m 04s, Pump controller 3d 11h; RSSI Front gate -63, Pump -69, 9a3b6c -61;
+MQTT "not set" for Front gate RFID and 9a3b6c, "connected" for Pump controller.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>Fleet - de-esp32 Manager</title>
+<script>try{var t=localStorage.getItem('deesp32-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t)}catch(e){}</script>
+<link rel="stylesheet" href="tokens.css">
+<style>
+.dev{display:flex;flex-direction:column;gap:var(--s3);padding:var(--s4) var(--s5)}
+.dev.sel{border-color:var(--acc);box-shadow:0 0 0 1px var(--acc)}
+.dev.is-offline{background:var(--in)}
+.dev.is-offline .chips,.dev.is-offline .dev-meta{opacity:.65}
+.dev-top{display:flex;align-items:flex-start;gap:10px}
+.dev-top .chip{margin-top:2px}
+.sel-box{width:40px;min-height:40px;justify-content:center;margin:-8px 0 -8px -10px}
+.dev-id{flex:1;min-width:0}
+.dev-name{font-size:17px;font-weight:650;overflow-wrap:anywhere}
+.dev-id .mono{font-size:var(--fs-xs);overflow-wrap:anywhere}
+.attn{display:flex;align-items:flex-start;gap:8px;font-size:14px;font-weight:600}
+.attn .i{margin-top:2px}
+.attn.warn{color:var(--warn)}.attn.bad{color:var(--bad)}.attn.none{color:var(--mut);font-weight:500}
+.dev-meta{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:var(--fs-sm)}
+.dev-actions{display:flex;flex-wrap:wrap;gap:var(--s2);margin-top:auto;padding-top:var(--s1)}
+.states h3.eyebrow{margin-bottom:var(--s3)}
+.states>.grid>.card{display:flex;flex-direction:column;gap:var(--s3)}
+.states .full{grid-column:1/-1}
+@media(max-width:767.98px){.toolbar .search{max-width:none}}
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false"><defs>
+<symbol id="i-chip" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2"/><path d="M9 2v4M15 2v4M9 18v4M15 18v4M2 9h4M2 15h4M18 9h4M18 15h4"/></symbol>
+<symbol id="i-fleet" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></symbol>
+<symbol id="i-discover" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4"/><path d="M12 12l5-5"/></symbol>
+<symbol id="i-firmware" viewBox="0 0 24 24"><path d="M12 3v12M7 10l5 5 5-5"/><path d="M4 20h16"/></symbol>
+<symbol id="i-backups" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="5" rx="1.5"/><path d="M5 9v9a2 2 0 002 2h10a2 2 0 002-2V9M10 13h4"/></symbol>
+<symbol id="i-settings" viewBox="0 0 24 24"><path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="17" r="2"/></symbol>
+<symbol id="i-theme" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 010 18z" fill="currentColor"/></symbol>
+<symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></symbol>
+<symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+<symbol id="i-refresh" viewBox="0 0 24 24"><path d="M20 11a8 8 0 00-14-4L4 9"/><path d="M4 4v5h5"/><path d="M4 13a8 8 0 0014 4l2-2"/><path d="M20 20v-5h-5"/></symbol>
+<symbol id="i-ext" viewBox="0 0 24 24"><path d="M14 4h6v6M20 4l-9 9"/><path d="M18 14v5a1 1 0 01-1 1H5a1 1 0 01-1-1V7a1 1 0 011-1h5"/></symbol>
+<symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12l5 5 9-10"/></symbol>
+<symbol id="i-alert" viewBox="0 0 24 24"><path d="M12 3l10 18H2z"/><path d="M12 10v5M12 18v.01"/></symbol>
+<symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.01"/></symbol>
+<symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></symbol>
+<symbol id="i-trash" viewBox="0 0 24 24"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></symbol>
+<symbol id="i-list" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/></symbol>
+<symbol id="i-upload" viewBox="0 0 24 24"><path d="M12 16V4M7 9l5-5 5 5"/><path d="M4 20h16"/></symbol>
+<symbol id="i-wifi" viewBox="0 0 24 24"><path d="M2 9a15 15 0 0120 0M5 12.5a10 10 0 0114 0M8.5 16a5 5 0 017 0"/><path d="M12 19.5v.01"/></symbol>
+<symbol id="i-power" viewBox="0 0 24 24"><path d="M12 3v9"/><path d="M6.3 7a8 8 0 1011.4 0"/></symbol>
+<symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></symbol>
+<symbol id="i-server" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="7" rx="2"/><rect x="3" y="13" width="18" height="7" rx="2"/><path d="M7 7.5v.01M7 16.5v.01"/></symbol>
+</defs></svg>
+<div class="app">
+<aside class="nav">
+  <a class="brand" href="fleet.html" aria-label="de-esp32 Manager"><span class="logo"><svg class="i" aria-hidden="true"><use href="#i-chip"/></svg></span><span class="lbl">de-esp32 Manager</span></a>
+  <nav class="nav-list" aria-label="Main">
+    <a class="nav-item on" href="fleet.html" aria-current="page" title="Fleet"><svg class="i" aria-hidden="true"><use href="#i-fleet"/></svg><span class="lbl">Fleet</span><span class="badge">8</span></a>
+    <a class="nav-item" href="discover.html" title="Discover"><svg class="i" aria-hidden="true"><use href="#i-discover"/></svg><span class="lbl">Discover</span></a>
+    <a class="nav-item" href="firmware.html" title="Firmware"><svg class="i" aria-hidden="true"><use href="#i-firmware"/></svg><span class="lbl">Firmware</span></a>
+    <a class="nav-item" href="backups.html" title="Backups"><svg class="i" aria-hidden="true"><use href="#i-backups"/></svg><span class="lbl">Backups</span></a>
+    <a class="nav-item" href="settings.html" title="Settings"><svg class="i" aria-hidden="true"><use href="#i-settings"/></svg><span class="lbl">Settings</span></a>
+  </nav>
+  <div class="nav-foot">
+    <div class="srv" title="Server connected · localhost:5180"><span class="dot ok"></span><span class="lbl">Server connected · localhost:5180</span></div>
+    <button class="btn ghost" type="button" data-theme-toggle title="Theme: system" aria-label="Theme: system"><svg class="i" aria-hidden="true"><use href="#i-theme"/></svg><span class="lbl">Theme: system</span></button>
+  </div>
+</aside>
+<main class="page">
+<div class="page-head">
+  <div>
+    <h1>Fleet</h1>
+    <p>8 devices · last scan 3 min ago</p>
+  </div>
+  <div class="actions">
+    <a class="btn primary" href="discover.html"><svg class="i" aria-hidden="true"><use href="#i-discover"/></svg>Scan network</a>
+    <button class="btn" type="button" data-open="add-ip"><svg class="i" aria-hidden="true"><use href="#i-plus"/></svg>Add by IP</button>
+  </div>
+</div>
+
+<section class="stats" aria-label="Fleet summary">
+  <div class="stat"><span class="label">Total</span><span class="value">8</span><span class="hint">devices in your fleet</span></div>
+  <div class="stat ok"><span class="label">Online</span><span class="value">6</span><span class="hint">including 4 that need attention</span></div>
+  <div class="stat"><span class="label">Offline / unreachable</span><span class="value">2</span><span class="hint">1 offline · 1 unreachable</span></div>
+  <div class="stat warn"><span class="label">Needs attention</span><span class="value">4</span><span class="hint">safe mode, MQTT, memory, new firmware</span></div>
+  <div class="stat"><span class="label">Firmware differs</span><span class="value">2</span><span class="hint">vs target 9dcba89 (Latest CI build)</span></div>
+</section>
+
+<div class="toolbar" role="toolbar" aria-label="Filter and sort devices">
+  <label class="search"><svg class="i" aria-hidden="true"><use href="#i-search"/></svg><input type="search" id="q" placeholder="Search name, IP or ID" aria-label="Search name, IP or ID" autocomplete="off"></label>
+  <div class="chips" data-single role="group" aria-label="Filter">
+    <button type="button" class="filter-chip on" data-filter="all" aria-pressed="true">All <span class="count">8</span></button>
+    <button type="button" class="filter-chip" data-filter="online" aria-pressed="false">Online <span class="count">6</span></button>
+    <button type="button" class="filter-chip" data-filter="offline" aria-pressed="false">Offline <span class="count">2</span></button>
+    <button type="button" class="filter-chip" data-filter="attn" aria-pressed="false">Needs attention <span class="count">4</span></button>
+    <button type="button" class="filter-chip" data-filter="differs" aria-pressed="false">Differs <span class="count">2</span></button>
+  </div>
+  <span class="spacer"></span>
+  <label class="sr" for="sort">Sort by</label>
+  <select class="input" id="sort"><option value="name">Sort: Name</option><option value="health">Sort: Health</option><option value="seen">Sort: Last seen</option><option value="fw">Sort: Firmware</option></select>
+  <div class="seg" role="group" aria-label="View">
+    <button type="button" class="on" data-view="cards" aria-pressed="true"><svg class="i sm" aria-hidden="true"><use href="#i-fleet"/></svg>Cards</button>
+    <button type="button" data-view="table" aria-pressed="false"><svg class="i sm" aria-hidden="true"><use href="#i-list"/></svg>Table</button>
+  </div>
+</div>
+
+<div id="view-cards">
+  <div class="grid" style="--min:340px">
+    <article class="card dev is-offline" data-id="08b61f22c4e7" data-health="unreachable" data-attn="0" data-differs="0" data-name="Desk lamp" data-rank="1" data-seen="45" data-fw="9dcba89" data-search="desk lamp esp32-22c4e7 192.168.1.112 08b61f22c4e7">
+      <div class="dev-top">
+        <label class="check sel-box"><input type="checkbox" data-sel="08b61f22c4e7" aria-label="Select Desk lamp"></label>
+        <div class="dev-id"><h3 class="dev-name">Desk lamp</h3><div class="mono mut">esp32-22c4e7 · 192.168.1.112</div></div>
+        <span class="chip warn">Unreachable</span>
+      </div>
+      <p class="attn warn"><svg class="i sm" aria-hidden="true"><use href="#i-alert"/></svg><span>Not answering — 1 missed poll · last seen 45 s ago</span></p>
+      <div class="chips"><span class="chip mono">9dcba89</span><span class="chip">Cached values</span></div>
+      <div class="dev-meta mut"><span>Uptime —</span></div>
+      <div class="dev-actions">
+        <a class="btn sm primary" href="device-live.html">Open</a>
+        <a class="btn sm" href="http://192.168.1.112/" target="_blank" rel="noopener" aria-label="Open device page for Desk lamp">Device page ↗</a>
+        <button class="btn sm" type="button"><svg class="i sm" aria-hidden="true"><use href="#i-refresh"/></svg>Retry</button>
+      </div>
+    </article>
+    <article class="card dev" data-id="7821849a3b6c" data-health="online" data-attn="1" data-differs="0" data-name="esp32-9a3b6c" data-rank="2" data-seen="0" data-fw="9dcba89" data-search="esp32-9a3b6c esp32-9a3b6c 192.168.1.104 7821849a3b6c">
+      <div class="dev-top">
+        <label class="check sel-box"><input type="checkbox" data-sel="7821849a3b6c" aria-label="Select esp32-9a3b6c"></label>
+        <div class="dev-id"><h3 class="dev-name">esp32-9a3b6c</h3><div class="mono mut">esp32-9a3b6c · 192.168.1.104</div></div>
+        <span class="chip ok">Online</span>
+      </div>
+      <p class="attn warn"><svg class="i sm" aria-hidden="true"><use href="#i-alert"/></svg><span>Verifying new firmware</span></p>
+      <div class="chips"><span class="chip"><svg class="i" aria-hidden="true"><use href="#i-wifi"/></svg>-61 dBm</span><span class="chip off">MQTT not set</span><span class="chip ok">Memory OK</span><span class="chip mono">9dcba89</span></div>
+      <div class="dev-meta mut"><span>Uptime <span class="num">42 s</span></span></div>
+      <div class="dev-actions">
+        <a class="btn sm primary" href="device-live.html">Open</a>
+        <a class="btn sm" href="http://192.168.1.104/" target="_blank" rel="noopener" aria-label="Open device page for esp32-9a3b6c">Device page ↗</a>
+        
+      </div>
+    </article>
+    <article class="card dev" data-id="3c71bf44d702" data-health="online" data-attn="1" data-differs="0" data-name="Front gate RFID" data-rank="2" data-seen="0" data-fw="9dcba89" data-search="front gate rfid esp32-44d702 192.168.1.71 3c71bf44d702">
+      <div class="dev-top">
+        <label class="check sel-box"><input type="checkbox" data-sel="3c71bf44d702" aria-label="Select Front gate RFID"></label>
+        <div class="dev-id"><h3 class="dev-name">Front gate RFID</h3><div class="mono mut">esp32-44d702 · 192.168.1.71</div></div>
+        <span class="chip ok">Online</span>
+      </div>
+      <p class="attn bad"><svg class="i sm" aria-hidden="true"><use href="#i-alert"/></svg><span>Safe mode — boot loop: 3 resets before healthy</span></p>
+      <div class="chips"><span class="chip"><svg class="i" aria-hidden="true"><use href="#i-wifi"/></svg>-63 dBm</span><span class="chip off">MQTT not set</span><span class="chip ok">Memory OK</span><span class="chip mono">9dcba89</span></div>
+      <div class="dev-meta mut"><span>Uptime <span class="num">1m 04s</span></span></div>
+      <div class="dev-actions">
+        <a class="btn sm primary" href="device-live.html">Open</a>
+        <a class="btn sm" href="http://192.168.1.71/" target="_blank" rel="noopener" aria-label="Open device page for Front gate RFID">Device page ↗</a>
+        
+      </div>
+    </article>
+    <article class="card dev sel" data-id="3c71bf0a9e11" data-health="online" data-attn="1" data-differs="1" data-name="Garage door" data-rank="2" data-seen="0" data-fw="0de951c" data-search="garage door esp32-0a9e11 192.168.1.63 3c71bf0a9e11">
+      <div class="dev-top">
+        <label class="check sel-box"><input type="checkbox" data-sel="3c71bf0a9e11" checked aria-label="Select Garage door"></label>
+        <div class="dev-id"><h3 class="dev-name">Garage door</h3><div class="mono mut">esp32-0a9e11 · 192.168.1.63</div></div>
+        <span class="chip ok">Online</span>
+      </div>
+      <p class="attn warn"><svg class="i sm" aria-hidden="true"><use href="#i-alert"/></svg><span>MQTT disconnected</span></p>
+      <div class="chips"><span class="chip"><svg class="i" aria-hidden="true"><use href="#i-wifi"/></svg>-66 dBm</span><span class="chip warn">MQTT disconnected</span><span class="chip ok">Memory OK</span><span class="chip warn mono">0de951c · differs</span></div>
+      <div class="dev-meta mut"><span>Uptime <span class="num">12d 2h</span></span></div>
+      <div class="dev-actions">
+        <a class="btn sm primary" href="device-live.html">Open</a>
+        <a class="btn sm" href="http://192.168.1.63/" target="_blank" rel="noopener" aria-label="Open device page for Garage door">Device page ↗</a>
+        
+      </div>
+    </article>
+    <article class="card dev" data-id="a4cf12e81f20" data-health="online" data-attn="0" data-differs="0" data-name="Greenhouse" data-rank="3" data-seen="0" data-fw="9dcba89" data-search="greenhouse esp32-e81f20 192.168.1.57 a4cf12e81f20">
+      <div class="dev-top">
+        <label class="check sel-box"><input type="checkbox" data-sel="a4cf12e81f20" aria-label="Select Greenhouse"></label>
+        <div class="dev-id"><h3 class="dev-name">Greenhouse</h3><div class="mono mut">esp32-e81f20 · 192.168.1.57</div></div>
+        <span class="chip ok">Online</span>
+      </div>
+      <p class="attn none"><span>No issues</span></p>
+      <div class="chips"><span class="chip"><svg class="i" aria-hidden="true"><use href="#i-wifi"/></svg>-71 dBm</span><span class="chip ok">MQTT connected</span><span class="chip ok">Memory OK</span><span class="chip mono">9dcba89</span></div>
+      <div class="dev-meta mut"><span>Uptime <span class="num">6d 4h</span></span><span>BME280 23.4 °C</span></div>
+      <div class="dev-actions">
+        <a class="btn sm primary" href="device-live.html">Open</a>
+        <a class="btn sm" href="http://192.168.1.57/" target="_blank" rel="noopener" aria-label="Open device page for Greenhouse">Device page ↗</a>
+        
+      </div>
+    </article>
+    <article class="card dev is-offline" data-id="246f28c0ffee" data-health="offline" data-attn="0" data-differs="1" data-name="Kitchen relay" data-rank="0" data-seen="7200" data-fw="5e3c76f" data-search="kitchen relay esp32-c0ffee 192.168.1.88 246f28c0ffee">
+      <div class="dev-top">
+        <label class="check sel-box"><input type="checkbox" data-sel="246f28c0ffee" aria-label="Select Kitchen relay"></label>
+        <div class="dev-id"><h3 class="dev-name">Kitchen relay</h3><div class="mono mut">esp32-c0ffee · 192.168.1.88</div></div>
+        <span class="chip off">Offline</span>
+      </div>
+      <p class="attn none"><svg class="i sm" aria-hidden="true"><use href="#i-clock"/></svg><span>Last seen 2 h ago</span></p>
+      <div class="chips"><span class="chip warn mono">5e3c76f · differs</span><span class="chip">Cached values</span></div>
+      <div class="dev-meta mut"><span>Uptime —</span></div>
+      <div class="dev-actions">
+        <a class="btn sm primary" href="device-live.html">Open</a>
+        <a class="btn sm" href="http://192.168.1.88/" target="_blank" rel="noopener" aria-label="Open device page for Kitchen relay">Device page ↗</a>
+        <button class="btn sm" type="button"><svg class="i sm" aria-hidden="true"><use href="#i-refresh"/></svg>Retry</button>
+      </div>
+    </article>
+    <article class="card dev" data-id="246f2811ab09" data-health="online" data-attn="1" data-differs="0" data-name="Pump controller" data-rank="2" data-seen="0" data-fw="9dcba89" data-search="pump controller esp32-11ab09 192.168.1.90 246f2811ab09">
+      <div class="dev-top">
+        <label class="check sel-box"><input type="checkbox" data-sel="246f2811ab09" aria-label="Select Pump controller"></label>
+        <div class="dev-id"><h3 class="dev-name">Pump controller</h3><div class="mono mut">esp32-11ab09 · 192.168.1.90</div></div>
+        <span class="chip ok">Online</span>
+      </div>
+      <p class="attn warn"><svg class="i sm" aria-hidden="true"><use href="#i-alert"/></svg><span>Memory pressure: warn</span></p>
+      <div class="chips"><span class="chip"><svg class="i" aria-hidden="true"><use href="#i-wifi"/></svg>-69 dBm</span><span class="chip ok">MQTT connected</span><span class="chip warn">Memory warn · 41 KB free</span><span class="chip mono">9dcba89</span></div>
+      <div class="dev-meta mut"><span>Uptime <span class="num">3d 11h</span></span></div>
+      <div class="dev-actions">
+        <a class="btn sm primary" href="device-live.html">Open</a>
+        <a class="btn sm" href="http://192.168.1.90/" target="_blank" rel="noopener" aria-label="Open device page for Pump controller">Device page ↗</a>
+        
+      </div>
+    </article>
+    <article class="card dev sel" data-id="a4cf12b3c4d5" data-health="online" data-attn="0" data-differs="0" data-name="Workshop node" data-rank="3" data-seen="0" data-fw="9dcba89" data-search="workshop node esp32-b3c4d5 192.168.1.42 a4cf12b3c4d5">
+      <div class="dev-top">
+        <label class="check sel-box"><input type="checkbox" data-sel="a4cf12b3c4d5" checked aria-label="Select Workshop node"></label>
+        <div class="dev-id"><h3 class="dev-name">Workshop node</h3><div class="mono mut">esp32-b3c4d5 · 192.168.1.42</div></div>
+        <span class="chip ok">Online</span>
+      </div>
+      <p class="attn none"><span>No issues</span></p>
+      <div class="chips"><span class="chip"><svg class="i" aria-hidden="true"><use href="#i-wifi"/></svg>-58 dBm</span><span class="chip ok">MQTT connected</span><span class="chip ok">Memory OK · 151 KB free</span><span class="chip mono">9dcba89</span></div>
+      <div class="dev-meta mut"><span>Uptime <span class="num">1h 27m</span></span><span>7 I/O · 2 add-ons</span></div>
+      <div class="dev-actions">
+        <a class="btn sm primary" href="device-live.html">Open</a>
+        <a class="btn sm" href="http://192.168.1.42/" target="_blank" rel="noopener" aria-label="Open device page for Workshop node">Device page ↗</a>
+        
+      </div>
+    </article>
+  </div>
+</div>
+
+<div id="view-table" hidden>
+  <div class="table-wrap">
+    <table class="table">
+      <thead><tr>
+        <th class="sel"><label class="check"><input type="checkbox" id="sel-all" aria-label="Select all shown devices"></label></th>
+        <th>Name</th><th>Health</th><th>IP</th><th>Firmware</th><th class="num">Uptime</th><th class="num">RSSI</th><th>MQTT</th><th>Memory</th><th>Last seen</th>
+      </tr></thead>
+      <tbody>
+        <tr data-id="08b61f22c4e7" data-health="unreachable" data-attn="0" data-differs="0" data-name="Desk lamp" data-rank="1" data-seen="45" data-fw="9dcba89" data-search="desk lamp esp32-22c4e7 192.168.1.112 08b61f22c4e7" class="is-offline">
+          <td class="sel"><label class="check"><input type="checkbox" data-sel="08b61f22c4e7" aria-label="Select Desk lamp"></label></td>
+          <td><a class="cell-main" href="device-live.html">Desk lamp</a><span class="cell-sub">esp32-22c4e7</span></td>
+          <td><span class="chip warn">Unreachable</span></td>
+          <td class="mono">192.168.1.112</td>
+          <td><span class="chip mono">9dcba89</span></td>
+          <td class="num">—</td>
+          <td class="num">—</td>
+          <td><span class="mut">—</span></td>
+          <td><span class="mut">—</span></td>
+          <td class="mut">45 s ago</td>
+        </tr>
+        <tr data-id="7821849a3b6c" data-health="online" data-attn="1" data-differs="0" data-name="esp32-9a3b6c" data-rank="2" data-seen="0" data-fw="9dcba89" data-search="esp32-9a3b6c esp32-9a3b6c 192.168.1.104 7821849a3b6c" class="">
+          <td class="sel"><label class="check"><input type="checkbox" data-sel="7821849a3b6c" aria-label="Select esp32-9a3b6c"></label></td>
+          <td><a class="cell-main" href="device-live.html">esp32-9a3b6c</a><span class="cell-sub">esp32-9a3b6c</span></td>
+          <td><span class="chip ok">Online</span></td>
+          <td class="mono">192.168.1.104</td>
+          <td><span class="chip mono">9dcba89</span></td>
+          <td class="num">42 s</td>
+          <td class="num">-61 dBm</td>
+          <td><span class="chip off">not set</span></td>
+          <td><span class="chip ok">OK</span></td>
+          <td class="mut">Just now</td>
+        </tr>
+        <tr data-id="3c71bf44d702" data-health="online" data-attn="1" data-differs="0" data-name="Front gate RFID" data-rank="2" data-seen="0" data-fw="9dcba89" data-search="front gate rfid esp32-44d702 192.168.1.71 3c71bf44d702" class="">
+          <td class="sel"><label class="check"><input type="checkbox" data-sel="3c71bf44d702" aria-label="Select Front gate RFID"></label></td>
+          <td><a class="cell-main" href="device-live.html">Front gate RFID</a><span class="cell-sub">esp32-44d702</span></td>
+          <td><span class="chip ok">Online</span></td>
+          <td class="mono">192.168.1.71</td>
+          <td><span class="chip mono">9dcba89</span></td>
+          <td class="num">1m 04s</td>
+          <td class="num">-63 dBm</td>
+          <td><span class="chip off">not set</span></td>
+          <td><span class="chip ok">OK</span></td>
+          <td class="mut">Just now</td>
+        </tr>
+        <tr data-id="3c71bf0a9e11" data-health="online" data-attn="1" data-differs="1" data-name="Garage door" data-rank="2" data-seen="0" data-fw="0de951c" data-search="garage door esp32-0a9e11 192.168.1.63 3c71bf0a9e11" class="sel">
+          <td class="sel"><label class="check"><input type="checkbox" data-sel="3c71bf0a9e11" checked aria-label="Select Garage door"></label></td>
+          <td><a class="cell-main" href="device-live.html">Garage door</a><span class="cell-sub">esp32-0a9e11</span></td>
+          <td><span class="chip ok">Online</span></td>
+          <td class="mono">192.168.1.63</td>
+          <td><span class="chip warn mono">0de951c · differs</span></td>
+          <td class="num">12d 2h</td>
+          <td class="num">-66 dBm</td>
+          <td><span class="chip warn">disconnected</span></td>
+          <td><span class="chip ok">OK</span></td>
+          <td class="mut">Just now</td>
+        </tr>
+        <tr data-id="a4cf12e81f20" data-health="online" data-attn="0" data-differs="0" data-name="Greenhouse" data-rank="3" data-seen="0" data-fw="9dcba89" data-search="greenhouse esp32-e81f20 192.168.1.57 a4cf12e81f20" class="">
+          <td class="sel"><label class="check"><input type="checkbox" data-sel="a4cf12e81f20" aria-label="Select Greenhouse"></label></td>
+          <td><a class="cell-main" href="device-live.html">Greenhouse</a><span class="cell-sub">esp32-e81f20</span></td>
+          <td><span class="chip ok">Online</span></td>
+          <td class="mono">192.168.1.57</td>
+          <td><span class="chip mono">9dcba89</span></td>
+          <td class="num">6d 4h</td>
+          <td class="num">-71 dBm</td>
+          <td><span class="chip ok">connected</span></td>
+          <td><span class="chip ok">OK</span></td>
+          <td class="mut">Just now</td>
+        </tr>
+        <tr data-id="246f28c0ffee" data-health="offline" data-attn="0" data-differs="1" data-name="Kitchen relay" data-rank="0" data-seen="7200" data-fw="5e3c76f" data-search="kitchen relay esp32-c0ffee 192.168.1.88 246f28c0ffee" class="is-offline">
+          <td class="sel"><label class="check"><input type="checkbox" data-sel="246f28c0ffee" aria-label="Select Kitchen relay"></label></td>
+          <td><a class="cell-main" href="device-live.html">Kitchen relay</a><span class="cell-sub">esp32-c0ffee</span></td>
+          <td><span class="chip off">Offline</span></td>
+          <td class="mono">192.168.1.88</td>
+          <td><span class="chip warn mono">5e3c76f · differs</span></td>
+          <td class="num">—</td>
+          <td class="num">—</td>
+          <td><span class="mut">—</span></td>
+          <td><span class="mut">—</span></td>
+          <td class="mut">2 h ago</td>
+        </tr>
+        <tr data-id="246f2811ab09" data-health="online" data-attn="1" data-differs="0" data-name="Pump controller" data-rank="2" data-seen="0" data-fw="9dcba89" data-search="pump controller esp32-11ab09 192.168.1.90 246f2811ab09" class="">
+          <td class="sel"><label class="check"><input type="checkbox" data-sel="246f2811ab09" aria-label="Select Pump controller"></label></td>
+          <td><a class="cell-main" href="device-live.html">Pump controller</a><span class="cell-sub">esp32-11ab09</span></td>
+          <td><span class="chip ok">Online</span></td>
+          <td class="mono">192.168.1.90</td>
+          <td><span class="chip mono">9dcba89</span></td>
+          <td class="num">3d 11h</td>
+          <td class="num">-69 dBm</td>
+          <td><span class="chip ok">connected</span></td>
+          <td><span class="chip warn">warn · 41 KB</span></td>
+          <td class="mut">Just now</td>
+        </tr>
+        <tr data-id="a4cf12b3c4d5" data-health="online" data-attn="0" data-differs="0" data-name="Workshop node" data-rank="3" data-seen="0" data-fw="9dcba89" data-search="workshop node esp32-b3c4d5 192.168.1.42 a4cf12b3c4d5" class="sel">
+          <td class="sel"><label class="check"><input type="checkbox" data-sel="a4cf12b3c4d5" checked aria-label="Select Workshop node"></label></td>
+          <td><a class="cell-main" href="device-live.html">Workshop node</a><span class="cell-sub">esp32-b3c4d5</span></td>
+          <td><span class="chip ok">Online</span></td>
+          <td class="mono">192.168.1.42</td>
+          <td><span class="chip mono">9dcba89</span></td>
+          <td class="num">1h 27m</td>
+          <td class="num">-58 dBm</td>
+          <td><span class="chip ok">connected</span></td>
+          <td><span class="chip ok">OK · 151 KB</span></td>
+          <td class="mut">Just now</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="empty" id="no-match" hidden>
+  <span class="ico"><svg class="i" aria-hidden="true"><use href="#i-search"/></svg></span>
+  <h3>No devices match</h3>
+  <p>Try a different search or choose All.</p>
+</div>
+
+<div class="bulkbar" id="bulk" role="region" aria-label="Bulk actions">
+  <span class="count" id="bulk-count">2 selected</span>
+  <a class="btn sm primary" href="firmware.html">Update firmware…</a>
+  <button class="btn sm" type="button">Back up</button>
+  <button class="btn sm" type="button">Reboot</button>
+  <button class="btn sm" type="button">Forget</button>
+  <span class="spacer"></span>
+  <button class="btn sm ghost" type="button" id="bulk-clear">Clear</button>
+</div>
+
+<hr class="divider">
+
+<section class="states" aria-labelledby="states-h">
+  <h2 id="states-h">States (prototype only)</h2>
+  <p class="mut" style="margin-top:4px;margin-bottom:var(--s4)">Compact mockups of the other states this screen must handle. Not part of the real page.</p>
+  <div class="grid" style="--min:420px">
+    <div class="card">
+      <h3 class="eyebrow">Empty fleet</h3>
+      <div class="empty">
+        <span class="ico"><svg class="i" aria-hidden="true"><use href="#i-fleet"/></svg></span>
+        <h3>No devices yet</h3>
+        <p>Scan your network to find boards running de-esp32, or add one by its IP address.</p>
+        <div class="actions"><a class="btn primary" href="discover.html">Scan network</a><button class="btn" type="button" data-open="add-ip">Add by IP</button></div>
+        <a href="https://terraseraph.github.io/esp32-joat/" target="_blank" rel="noopener">First time? Flash a board with the browser installer ↗</a>
+      </div>
+    </div>
+    <div class="card">
+      <h3 class="eyebrow">Loading</h3>
+      <div class="grid" style="--min:170px" aria-busy="true" aria-label="Loading devices">
+        <div class="card stack"><span class="skeleton title"></span><span class="skeleton line" style="width:80%"></span><span class="skeleton block"></span></div>
+        <div class="card stack"><span class="skeleton title"></span><span class="skeleton line" style="width:80%"></span><span class="skeleton block"></span></div>
+        <div class="card stack"><span class="skeleton title"></span><span class="skeleton line" style="width:80%"></span><span class="skeleton block"></span></div>
+      </div>
+    </div>
+    <div class="card">
+      <h3 class="eyebrow">All devices offline</h3>
+      <div class="banner warn" role="status"><svg class="i" aria-hidden="true"><use href="#i-alert"/></svg><div class="txt"><strong>Can't reach any device</strong> — is this PC on the same network as your boards?</div><div class="act"><button class="btn sm" type="button"><svg class="i sm" aria-hidden="true"><use href="#i-refresh"/></svg>Retry all</button><a class="btn sm" href="discover.html">Scan network</a></div></div>
+    </div>
+    <div class="card">
+      <h3 class="eyebrow">Manager server disconnected</h3>
+      <div class="banner bad" role="alert"><svg class="i" aria-hidden="true"><use href="#i-server"/></svg><div class="txt">Lost connection to the Manager server — retrying…</div><div class="act"><button class="btn sm" type="button">Retry now</button></div></div>
+      <div class="progress ind" role="progressbar" aria-label="Reconnecting"><i></i></div>
+    </div>
+    <div class="card">
+      <h3 class="eyebrow">Add by IP · error</h3>
+      <div class="field err">
+        <label for="ip-err">IP address or hostname</label>
+        <input id="ip-err" value="192.168.1.50" aria-invalid="true" aria-describedby="ip-err-m" spellcheck="false">
+        <div class="msg" id="ip-err-m"><svg class="i sm" aria-hidden="true"><use href="#i-alert"/></svg>No de-esp32 device answered at 192.168.1.50 (timed out after 2 s)</div>
+        <div class="hint">The Manager checks <code>/api/v1/status</code> on that address.</div>
+      </div>
+    </div>
+  </div>
+</section>
+</main>
+</div>
+<dialog class="modal" id="add-ip" aria-labelledby="add-ip-t">
+  <form method="dialog" class="dlg">
+    <div class="dlg-head"><h2 id="add-ip-t">Add device by IP</h2><button type="button" class="btn icon ghost" data-close aria-label="Close"><svg class="i" aria-hidden="true"><use href="#i-x"/></svg></button></div>
+    <div class="dlg-body">
+      <div class="field">
+        <label for="add-ip-host">IP address or hostname</label>
+        <input id="add-ip-host" name="host" autocomplete="off" spellcheck="false" autofocus placeholder="192.168.1.50 or esp32-b3c4d5.local">
+        <div class="hint">The Manager checks <code>/api/v1/status</code> on that address.</div>
+      </div>
+    </div>
+    <div class="dlg-foot"><button type="button" class="btn" data-close>Cancel</button><button class="btn primary" value="add">Add device</button></div>
+  </form>
+</dialog>
+<script>
+(function(){
+  var root=document.documentElement,modes=['system','light','dark'],cur='system',KEY='deesp32-theme';
+  try{var s=localStorage.getItem(KEY);if(s==='light'||s==='dark')cur=s}catch(e){}
+  function apply(){
+    if(cur==='system')root.removeAttribute('data-theme');else root.setAttribute('data-theme',cur);
+    document.querySelectorAll('[data-theme-toggle]').forEach(function(b){
+      var l=b.querySelector('.lbl');if(l)l.textContent='Theme: '+cur;
+      b.title='Theme: '+cur;b.setAttribute('aria-label','Theme: '+cur+' (click to change)');
+    });
+  }
+  apply();
+  document.addEventListener('click',function(e){
+    var t=e.target.closest('[data-theme-toggle]');
+    if(t){cur=modes[(modes.indexOf(cur)+1)%3];try{localStorage.setItem(KEY,cur)}catch(x){}apply();return}
+    var o=e.target.closest('[data-open]');
+    if(o){var d=document.getElementById(o.getAttribute('data-open'));if(d&&d.showModal)d.showModal();return}
+    var c=e.target.closest('[data-close]');
+    if(c){var dd=c.closest('dialog');if(dd)dd.close();return}
+    if(e.target.tagName==='DIALOG'&&e.target.open){e.target.close();return}
+    var sg=e.target.closest('.seg button');
+    if(sg){sg.parentNode.querySelectorAll('button').forEach(function(b){var on=b===sg;b.classList.toggle('on',on);b.setAttribute('aria-pressed',on)});return}
+    var fc=e.target.closest('.filter-chip');
+    if(fc){
+      var grp=fc.closest('[data-single]');
+      if(grp){grp.querySelectorAll('.filter-chip').forEach(function(b){var on=b===fc;b.classList.toggle('on',on);b.setAttribute('aria-pressed',on)})}
+      else{var on=fc.classList.toggle('on');fc.setAttribute('aria-pressed',on)}
+      return;
+    }
+    var sw=e.target.closest('.switch');
+    if(sw){sw.setAttribute('aria-checked',sw.getAttribute('aria-checked')!=='true');return}
+    var dm=e.target.closest('[data-dismiss]');
+    if(dm){var tt=dm.closest('.toast');if(tt)tt.remove()}
+  });
+})();
+(function(){
+  var cards=[].slice.call(document.querySelectorAll('#view-cards [data-id]'));
+  var rows=[].slice.call(document.querySelectorAll('#view-table tbody tr[data-id]'));
+  var cardBox=document.querySelector('#view-cards .grid'),rowBox=document.querySelector('#view-table tbody');
+  var sel={'a4cf12b3c4d5':1,'3c71bf0a9e11':1},q='',flt='all',srt='name';
+  var bulk=document.getElementById('bulk'),selAll=document.getElementById('sel-all');
+  function match(el){
+    var h=el.dataset.health;
+    if(flt==='online'&&h!=='online')return false;
+    if(flt==='offline'&&h==='online')return false;
+    if(flt==='attn'&&el.dataset.attn!=='1')return false;
+    if(flt==='differs'&&el.dataset.differs!=='1')return false;
+    return !q||el.dataset.search.indexOf(q)>-1;
+  }
+  var byName=function(a,b){return a.dataset.name.toLowerCase().localeCompare(b.dataset.name.toLowerCase())};
+  var cmp={
+    name:byName,
+    health:function(a,b){return (a.dataset.rank-b.dataset.rank)||byName(a,b)},
+    seen:function(a,b){return (a.dataset.seen-b.dataset.seen)||byName(a,b)},
+    fw:function(a,b){return (b.dataset.differs-a.dataset.differs)||a.dataset.fw.localeCompare(b.dataset.fw)||byName(a,b)}
+  };
+  function order(list,box){list.slice().sort(cmp[srt]).forEach(function(el){box.appendChild(el)})}
+  function render(){
+    var shown=0;
+    cards.concat(rows).forEach(function(el){var ok=match(el);el.hidden=!ok;if(ok&&el.tagName==='ARTICLE')shown++});
+    document.getElementById('no-match').hidden=shown>0;
+    var n=Object.keys(sel).length;
+    bulk.hidden=n===0;
+    document.getElementById('bulk-count').textContent=n+' selected';
+    cards.concat(rows).forEach(function(el){
+      var on=!!sel[el.dataset.id];el.classList.toggle('sel',on);
+      el.querySelector('[data-sel]').checked=on;
+    });
+    var vis=rows.filter(function(r){return !r.hidden});
+    selAll.checked=vis.length>0&&vis.every(function(r){return sel[r.dataset.id]});
+  }
+  document.addEventListener('change',function(e){
+    var t=e.target;
+    if(t.matches('[data-sel]')){if(t.checked)sel[t.getAttribute('data-sel')]=1;else delete sel[t.getAttribute('data-sel')];render()}
+    else if(t===selAll){rows.forEach(function(r){if(r.hidden)return;if(t.checked)sel[r.dataset.id]=1;else delete sel[r.dataset.id]});render()}
+    else if(t.id==='sort'){srt=t.value;order(cards,cardBox);order(rows,rowBox)}
+  });
+  document.getElementById('q').addEventListener('input',function(e){q=e.target.value.trim().toLowerCase();render()});
+  document.addEventListener('click',function(e){
+    var f=e.target.closest('[data-filter]');if(f){flt=f.getAttribute('data-filter');render();return}
+    var v=e.target.closest('[data-view]');
+    if(v){var t=v.getAttribute('data-view')==='table';document.getElementById('view-cards').hidden=t;document.getElementById('view-table').hidden=!t;return}
+    if(e.target.closest('#bulk-clear')){sel={};render()}
+  });
+  render();
+})();
+</script>
+</body>
+</html>

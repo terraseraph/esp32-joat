@@ -1,0 +1,13 @@
+There is 1 interface on the system:
+
+    Name                   : Wi-Fi
+    Description            : Example(R) Wi-Fi 7 Wireless Network Adapter
+    GUID                   : 00000000-0000-0000-0000-000000000001
+    Physical address       : aa:bb:cc:00:11:22
+    Interface type         : Primary
+    State                  : disconnected
+    Radio status           : Hardware On
+                             Software On
+
+    Hosted network status  : Not available
+

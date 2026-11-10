@@ -1,0 +1,23 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "manager-proto",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["manager/proto/serve.js", "5199"],
+      "port": 5199
+    },
+    {
+      "name": "manager",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["manager/dist/server.cjs", "--no-open", "--no-network-scan", "--wifi-adapter", "fake", "--port", "5180", "--data-dir", "manager/.data/preview"],
+      "port": 5180
+    },
+    {
+      "name": "manager-fakes",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["--prefix", "manager", "run", "fake", "--", "--count", "3", "--base-port", "8101", "--seed", "demo"],
+      "port": 8101
+    }
+  ]
+}

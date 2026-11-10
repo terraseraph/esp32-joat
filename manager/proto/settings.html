@@ -1,0 +1,269 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>Settings - de-esp32 Manager</title>
+<script>try{var t=localStorage.getItem('deesp32-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t)}catch(e){}</script>
+<link rel="stylesheet" href="tokens.css">
+<style>
+/* settings.html page-specific styles (tokens only) */
+.page > .col{max-width:760px;margin-left:max(0px,calc((100% - var(--page-w)) / 2));margin-right:auto;width:100%}
+.col{display:grid;gap:var(--s4)}
+.col > * + *{margin-top:0}
+.card > .stack{gap:var(--s4)}
+.srow{display:flex;align-items:center;justify-content:space-between;gap:var(--s4)}
+.srow > div:first-child{min-width:0}
+.srow .lbl-t{font-size:var(--fs-sm);font-weight:600}
+.inline{display:flex;align-items:center;gap:var(--s2)}
+.inline input{flex:1;min-width:0}
+.ifaces{list-style:none;margin:0;padding:var(--s2) var(--s3);display:grid;gap:4px;background:var(--in);border:1px solid var(--line);border-radius:var(--r-sm);font:var(--fs-sm) var(--mono)}
+.pair{display:grid;gap:var(--s4);grid-template-columns:repeat(auto-fit,minmax(200px,1fr))}
+.token{display:flex;flex-wrap:wrap;align-items:center;gap:var(--s2)}
+.token .mono{flex:1 1 240px;min-width:0;padding:8px 12px;background:var(--in);border:1px solid var(--line);border-radius:var(--r-sm);overflow-wrap:anywhere}
+.states h3.eyebrow{margin-bottom:var(--s3)}
+.states > .grid > .card{display:flex;flex-direction:column;gap:var(--s3)}
+@media(max-width:767.98px){.srow{align-items:flex-start}.inline{flex-wrap:wrap}}
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false"><defs>
+<symbol id="i-chip" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2"/><path d="M9 2v4M15 2v4M9 18v4M15 18v4M2 9h4M2 15h4M18 9h4M18 15h4"/></symbol>
+<symbol id="i-fleet" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></symbol>
+<symbol id="i-discover" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4"/><path d="M12 12l5-5"/></symbol>
+<symbol id="i-firmware" viewBox="0 0 24 24"><path d="M12 3v12M7 10l5 5 5-5"/><path d="M4 20h16"/></symbol>
+<symbol id="i-backups" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="5" rx="1.5"/><path d="M5 9v9a2 2 0 002 2h10a2 2 0 002-2V9M10 13h4"/></symbol>
+<symbol id="i-settings" viewBox="0 0 24 24"><path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="17" r="2"/></symbol>
+<symbol id="i-theme" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 010 18z" fill="currentColor"/></symbol>
+<symbol id="i-refresh" viewBox="0 0 24 24"><path d="M20 11a8 8 0 00-14-4L4 9"/><path d="M4 4v5h5"/><path d="M4 13a8 8 0 0014 4l2-2"/><path d="M20 20v-5h-5"/></symbol>
+<symbol id="i-ext" viewBox="0 0 24 24"><path d="M14 4h6v6M20 4l-9 9"/><path d="M18 14v5a1 1 0 01-1 1H5a1 1 0 01-1-1V7a1 1 0 011-1h5"/></symbol>
+<symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12l5 5 9-10"/></symbol>
+<symbol id="i-alert" viewBox="0 0 24 24"><path d="M12 3l10 18H2z"/><path d="M12 10v5M12 18v.01"/></symbol>
+<symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.01"/></symbol>
+<symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></symbol>
+<symbol id="i-copy" viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 012-2h9"/></symbol>
+<symbol id="i-folder" viewBox="0 0 24 24"><path d="M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z"/></symbol>
+<symbol id="i-server" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="7" rx="2"/><rect x="3" y="13" width="18" height="7" rx="2"/><path d="M7 7.5v.01M7 16.5v.01"/></symbol>
+</defs></svg>
+<div class="app">
+<aside class="nav">
+  <a class="brand" href="fleet.html" aria-label="de-esp32 Manager"><span class="logo"><svg class="i" aria-hidden="true"><use href="#i-chip"/></svg></span><span class="lbl">de-esp32 Manager</span></a>
+  <nav class="nav-list" aria-label="Main">
+    <a class="nav-item" href="fleet.html" title="Fleet"><svg class="i" aria-hidden="true"><use href="#i-fleet"/></svg><span class="lbl">Fleet</span><span class="badge">8</span></a>
+    <a class="nav-item" href="discover.html" title="Discover"><svg class="i" aria-hidden="true"><use href="#i-discover"/></svg><span class="lbl">Discover</span></a>
+    <a class="nav-item" href="firmware.html" title="Firmware"><svg class="i" aria-hidden="true"><use href="#i-firmware"/></svg><span class="lbl">Firmware</span></a>
+    <a class="nav-item" href="backups.html" title="Backups"><svg class="i" aria-hidden="true"><use href="#i-backups"/></svg><span class="lbl">Backups</span></a>
+    <a class="nav-item on" href="settings.html" aria-current="page" title="Settings"><svg class="i" aria-hidden="true"><use href="#i-settings"/></svg><span class="lbl">Settings</span></a>
+  </nav>
+  <div class="nav-foot">
+    <div class="srv" title="Server connected · localhost:5180"><span class="dot ok"></span><span class="lbl">Server connected · localhost:5180</span></div>
+    <button class="btn ghost" type="button" data-theme-toggle title="Theme: system" aria-label="Theme: system"><svg class="i" aria-hidden="true"><use href="#i-theme"/></svg><span class="lbl">Theme: system</span></button>
+  </div>
+</aside>
+<main class="page">
+<div class="page-head">
+  <div>
+    <h1>Settings</h1>
+    <p>These apply to the Manager on this PC, not to your devices. Changes save as you make them.</p>
+  </div>
+</div>
+
+<div class="col">
+
+<section class="card" aria-labelledby="s-mon">
+  <div class="card-head"><h2 id="s-mon">Device monitoring</h2></div>
+  <div class="stack">
+    <div class="field"><label for="poll">Check devices every</label>
+      <select id="poll"><option>10 s</option><option selected>30 s</option><option>1 min</option><option>5 min</option></select>
+      <div class="hint">Each check is one small request per device.</div></div>
+    <div class="srow"><div><div class="lbl-t" id="l-live">Keep the whole fleet live</div><div class="hint">Opens a live connection to every device (up to 16). Uses one of each device's 4 live-viewer slots.</div></div>
+      <button class="switch" type="button" role="switch" aria-checked="false" aria-labelledby="l-live"></button></div>
+    <div class="field"><span class="label">Mark a device offline after</span><div>2 missed checks</div></div>
+  </div>
+</section>
+
+<section class="card" aria-labelledby="s-disc">
+  <div class="card-head"><h2 id="s-disc">Discovery</h2></div>
+  <div class="stack">
+    <div class="srow"><div><div class="lbl-t" id="l-bg">Scan in the background</div><div class="hint">Looks for new devices on its own. Found devices wait in Discover until you add them.</div></div>
+      <button class="switch" type="button" role="switch" aria-checked="false" aria-labelledby="l-bg" id="sw-bg"></button></div>
+    <div class="field"><label for="bg-every">Scan every</label>
+      <select id="bg-every" disabled><option selected>5 min</option><option>15 min</option><option>1 h</option></select></div>
+    <div class="srow"><div><div class="lbl-t" id="l-mdns">Use mDNS</div><div class="hint">Finds devices that announce themselves on the network.</div></div>
+      <button class="switch" type="button" role="switch" aria-checked="true" aria-labelledby="l-mdns"></button></div>
+    <div class="srow"><div><div class="lbl-t" id="l-sweep">Sweep local /24 networks</div><div class="hint">Asks every address on your PC's own networks. Slower, but finds devices mDNS misses.</div></div>
+      <button class="switch" type="button" role="switch" aria-checked="true" aria-labelledby="l-sweep"></button></div>
+    <div class="field"><label for="subnets">Extra subnets to sweep</label>
+      <textarea id="subnets" placeholder="192.168.20.0/24, one per line" spellcheck="false"></textarea>
+      <div class="hint">Only /24 IPv4 networks. Use this for a network your PC can reach but isn't directly on.</div></div>
+    <div class="field"><span class="label">Detected networks on this PC</span>
+      <ul class="ifaces" aria-label="Detected networks"><li>Wi-Fi · 192.168.1.23/24</li><li>Ethernet · 10.0.0.5/24</li></ul></div>
+  </div>
+</section>
+
+<section class="card" aria-labelledby="s-fw">
+  <div class="card-head"><h2 id="s-fw">Firmware updates</h2></div>
+  <div class="stack">
+    <div class="field"><label for="fw-url">Latest firmware source</label>
+      <div class="inline"><input id="fw-url" type="url" value="https://terraseraph.github.io/esp32-joat/firmware/de_esp32_runtime.bin" spellcheck="false"><button class="btn" type="button">Reset to default</button></div>
+      <div class="hint">Where "Latest CI build" is downloaded from.</div></div>
+    <div class="field"><span class="label" id="l-method">Default update method</span>
+      <div class="seg" role="group" aria-labelledby="l-method" style="width:fit-content"><button type="button" class="on" aria-pressed="true">Push from this PC</button><button type="button" aria-pressed="false">Device downloads it</button></div>
+      <div class="hint">Pushing works without the device reaching the internet. When a device downloads it, the device needs internet access.</div></div>
+    <div class="pair">
+      <div class="field"><label for="par">Parallel updates</label>
+        <select id="par"><option>1</option><option selected>2</option><option>3</option><option>4</option></select></div>
+      <div class="field"><label for="stopn">Pause after failures</label>
+        <input id="stopn" type="number" min="1" max="16" value="1"><div class="hint">Stops starting new devices after this many fail.</div></div>
+    </div>
+  </div>
+</section>
+
+<section class="card" aria-labelledby="s-app">
+  <div class="card-head"><h2 id="s-app">Appearance</h2></div>
+  <div class="field"><span class="label" id="l-theme">Theme</span>
+    <div class="seg" role="group" aria-labelledby="l-theme" id="theme-seg" style="width:fit-content"><button type="button" data-theme-set="system" aria-pressed="false">System</button><button type="button" data-theme-set="light" aria-pressed="false">Light</button><button type="button" data-theme-set="dark" aria-pressed="false">Dark</button></div></div>
+</section>
+
+<section class="card" aria-labelledby="s-acc">
+  <div class="card-head"><h2 id="s-acc">Access</h2></div>
+  <div class="stack">
+    <dl class="kv">
+      <dt>Listening on</dt><dd class="mono">http://localhost:5180</dd>
+      <dt>Mode</dt><dd><span class="chip ok">This PC only</span></dd>
+    </dl>
+    <p class="mut">To open the Manager from a phone or another computer, restart it with <code>--lan</code>. You'll get a link with an access token.</p>
+  </div>
+</section>
+
+<section class="card" aria-labelledby="s-data">
+  <div class="card-head"><h2 id="s-data">Data</h2></div>
+  <dl class="kv">
+    <dt>Data folder</dt><dd><div class="inline" style="flex-wrap:wrap"><span class="mono">C:\Users\you\AppData\Roaming\de-esp32-manager</span><button class="btn sm" type="button"><svg class="i sm" aria-hidden="true"><use href="#i-folder"/></svg>Open folder</button></div></dd>
+    <dt>Registry</dt><dd>8 devices</dd>
+    <dt>Backups</dt><dd>4 files</dd>
+    <dt>Firmware cache</dt><dd><div class="inline" style="flex-wrap:wrap"><span>2 images · 2.8 MB</span><button class="btn sm" type="button">Clear cache</button></div></dd>
+  </dl>
+</section>
+
+<section class="card" aria-labelledby="s-about">
+  <div class="card-head"><h2 id="s-about">About</h2></div>
+  <div class="stack" style="gap:var(--s3)">
+    <dl class="kv">
+      <dt>Version</dt><dd>de-esp32 Manager 0.1.0</dd>
+      <dt>Runtime</dt><dd>Node 22.x</dd>
+    </dl>
+    <div class="row">
+      <a class="btn" href="https://terraseraph.github.io/esp32-joat/" target="_blank" rel="noopener">Browser installer <svg class="i sm" aria-hidden="true"><use href="#i-ext"/></svg></a>
+      <a class="btn" href="https://github.com/terraseraph/esp32-joat" target="_blank" rel="noopener">Project on GitHub <svg class="i sm" aria-hidden="true"><use href="#i-ext"/></svg></a>
+    </div>
+    <p class="hint">Device API docs: each device serves <code>/api/v1/openapi.json</code>.</p>
+  </div>
+</section>
+
+</div>
+
+<hr class="divider">
+
+<section class="states" aria-labelledby="states-h">
+  <h2 id="states-h">States (prototype only)</h2>
+  <p class="mut" style="margin-top:4px;margin-bottom:var(--s4)">Compact mockups of the other states this screen must handle. Not part of the real page.</p>
+  <div class="grid" style="--min:420px">
+
+    <div class="card">
+      <h3 class="eyebrow">Access · LAN mode (started with --lan)</h3>
+      <div class="card-head" style="margin-bottom:0"><h2>Access</h2></div>
+      <dl class="kv">
+        <dt>Listening on</dt><dd class="mono">http://192.168.1.23:5180</dd>
+        <dt>Mode</dt><dd><span class="chip warn">Network access on</span></dd>
+        <dt>Access link</dt><dd><div class="token"><span class="mono" aria-label="Access link, token hidden">http://192.168.1.23:5180/?token=••••••••••••••••</span><button class="btn sm" type="button"><svg class="i sm" aria-hidden="true"><use href="#i-copy"/></svg>Copy</button><button class="btn sm" type="button"><svg class="i sm" aria-hidden="true"><use href="#i-refresh"/></svg>Rotate token</button></div></dd>
+      </dl>
+      <div class="banner warn" role="note"><svg class="i" aria-hidden="true"><use href="#i-alert"/></svg><div class="txt"><strong>Anyone with this link on your network can control your devices.</strong> Rotating the token signs out everyone who has the old link.</div></div>
+    </div>
+
+    <div class="card">
+      <h3 class="eyebrow">Invalid subnet</h3>
+      <div class="field err">
+        <label for="subnets-err">Extra subnets to sweep</label>
+        <textarea id="subnets-err" aria-invalid="true" aria-describedby="subnets-err-m" spellcheck="false">192.168.20.0/24
+192.168.1.0/16</textarea>
+        <div class="msg" id="subnets-err-m" role="alert"><svg class="i sm" aria-hidden="true"><use href="#i-alert"/></svg>Not a /24 IPv4 network: 192.168.1.0/16</div>
+        <div class="hint">Only /24 IPv4 networks. Use this for a network your PC can reach but isn't directly on.</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3 class="eyebrow">Saved</h3>
+      <div class="toast ok" role="status"><svg class="i" aria-hidden="true"><use href="#i-check"/></svg><div class="txt">Settings saved</div><button class="btn sm ghost icon" type="button" data-dismiss aria-label="Dismiss" style="min-height:24px;width:24px"><svg class="i sm" aria-hidden="true"><use href="#i-x"/></svg></button></div>
+    </div>
+
+    <div class="card">
+      <h3 class="eyebrow">Access · running in the desktop app</h3>
+      <div class="card-head" style="margin-bottom:0"><h2>Access</h2></div>
+      <dl class="kv">
+        <dt>Listening on</dt><dd class="mono">http://127.0.0.1:50731</dd>
+        <dt>Mode</dt><dd><span class="chip ok">This PC only</span></dd>
+      </dl>
+      <p class="mut">The desktop app is always local-only.</p>
+    </div>
+
+  </div>
+</section>
+</main>
+</div>
+<script>
+(function(){
+  var root=document.documentElement,modes=['system','light','dark'],cur='system',KEY='deesp32-theme';
+  try{var s=localStorage.getItem(KEY);if(s==='light'||s==='dark')cur=s}catch(e){}
+  function apply(){
+    if(cur==='system')root.removeAttribute('data-theme');else root.setAttribute('data-theme',cur);
+    document.querySelectorAll('[data-theme-toggle]').forEach(function(b){
+      var l=b.querySelector('.lbl');if(l)l.textContent='Theme: '+cur;
+      b.title='Theme: '+cur;b.setAttribute('aria-label','Theme: '+cur+' (click to change)');
+    });
+  }
+  apply();
+  document.addEventListener('click',function(e){
+    var t=e.target.closest('[data-theme-toggle]');
+    if(t){cur=modes[(modes.indexOf(cur)+1)%3];try{localStorage.setItem(KEY,cur)}catch(x){}apply();return}
+    var o=e.target.closest('[data-open]');
+    if(o){var d=document.getElementById(o.getAttribute('data-open'));if(d&&d.showModal)d.showModal();return}
+    var c=e.target.closest('[data-close]');
+    if(c){var dd=c.closest('dialog');if(dd)dd.close();return}
+    if(e.target.tagName==='DIALOG'&&e.target.open){e.target.close();return}
+    var sg=e.target.closest('.seg button');
+    if(sg){sg.parentNode.querySelectorAll('button').forEach(function(b){var on=b===sg;b.classList.toggle('on',on);b.setAttribute('aria-pressed',on)});return}
+    var fc=e.target.closest('.filter-chip');
+    if(fc){
+      var grp=fc.closest('[data-single]');
+      if(grp){grp.querySelectorAll('.filter-chip').forEach(function(b){var on=b===fc;b.classList.toggle('on',on);b.setAttribute('aria-pressed',on)})}
+      else{var on=fc.classList.toggle('on');fc.setAttribute('aria-pressed',on)}
+      return;
+    }
+    var sw=e.target.closest('.switch');
+    if(sw){sw.setAttribute('aria-checked',sw.getAttribute('aria-checked')!=='true');return}
+    var dm=e.target.closest('[data-dismiss]');
+    if(dm){var tt=dm.closest('.toast');if(tt)tt.remove()}
+  });
+})();
+(function(){
+  /* Appearance seg drives the nav theme toggle (which owns the stored value) */
+  var seg=document.getElementById('theme-seg');
+  function cur(){var t=document.querySelector('[data-theme-toggle]');return t?t.title.replace('Theme: ',''):'system'}
+  function sync(){seg.querySelectorAll('button').forEach(function(b){var on=b.getAttribute('data-theme-set')===cur();b.classList.toggle('on',on);b.setAttribute('aria-pressed',on)})}
+  seg.addEventListener('click',function(e){
+    var b=e.target.closest('[data-theme-set]');if(!b)return;
+    var want=b.getAttribute('data-theme-set'),t=document.querySelector('[data-theme-toggle]');
+    for(var i=0;i<3&&t&&cur()!==want;i++)t.click();
+    sync();
+  });
+  document.addEventListener('click',function(e){if(e.target.closest('[data-theme-toggle]'))sync()});
+  sync();
+  /* "Scan every" is only editable while background scanning is on */
+  var sw=document.getElementById('sw-bg'),ev=document.getElementById('bg-every');
+  sw.addEventListener('click',function(){setTimeout(function(){ev.disabled=sw.getAttribute('aria-checked')!=='true'},0)});
+})();
+</script>
+</body>
+</html>

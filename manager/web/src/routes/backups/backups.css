@@ -1,0 +1,71 @@
+/* Backups screen. Built from tokens only (see proto/backups.html). */
+.gaps summary { list-style: none; cursor: pointer; display: inline-flex; align-items: center; min-height: 32px; }
+.gaps summary::-webkit-details-marker { display: none; }
+.gaps summary:focus-visible { outline: 2px solid var(--acc); outline-offset: 2px; border-radius: var(--r-pill); }
+.gaps ul { margin: 6px 0 4px; padding-left: 18px; color: var(--mut); font-size: var(--fs-xs); white-space: normal; min-width: 210px; }
+.gaps ul li + li { margin-top: 2px; }
+.bk-note { display: block; margin-top: 2px; max-width: 28ch; color: var(--mut); font-size: var(--fs-xs); font-style: italic; overflow-wrap: anywhere; }
+.bk-filter { display: flex; align-items: center; gap: var(--s2); }
+.bk-filter .ui-select { min-width: 220px; }
+.bk-min0 { min-width: 0; }
+.bk-gap-list { margin: 6px 0 0; padding-left: 18px; }
+.bk-note-input { flex: 1; min-width: 0; }
+
+/* Device pick rows */
+.pick { display: flex; align-items: center; gap: 10px; padding: 6px 12px; border: 1px solid var(--line); border-radius: var(--r-sm); background: var(--card); cursor: pointer; }
+.pick input { width: 18px; height: 18px; margin: 0; flex: none; accent-color: var(--acc); }
+.pick .grow { flex: 1; min-width: 0; }
+.pick .nm { font-weight: 650; display: block; overflow-wrap: anywhere; }
+.pick .sub { display: block; font: var(--fs-xs) var(--mono); color: var(--mut); overflow-wrap: anywhere; }
+.pick.dis { opacity: .6; background: var(--in); cursor: not-allowed; }
+.bk-picks { gap: var(--s2); }
+
+/* Backup now results, apply outcome */
+.bk-results { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--s2); }
+.bk-results li { display: grid; gap: 2px; padding: 8px 12px; border-radius: var(--r-sm); background: var(--in); font-size: 14px; overflow-wrap: anywhere; }
+.bk-result-main { display: flex; align-items: center; justify-content: space-between; gap: var(--s2); }
+
+/* Detail */
+.sect { display: grid; gap: var(--s2); }
+.sect > h3 { font-size: var(--fs-sm); text-transform: uppercase; letter-spacing: .05em; color: var(--mut); }
+.bk-rules { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.bk-rules li { display: flex; gap: 10px; align-items: baseline; padding: 8px 12px; border-radius: var(--r-sm); background: var(--in); }
+.ui-dlg-body .table { min-width: 0; }
+.ui-dlg-body .table-wrap { box-shadow: none; }
+
+/* Plan */
+.bk-plan { display: grid; gap: var(--s3); padding: var(--s3) 0; }
+.bk-plan + .bk-plan { border-top: 1px solid var(--line); }
+.bk-plan-head { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2); font-size: var(--fs-md); }
+.plan { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--s4); }
+.plan-step { display: grid; gap: 6px; }
+.plan-step h4 { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; font-size: var(--fs-sm); font-weight: 650; }
+.plan-step h4 .n { display: inline-grid; place-items: center; width: 20px; height: 20px; border-radius: 50%; background: var(--in); border: 1px solid var(--line); color: var(--mut); font-size: 11px; font-variant-numeric: tabular-nums; }
+.diff { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.diff li { display: grid; grid-template-columns: 20px minmax(0, 1fr); gap: 8px; align-items: start; padding: 6px 10px; border-radius: var(--r-sm); background: var(--in); font-size: 14px; overflow-wrap: anywhere; }
+.diff .mk { font: 700 15px/1.35 var(--mono); text-align: center; }
+.diff li.add { background: var(--ok-bg); } .diff li.add .mk { color: var(--ok); }
+.diff li.del { background: var(--bad-bg); } .diff li.del .mk { color: var(--bad); }
+.diff li.chg { background: var(--warn-bg); } .diff li.chg .mk { color: var(--warn); }
+.diff li.conflict { background: var(--warn-bg); border: 1px solid var(--warn-bd); }
+.diff li.conflict > .i { margin-top: 2px; }
+
+.ui-dlg-body > .steps { gap: var(--s2) var(--s4); padding-bottom: var(--s3); border-bottom: 1px solid var(--line); }
+
+/* List table: actions stay on one line; under 1100 px each backup becomes a card instead of a clipped table. */
+.bk-table { min-width: 0; }
+.bk-table th, .bk-table td { padding-left: 10px; padding-right: 10px; }
+.bk-table .cell-main { max-width: 24ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bk-table .bk-actions { flex-wrap: nowrap; white-space: nowrap; }
+.bk-table .bk-actions .btn { flex: none; }
+@media (max-width: 1099.98px) {
+  .bk-table, .bk-table tbody, .bk-table tr, .bk-table td { display: block; }
+  .bk-table thead { display: none; }
+  .bk-table tr { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s2) var(--s4); padding: var(--s3) var(--s4); border-bottom: 1px solid var(--line); }
+  .bk-table tbody tr:last-child { border-bottom: 0; }
+  .bk-table td { padding: 0; border: 0; background: none !important; }
+  .bk-table td[data-label]::before { content: attr(data-label); display: block; font-size: var(--fs-xs); font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--mut); }
+  .bk-table td.bk-c-device, .bk-table td.bk-c-actions { grid-column: 1 / -1; }
+  .bk-table .cell-main { max-width: none; }
+  .bk-table .bk-actions { flex-wrap: wrap; }
+}

@@ -1,0 +1,33 @@
+
+Schnittstellenname : WLAN
+Zurzeit sind 3 Netzwerke sichtbar.
+
+SSID 1 : Café-Wi-Fi ü€
+    Netzwerktyp             : Infrastruktur
+    Authentifizierung       : WPA2-Personal
+    Verschlüsselung         : CCMP
+    BSSID 1                 : 02:00:00:00:00:31
+         Signalstärke       : 74%
+         Funktyp            : 802.11n
+         Band               : 2,4 GHz
+         Kanal              : 6
+
+SSID 2 : Gästenetz ohne Passwort
+    Netzwerktyp             : Infrastruktur
+    Authentifizierung       : Offen
+    Verschlüsselung         : Keine
+    BSSID 1                 : 02:00:00:00:00:32
+         Signalstärke       : 41%
+         Funktyp            : 802.11n
+         Band               : 2,4 GHz
+         Kanal              : 1
+
+SSID 3 : esp32-4d5e6f
+    Netzwerktyp             : Infrastruktur
+    Authentifizierung       : WPA2-Personal
+    Verschlüsselung         : CCMP
+    BSSID 1                 : 02:00:00:00:00:33
+         Signalstärke       : 66%
+         Funktyp            : 802.11n
+         Band               : 2,4 GHz
+         Kanal              : 11

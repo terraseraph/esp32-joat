@@ -1,0 +1,28 @@
+.addons-sec { display: grid; gap: var(--s3); scroll-margin-top: var(--s5); }
+.addons-head { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2) var(--s4); }
+.addons-head h2 { margin: 0; }
+.addons-head .sub { color: var(--mut); font-size: var(--fs-sm); }
+
+.addon { display: grid; gap: var(--s3); align-content: start; }
+.addon-top { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2) var(--s3); }
+.addon-top h3 { margin: 0; font-size: var(--fs-lg); }
+.addon-live { margin-left: auto; text-align: right; min-width: 0; }
+.addon-live .rd { font-size: 24px; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1.2; overflow-wrap: anywhere; }
+.addon-live .rd.is-empty { font-size: 16px; font-weight: 600; color: var(--mut); }
+.addon-live .sb { color: var(--mut); font-size: var(--fs-sm); }
+.addon .kv { grid-template-columns: minmax(80px, 30%) minmax(0, 1fr); }
+.addon.is-disabled .addon-live, .addon.is-disabled .kv { opacity: 0.5; }
+.addon.is-offline .addon-live, .addon.is-offline .kv { opacity: 0.55; }
+.addon-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2); }
+.addon-actions .ui-switch-row, .addon-actions .switch { margin-right: var(--s2); }
+
+/* wizard */
+.addon-step { display: grid; gap: var(--s4); }
+.addon-type { display: grid; gap: var(--s2); align-content: start; text-align: left; padding: var(--s3) var(--s4); border: 1px solid var(--line); border-radius: var(--r); background: var(--card); color: var(--fg); cursor: pointer; }
+.addon-type .t { font-weight: 700; }
+.addon-type .chips { display: flex; flex-wrap: wrap; gap: var(--s2); }
+.addon-type:hover:not(:disabled) { background: var(--in); }
+.addon-type[aria-pressed="true"] { border-color: var(--acc); background: var(--acc-bg); }
+.addon-type:disabled { opacity: 0.5; cursor: not-allowed; }
+.addon-pins { display: grid; gap: var(--s3); margin: 0; padding: 0; border: 0; min-width: 0; }
+.addon-pins legend { padding: 0; margin-bottom: var(--s2); }

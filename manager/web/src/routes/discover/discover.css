@@ -1,0 +1,74 @@
+/* Discover screen. Built from tokens only (see proto/discover.html). */
+.disc { display: grid; grid-template-columns: minmax(0, 2fr) minmax(280px, 1fr); gap: var(--s5); align-items: start; }
+.disc-main, .disc-side { display: grid; gap: var(--s4); min-width: 0; }
+.disc-main:empty { display: none; }
+.disc-side { position: sticky; top: var(--s4); }
+@media (max-width: 1023.98px) {
+  .disc { grid-template-columns: minmax(0, 1fr); }
+  .disc-side { position: static; }
+}
+/* No results to show: the two side cards sit next to each other instead of leaving a hole */
+.disc:has(> .disc-main:empty) { grid-template-columns: minmax(0, 1fr); }
+.disc:has(> .disc-main:empty) .disc-side { position: static; grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr)); align-items: start; }
+.side-h { margin-bottom: var(--s3); }
+.side-link { margin-top: var(--s4); }
+.side-list { margin: 0; padding-left: 20px; display: grid; gap: var(--s2); font-size: 14px; }
+.side-list li::marker { color: var(--mut); }
+
+/* Scan card */
+.scan-top { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--s3) var(--s5); }
+.scan-found { display: flex; align-items: baseline; gap: 8px; }
+.scan-found .n { font-size: var(--fs-2xl); font-weight: 700; line-height: 1; font-variant-numeric: tabular-nums; }
+.scan-bar { display: grid; gap: var(--s2); margin-top: var(--s4); }
+.scan-phase { font-size: var(--fs-sm); }
+.scan-card .progress > i.m { transition: none; }
+.scan-subnets { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--s2) var(--s3); margin-top: var(--s3); font-size: var(--fs-sm); }
+.subnet-list { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.scan-foot { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--s3); margin-top: var(--s4); padding-top: var(--s4); border-top: 1px solid var(--line); }
+.scan-foot p { font-size: var(--fs-sm); color: var(--mut); max-width: 64ch; }
+.scan-sub { font-size: var(--fs-sm); }
+.disc-warn .warn-list { margin: var(--s1) 0 0; padding-left: 18px; font-size: var(--fs-sm); }
+.add-ok { margin-top: var(--s4); }
+
+/* Disclosures (Advanced, result groups) */
+.disclosure > summary, details.grp > summary { list-style: none; cursor: pointer; }
+.disclosure > summary::-webkit-details-marker, details.grp > summary::-webkit-details-marker { display: none; }
+.disclosure > summary::before, details.grp > summary::before {
+  content: ""; width: 8px; height: 8px; border-right: 2px solid var(--mut); border-bottom: 2px solid var(--mut);
+  transform: rotate(-45deg); transition: transform .15s; flex: none;
+}
+.disclosure[open] > summary::before, details.grp[open] > summary::before { transform: rotate(45deg); }
+.disclosure > summary:focus-visible, details.grp > summary:focus-visible { outline: 2px solid var(--acc); outline-offset: 2px; border-radius: var(--r-sm); }
+.adv { margin-top: var(--s4); padding-top: var(--s3); border-top: 1px solid var(--line); }
+.adv > summary { display: flex; align-items: center; gap: var(--s2); min-height: 32px; font-size: var(--fs-sm); font-weight: 600; width: fit-content; }
+.adv-body { display: grid; gap: var(--s4); margin-top: var(--s3); max-width: 64ch; }
+.adv-checks { display: flex; flex-wrap: wrap; gap: var(--s1) var(--s5); border: 0; margin: 0; padding: 0; min-width: 0; }
+.adv-msg { display: flex; align-items: center; gap: 6px; }
+
+/* Result groups */
+.grp-head { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2) var(--s3); padding: var(--s4) var(--s5); }
+.grp-head h2 { font-size: var(--fs-md); }
+.grp-head .spacer { flex: 1; }
+.grp-hint { font-size: var(--fs-sm); }
+.res { list-style: none; margin: 0; padding: 0; }
+.res-row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2) var(--s4); padding: var(--s3) var(--s5); border-top: 1px solid var(--line); background: var(--card); }
+.res-row.hl { background: var(--acc-bg); }
+.res-row.compact { padding: 10px var(--s5); }
+.res-main { flex: 1 1 240px; min-width: 0; }
+.res-name { font-weight: 650; overflow-wrap: anywhere; }
+.res-sub { font-family: var(--mono); font-size: var(--fs-xs); color: var(--mut); overflow-wrap: anywhere; }
+.res-meta { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.res-act { display: flex; flex-wrap: wrap; gap: var(--s2); margin-left: auto; }
+.res-note { flex: 1 1 100%; display: flex; align-items: flex-start; gap: 8px; font-size: var(--fs-sm); }
+.res-note .i { margin-top: 2px; }
+.res-note.t-warn > .i { color: var(--warn); }
+.res-note p { max-width: 70ch; color: var(--fg); }
+.res-wait { display: flex; align-items: center; gap: var(--s3); }
+.res-wait .i { color: var(--mut); }
+
+/* Nothing found */
+.nothing .side-list { text-align: left; max-width: 56ch; }
+.nothing .actions { display: flex; flex-wrap: wrap; gap: var(--s2); justify-content: center; }
+
+/* Fields that stay usable while the switches above are off must not look dimmed. */
+.adv-body .field input:not(:disabled) { opacity: 1; cursor: text; }

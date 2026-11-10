@@ -1,0 +1,33 @@
+
+Nazwa interfejsu : Wi-Fi
+Widoczne sieci: 3.
+
+SSID 1 : Łódź-Wi-Fi
+    Typ sieci               : Infrastruktura
+    Uwierzytelnianie        : WPA2-Personal
+    Szyfrowanie             : CCMP
+    BSSID 1                 : 02:00:00:00:00:41
+         Siła sygnału       : 83%
+         Typ radia          : 802.11n
+         Pasmo              : 2,4 GHz
+         Kanał              : 6
+
+SSID 2 : Kawiarnia gość
+    Typ sieci               : Infrastruktura
+    Uwierzytelnianie        : Otwarta
+    Szyfrowanie             : Brak
+    BSSID 1                 : 02:00:00:00:00:42
+         Siła sygnału       : 35%
+         Typ radia          : 802.11n
+         Pasmo              : 2,4 GHz
+         Kanał              : 1
+
+SSID 3 : Żółć 5G
+    Typ sieci               : Infrastruktura
+    Uwierzytelnianie        : WPA3-Personal
+    Szyfrowanie             : CCMP
+    BSSID 1                 : 02:00:00:00:00:43
+         Siła sygnału       : 58%
+         Typ radia          : 802.11ax
+         Pasmo              : 5 GHz
+         Kanał              : 36

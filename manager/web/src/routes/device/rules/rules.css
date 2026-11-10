@@ -1,0 +1,28 @@
+.rules-sec { display: grid; gap: var(--s3); scroll-margin-top: var(--s5); }
+.rules-head { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2) var(--s4); }
+.rules-head h2 { margin: 0; }
+.rules-meter { display: flex; align-items: center; gap: var(--s3); min-width: 120px; flex: 0 1 180px; }
+.rules-meter .progress { flex: 1; }
+
+.rules-list { padding: 0; margin: 0; list-style: none; overflow: hidden; }
+.rule { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: var(--s3) var(--s4); padding: var(--s3) var(--s4); }
+.rules-list > li + li { border-top: 1px solid var(--line); }
+.rule .sent { margin: 0; line-height: 1.6; }
+.rule .inert { display: block; margin-top: 2px; color: var(--warn); font-size: var(--fs-sm); }
+.rule.is-off .sent { color: var(--mut); }
+.rule.is-offline .sent { opacity: 0.6; }
+.rule .ra { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: var(--s2); }
+@media (max-width: 767.98px) {
+  .rule { grid-template-columns: minmax(0, 1fr) auto; }
+  .rule .sent { grid-column: 1 / -1; order: 3; }
+}
+
+/* sheet */
+.rule-form { display: grid; gap: var(--s4); }
+.rule-block { display: grid; gap: var(--s2); }
+.rule-row { display: grid; gap: var(--s3); }
+.rule-row.rr3 { grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr) minmax(0, 1fr); }
+.rule-row.rr2 { grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr); }
+@media (max-width: 520px) {
+  .rule-row.rr3, .rule-row.rr2 { grid-template-columns: minmax(0, 1fr); }
+}

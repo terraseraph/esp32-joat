@@ -1,0 +1,9 @@
+.ip-fields { display: grid; gap: var(--s3); }
+.ip-row { display: grid; align-items: start; gap: var(--s3); grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr)); }
+.ip-warnings { display: grid; gap: var(--s2); }
+.ip-explain { display: grid; gap: var(--s2); font-size: var(--fs-sm); color: var(--mut); }
+.ip-explain p { margin: 0; }
+.ip-job { display: grid; gap: var(--s3); }
+.ip-prefill { justify-self: start; }
+.ip-mode-chip { vertical-align: middle; }
+.ip-cell { display: inline-flex; align-items: center; gap: var(--s2); flex-wrap: wrap; }

@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>Prototypes - de-esp32 Manager</title>
+<link rel="stylesheet" href="tokens.css">
+<style>
+  .ix { max-width: 960px; margin: 0 auto; padding: var(--s6) var(--s5); display: grid; gap: var(--s5); }
+  .ix-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: var(--s3); }
+  .ix-list a { display: block; text-decoration: none; color: var(--fg); }
+  .ix-list a:hover h3 { color: var(--acc); }
+  .ix-list h3 { margin: 0 0 4px; font-size: var(--fs-md, 16px); }
+  .ix-list p { margin: 0; }
+</style>
+</head>
+<body>
+<main class="ix">
+  <div class="page-head">
+    <div><h1>de-esp32 Manager · prototypes</h1>
+    <p>Static screen designs for phase 1. Spec: <span class="mono">docs/manager-app.md</span>. Mock data uses the real device API shapes and the canonical fleet in <span class="mono">fleet.html</span>. Each page ends with a “States (prototype only)” section.</p></div>
+  </div>
+
+  <section>
+    <h2 class="eyebrow">App</h2>
+    <div class="ix-list">
+      <a class="card" href="fleet.html"><h3>Fleet</h3><p class="mut">All devices, health, cards ⇄ table, bulk select.</p></a>
+      <a class="card" href="discover.html"><h3>Discover</h3><p class="mut">Scan (mDNS + /24 sweep), adopt, add by IP, Setup AP devices.</p></a>
+      <a class="card" href="firmware.html"><h3>Firmware</h3><p class="mut">Target image, fleet update, running job, history.</p></a>
+      <a class="card" href="backups.html"><h3>Backups</h3><p class="mut">Backup list and gaps, restore, clone wizard. <span class="mono">#backup-detail</span>, <span class="mono">#wizard</span> open the sheets.</p></a>
+      <a class="card" href="settings.html"><h3>Settings</h3><p class="mut">Monitoring, discovery, firmware source, access, data.</p></a>
+    </div>
+  </section>
+
+  <section>
+    <h2 class="eyebrow">Device · Workshop node</h2>
+    <div class="ix-list">
+      <a class="card" href="device-live.html"><h3>Live</h3><p class="mut">Tiles with manual control, rule hints, WS-full and offline states.</p></a>
+      <a class="card" href="device-pins.html"><h3>Pins &amp; add-ons</h3><p class="mut">DevKitC pinout, pin sheet, add-on wizard, rules.</p></a>
+      <a class="card" href="device-network.html"><h3>Network</h3><p class="mut">Wi-Fi, move-network danger flow, Setup AP, MQTT.</p></a>
+      <a class="card" href="device-system.html"><h3>System</h3><p class="mut">Identity, firmware update and rollback, memory, logs, danger zone.</p></a>
+    </div>
+  </section>
+
+  <section>
+    <h2 class="eyebrow">Foundation</h2>
+    <div class="ix-list">
+      <a class="card" href="components.html"><h3>Components</h3><p class="mut">Every shared component with copyable markup.</p></a>
+      <a class="card" href="tokens.css"><h3>tokens.css</h3><p class="mut">Design tokens and base components (class index in the header).</p></a>
+    </div>
+  </section>
+</main>
+</body>
+</html>

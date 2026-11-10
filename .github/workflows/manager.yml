@@ -1,0 +1,229 @@
+name: Manager
+
+# de-esp32 Manager (manager/): lint, typecheck, tests, build, smoke start on every relevant change;
+# a `manager-v<version>` tag additionally publishes a GitHub Release (Node zip + Windows portable exe + SHA256SUMS).
+on:
+  push:
+    paths:
+      - "manager/**"
+      - "nodered/node-red-contrib-de-esp32/lib/**"
+      - "nodered/node-red-contrib-de-esp32/package.json"
+      - ".github/workflows/manager.yml"
+    tags:
+      - "manager-v*"
+  pull_request:
+    paths:
+      - "manager/**"
+      - "nodered/node-red-contrib-de-esp32/lib/**"
+      - "nodered/node-red-contrib-de-esp32/package.json"
+      - ".github/workflows/manager.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: manager-${{ github.ref }}
+  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
+
+env:
+  # electron / electron-builder are devDependencies; only the Windows build job needs the Electron binary,
+  # and electron-builder downloads that itself.
+  ELECTRON_SKIP_BINARY_DOWNLOAD: "1"
+
+jobs:
+  check:
+    name: Check (Node ${{ matrix.node }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: [20, 22]
+    defaults:
+      run:
+        working-directory: manager
+    steps:
+      # A normal full-repo checkout: manager/package.json depends on file:../nodered/node-red-contrib-de-esp32.
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+          cache-dependency-path: manager/package-lock.json
+
+      - name: Install
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Test
+        run: npm test
+
+      - name: Build
+        run: npm run build
+
+      - name: Smoke start (dist/server.cjs)
+        shell: bash
+        run: |
+          set -euo pipefail
+          DATA_DIR="$(mktemp -d)"
+          node dist/server.cjs --no-open --no-network-scan --wifi-adapter none --port 0 --data-dir "$DATA_DIR" > server.log 2>&1 &
+          SERVER_PID=$!
+          trap 'kill "$SERVER_PID" 2>/dev/null || true' EXIT
+          # The server prints "  Local:    http://127.0.0.1:<port>/" once it listens (port 0 = any free port).
+          URL=""
+          for _ in $(seq 1 50); do
+            URL="$(sed -n 's/^ *Local: *\(http[^ ]*\).*/\1/p' server.log | head -n 1)"
+            [ -n "$URL" ] && break
+            kill -0 "$SERVER_PID" 2>/dev/null || { echo "server exited early"; cat server.log; exit 1; }
+            sleep 0.2
+          done
+          [ -n "$URL" ] || { echo "server did not report its URL"; cat server.log; exit 1; }
+          echo "server at $URL"
+          ok=0
+          for _ in $(seq 1 20); do
+            if curl -fsS "${URL}api/health" -o health.json; then ok=1; break; fi
+            sleep 0.5
+          done
+          [ "$ok" = 1 ] || { echo "GET /api/health failed"; cat server.log; exit 1; }
+          cat health.json; echo
+          grep -q '"version"' health.json
+          curl -fsS "$URL" -o /dev/null   # the bundled SPA is served too
+          kill "$SERVER_PID"
+          wait "$SERVER_PID" || true
+
+      - name: Upload dist
+        if: matrix.node == 22
+        uses: actions/upload-artifact@v4
+        with:
+          name: manager-dist
+          path: manager/dist
+          retention-days: 7
+
+  # ---- release (tags manager-v*) -------------------------------------------------------------------------------
+
+  version:
+    name: Tag matches package.json
+    if: startsWith(github.ref, 'refs/tags/manager-v')
+    needs: check
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: v
+        shell: bash
+        run: |
+          PKG="$(node -p "require('./manager/package.json').version")"
+          if [ "${GITHUB_REF_NAME}" != "manager-v${PKG}" ]; then
+            echo "::error::tag ${GITHUB_REF_NAME} does not match manager/package.json version ${PKG} (expected manager-v${PKG})"
+            exit 1
+          fi
+          echo "version=${PKG}" >> "$GITHUB_OUTPUT"
+
+  bundle:
+    name: Node zip
+    needs: version
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: manager
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: manager/package-lock.json
+      - run: npm ci
+      - run: npm run build
+      - name: Zip
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          mkdir -p ../out
+          cp -r dist ../out/stage
+          cp README.md ../out/stage/README.md
+          for f in LICENSE ../LICENSE ../nodered/node-red-contrib-de-esp32/LICENSE; do
+            if [ -f "$f" ]; then cp "$f" ../out/stage/LICENSE; break; fi
+          done
+          (cd ../out/stage && zip -r -q "../de-esp32-manager-${VERSION}-node.zip" .)
+          ls -l ../out
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-node-zip
+          path: out/de-esp32-manager-*-node.zip
+          if-no-files-found: error
+          retention-days: 7
+
+  win:
+    name: Windows portable exe
+    needs: version
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: bash
+        working-directory: manager
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: manager/package-lock.json
+      - run: npm ci
+      - name: Build portable exe (unsigned; SmartScreen will warn)
+        run: npm run dist:win
+      - name: Check output name
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          ls -l release
+          test -f "release/de-esp32-manager-${VERSION}-portable.exe"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-win-portable
+          path: manager/release/de-esp32-manager-*-portable.exe
+          if-no-files-found: error
+          retention-days: 7
+
+  publish:
+    name: Publish GitHub Release
+    needs: [version, bundle, win]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: release-*
+          path: assets
+          merge-multiple: true
+      - name: Checksums
+        run: |
+          cd assets
+          sha256sum de-esp32-manager-* > SHA256SUMS
+          cat SHA256SUMS
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          # Release notes: the annotated tag's message (a lightweight tag has none: fall back to generated notes).
+          git fetch --force --tags origin "refs/tags/${TAG}:refs/tags/${TAG}"
+          git tag -l --format='%(contents)' "${TAG}" > notes.md
+          if [ "$(git cat-file -t "refs/tags/${TAG}")" = "tag" ] && [ -n "$(tr -d '[:space:]' < notes.md)" ]; then
+            NOTES=(--notes-file notes.md)
+          else
+            NOTES=(--generate-notes)
+          fi
+          gh release create "${TAG}" assets/* --title "de-esp32 Manager ${TAG#manager-v}" "${NOTES[@]}" --verify-tag

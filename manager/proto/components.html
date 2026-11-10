@@ -1,0 +1,704 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>Components - de-esp32 Manager</title>
+<script>try{var t=localStorage.getItem('deesp32-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t)}catch(e){}</script>
+<link rel="stylesheet" href="tokens.css">
+<style>
+.sec{display:grid;gap:var(--s3);scroll-margin-top:var(--s4)}
+.sec>*{min-width:0}
+.sec h2{margin-bottom:4px}
+.sec p{max-width:80ch}
+.demo{display:flex;flex-wrap:wrap;align-items:center;gap:var(--s3);padding:var(--s5);background:var(--card);border:1px solid var(--line);border-radius:var(--r)}
+.demo.block{display:block}
+details.markup{border:1px solid var(--line);border-radius:var(--r-sm);background:var(--card)}
+details.markup>summary{cursor:pointer;min-height:40px;display:flex;align-items:center;padding:0 var(--s3);color:var(--mut);font-size:var(--fs-sm);font-weight:600}
+details.markup pre{margin:0;padding:var(--s3);border-top:1px solid var(--line);background:var(--in);overflow:auto;max-height:420px;font:12.5px/1.5 var(--mono);white-space:pre;border-radius:0 0 var(--r-sm) var(--r-sm)}
+.swatches{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:var(--s3)}
+.swatch{display:flex;align-items:center;gap:10px;font-size:var(--fs-sm)}
+.swatch i{width:36px;height:36px;border-radius:10px;border:1px solid var(--line);flex:none}
+.icon-cell{display:inline-flex;flex-direction:column;align-items:center;gap:6px;width:88px;font-size:11px;color:var(--mut)}
+.jump{display:flex;flex-wrap:wrap;gap:var(--s2)}
+.jump a{font-size:var(--fs-sm);font-weight:600;text-decoration:none;padding:6px 12px;border:1px solid var(--line);border-radius:var(--r-pill);background:var(--card);color:var(--mut)}
+.jump a:hover{color:var(--acc);border-color:var(--acc-bd)}
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false"><defs>
+<symbol id="i-chip" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2"/><path d="M9 2v4M15 2v4M9 18v4M15 18v4M2 9h4M2 15h4M18 9h4M18 15h4"/></symbol>
+<symbol id="i-fleet" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></symbol>
+<symbol id="i-discover" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4"/><path d="M12 12l5-5"/></symbol>
+<symbol id="i-firmware" viewBox="0 0 24 24"><path d="M12 3v12M7 10l5 5 5-5"/><path d="M4 20h16"/></symbol>
+<symbol id="i-backups" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="5" rx="1.5"/><path d="M5 9v9a2 2 0 002 2h10a2 2 0 002-2V9M10 13h4"/></symbol>
+<symbol id="i-settings" viewBox="0 0 24 24"><path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="17" r="2"/></symbol>
+<symbol id="i-theme" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 010 18z" fill="currentColor"/></symbol>
+<symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></symbol>
+<symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+<symbol id="i-refresh" viewBox="0 0 24 24"><path d="M20 11a8 8 0 00-14-4L4 9"/><path d="M4 4v5h5"/><path d="M4 13a8 8 0 0014 4l2-2"/><path d="M20 20v-5h-5"/></symbol>
+<symbol id="i-ext" viewBox="0 0 24 24"><path d="M14 4h6v6M20 4l-9 9"/><path d="M18 14v5a1 1 0 01-1 1H5a1 1 0 01-1-1V7a1 1 0 011-1h5"/></symbol>
+<symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12l5 5 9-10"/></symbol>
+<symbol id="i-alert" viewBox="0 0 24 24"><path d="M12 3l10 18H2z"/><path d="M12 10v5M12 18v.01"/></symbol>
+<symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.01"/></symbol>
+<symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></symbol>
+<symbol id="i-trash" viewBox="0 0 24 24"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></symbol>
+<symbol id="i-list" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/></symbol>
+<symbol id="i-upload" viewBox="0 0 24 24"><path d="M12 16V4M7 9l5-5 5 5"/><path d="M4 20h16"/></symbol>
+<symbol id="i-wifi" viewBox="0 0 24 24"><path d="M2 9a15 15 0 0120 0M5 12.5a10 10 0 0114 0M8.5 16a5 5 0 017 0"/><path d="M12 19.5v.01"/></symbol>
+<symbol id="i-power" viewBox="0 0 24 24"><path d="M12 3v9"/><path d="M6.3 7a8 8 0 1011.4 0"/></symbol>
+<symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></symbol>
+<symbol id="i-server" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="7" rx="2"/><rect x="3" y="13" width="18" height="7" rx="2"/><path d="M7 7.5v.01M7 16.5v.01"/></symbol>
+</defs></svg>
+<div class="app">
+<aside class="nav">
+  <a class="brand" href="fleet.html" aria-label="de-esp32 Manager"><span class="logo"><svg class="i" aria-hidden="true"><use href="#i-chip"/></svg></span><span class="lbl">de-esp32 Manager</span></a>
+  <nav class="nav-list" aria-label="Main">
+    <a class="nav-item" href="fleet.html" title="Fleet"><svg class="i" aria-hidden="true"><use href="#i-fleet"/></svg><span class="lbl">Fleet</span></a>
+    <a class="nav-item" href="discover.html" title="Discover"><svg class="i" aria-hidden="true"><use href="#i-discover"/></svg><span class="lbl">Discover</span></a>
+    <a class="nav-item" href="firmware.html" title="Firmware"><svg class="i" aria-hidden="true"><use href="#i-firmware"/></svg><span class="lbl">Firmware</span></a>
+    <a class="nav-item" href="backups.html" title="Backups"><svg class="i" aria-hidden="true"><use href="#i-backups"/></svg><span class="lbl">Backups</span></a>
+    <a class="nav-item" href="settings.html" title="Settings"><svg class="i" aria-hidden="true"><use href="#i-settings"/></svg><span class="lbl">Settings</span></a>
+  </nav>
+  <div class="nav-foot">
+    <div class="srv" title="Server connected · localhost:5180"><span class="dot ok"></span><span class="lbl">Server connected · localhost:5180</span></div>
+    <button class="btn ghost" type="button" data-theme-toggle title="Theme: system" aria-label="Theme: system"><svg class="i" aria-hidden="true"><use href="#i-theme"/></svg><span class="lbl">Theme: system</span></button>
+  </div>
+</aside>
+<main class="page">
+<div class="page-head">
+  <div><h1>Components</h1><p>Shared building blocks for the de-esp32 Manager prototypes. Everything lives in <code>tokens.css</code>; copy the markup under each example. Use the theme button in the nav to check dark mode.</p></div>
+</div>
+<nav class="jump" aria-label="Sections"><a href="#tokens">Tokens</a><a href="#shell">Shell</a><a href="#device-head">Device head</a><a href="#buttons">Buttons</a><a href="#status">Status</a><a href="#forms">Forms</a><a href="#toolbar">Toolbar</a><a href="#table">Table</a><a href="#surfaces">Surfaces</a><a href="#feedback">Feedback</a><a href="#overlays">Overlays</a><a href="#icons">Icons</a></nav>
+<section class="sec" id="tokens">
+  <div><h2>Tokens</h2><p class="mut">Colour is semantic only: green ok, amber warn, red bad, accent = interactive / selected, grey = neutral / offline. Everything is a custom property on <code>:root</code>; <code>html[data-theme]</code> overrides the system preference.</p></div>
+  <div class="demo block"><div class="swatches">
+    <div class="swatch"><i style="background:var(--bg)"></i><span><b>Page</b><br><code>--bg</code></span></div>
+    <div class="swatch"><i style="background:var(--card)"></i><span><b>Card</b><br><code>--card</code></span></div>
+    <div class="swatch"><i style="background:var(--in)"></i><span><b>Inset / input</b><br><code>--in</code></span></div>
+    <div class="swatch"><i style="background:var(--line)"></i><span><b>Border</b><br><code>--line</code></span></div>
+    <div class="swatch"><i style="background:var(--fg)"></i><span><b>Text</b><br><code>--fg</code></span></div>
+    <div class="swatch"><i style="background:var(--mut)"></i><span><b>Muted text</b><br><code>--mut</code></span></div>
+    <div class="swatch"><i style="background:var(--acc)"></i><span><b>Accent</b><br><code>--acc</code></span></div>
+    <div class="swatch"><i style="background:var(--ok)"></i><span><b>OK</b><br><code>--ok</code></span></div>
+    <div class="swatch"><i style="background:var(--warn)"></i><span><b>Warn</b><br><code>--warn</code></span></div>
+    <div class="swatch"><i style="background:var(--bad)"></i><span><b>Bad</b><br><code>--bad</code></span></div>
+    <div class="swatch"><i style="background:var(--off)"></i><span><b>Offline grey</b><br><code>--off</code></span></div>
+    <div class="swatch"><i style="background:var(--ok-bg)"></i><span><b>OK tint</b><br><code>--ok-bg</code></span></div>
+    <div class="swatch"><i style="background:var(--warn-bg)"></i><span><b>Warn tint</b><br><code>--warn-bg</code></span></div>
+    <div class="swatch"><i style="background:var(--bad-bg)"></i><span><b>Bad tint</b><br><code>--bad-bg</code></span></div>
+    <div class="swatch"><i style="background:var(--acc-bg)"></i><span><b>Accent tint</b><br><code>--acc-bg</code></span></div>
+  </div></div>
+  <div class="demo block stack">
+    <h1>Heading 1 - page title</h1><h2>Heading 2 - section</h2><h3>Heading 3 - card title</h3>
+    <p>Body text, 15px. <span class="mut">Muted text (.mut).</span> Ids and addresses: <span class="mono">a4cf12b3c4d5 · 192.168.1.42 · esp32-b3c4d5</span> (.mono). Live values: <span class="num strong">1,234.56</span> (.num).</p>
+    <p class="eyebrow">Eyebrow label (.eyebrow)</p>
+  </div>
+</section>
+<section class="sec" id="shell">
+  <div><h2>App shell, nav and page head</h2><p class="mut">This page is the live example. Below 1024px the nav collapses to an icon rail, below 768px to a top bar. Pass <code>on</code> and <code>aria-current="page"</code> on the active item; the count badge is optional. Every screen is <code>&lt;div class="app"&gt;&lt;aside class="nav"&gt;…&lt;/aside&gt;&lt;main class="page"&gt;…&lt;/main&gt;&lt;/div&gt;</code> plus the icon sprite after <code>&lt;body&gt;</code>.</p></div>
+  <details class="markup" open><summary>Markup: shell + nav</summary><pre>&lt;div class="app"&gt;
+&lt;aside class="nav"&gt;
+  &lt;a class="brand" href="fleet.html" aria-label="de-esp32 Manager"&gt;&lt;span class="logo"&gt;&lt;svg class="i" aria-hidden="true"&gt;&lt;use href="#i-chip"/&gt;&lt;/svg&gt;&lt;/span&gt;&lt;span class="lbl"&gt;de-esp32 Manager&lt;/span&gt;&lt;/a&gt;
+  &lt;nav class="nav-list" aria-label="Main"&gt;
+    &lt;a class="nav-item on" href="fleet.html" aria-current="page" title="Fleet"&gt;&lt;svg class="i" aria-hidden="true"&gt;&lt;use href="#i-fleet"/&gt;&lt;/svg&gt;&lt;span class="lbl"&gt;Fleet&lt;/span&gt;&lt;span class="badge"&gt;8&lt;/span&gt;&lt;/a&gt;
+    &lt;a class="nav-item" href="discover.html" title="Discover"&gt;&lt;svg class="i" aria-hidden="true"&gt;&lt;use href="#i-discover"/&gt;&lt;/svg&gt;&lt;span class="lbl"&gt;Discover&lt;/span&gt;&lt;/a&gt;
+    &lt;a class="nav-item" href="firmware.html" title="Firmware"&gt;&lt;svg class="i" aria-hidden="true"&gt;&lt;use href="#i-firmware"/&gt;&lt;/svg&gt;&lt;span class="lbl"&gt;Firmware&lt;/span&gt;&lt;/a&gt;
+    &lt;a class="nav-item" href="backups.html" title="Backups"&gt;&lt;svg class="i" aria-hidden="true"&gt;&lt;use href="#i-backups"/&gt;&lt;/svg&gt;&lt;span class="lbl"&gt;Backups&lt;/span&gt;&lt;/a&gt;
+    &lt;a class="nav-item" href="settings.html" title="Settings"&gt;&lt;svg class="i" aria-hidden="true"&gt;&lt;use href="#i-settings"/&gt;&lt;/svg&gt;&lt;span class="lbl"&gt;Settings&lt;/span&gt;&lt;/a&gt;
+  &lt;/nav&gt;
+  &lt;div class="nav-foot"&gt;
+    &lt;div class="srv" title="Server connected · localhost:5180"&gt;&lt;span class="dot ok"&gt;&lt;/span&gt;&lt;span class="lbl"&gt;Server connected · localhost:5180&lt;/span&gt;&lt;/div&gt;
+    &lt;button class="btn ghost" type="button" data-theme-toggle title="Theme: system" aria-label="Theme: system"&gt;&lt;svg class="i" aria-hidden="true"&gt;&lt;use href="#i-theme"/&gt;&lt;/svg&gt;&lt;span class="lbl"&gt;Theme: system&lt;/span&gt;&lt;/button&gt;
+  &lt;/div&gt;
+&lt;/aside&gt;
+&lt;main class="page"&gt;
+  &lt;!-- .page-head, then sections; direct children are centred at max 1280px --&gt;
+&lt;/main&gt;
+&lt;/div&gt;</pre></details>
+  <div class="demo block">
+<div class="page-head">
+  <div>
+    <h1>Fleet</h1>
+    <p>8 devices · last scan 3 min ago</p>
+  </div>
+  <div class="actions">
+    <a class="btn primary" href="discover.html"><svg class="i" aria-hidden="true"><use href="#i-discover"/></svg>Scan network</a>
+    <button class="btn" type="button" data-open="add-ip"><svg class="i" aria-hidden="true"><use href="#i-plus"/></svg>Add by IP</button>
+  </div>
+</div>
+  </div>
+  <details class="markup"><summary>Markup</summary><pre>&lt;div class="page-head"&gt;
+  &lt;div&gt;
+    &lt;h1&gt;Fleet&lt;/h1&gt;
+    &lt;p&gt;8 devices · last scan 3 min ago&lt;/p&gt;
+  &lt;/div&gt;
+  &lt;div class="actions"&gt;
+    &lt;a class="btn primary" href="discover.html"&gt;&lt;svg class="i" aria-hidden="true"&gt;&lt;use href="#i-discover"/&gt;&lt;/svg&gt;Scan network&lt;/a&gt;
+    &lt;button class="btn" type="button" data-open="add-ip"&gt;&lt;svg class="i" aria-hidden="true"&gt;&lt;use href="#i-plus"/&gt;&lt;/svg&gt;Add by IP&lt;/button&gt;
+  &lt;/div&gt;
+&lt;/div&gt;</pre></details>
+</section>
+<section class="sec" id="device-head">
+  <div><h2>Device head and tabs</h2><p class="mut">Used by Live, Pins &amp; add-ons, Network and System. The tabs are plain links; mark the current one with <code>.on</code>. Health chip first, then attention chips in plain words.</p></div>
+  <div class="demo block">
+<header class="device-head">
+  <a class="back" href="fleet.html"><span aria-hidden="true">←</span> Fleet</a>
+  <div>
+    <div class="device-title"><h1>Workshop node</h1></div>
+    <p class="device-sub mono">esp32-b3c4d5 · 192.168.1.42 · a4cf12b3c4d5</p>
+    <div class="chips">
+      <span class="chip ok">Online</span>
+      <span class="chip warn">MQTT disconnected</span>
+      <span class="chip warn">Memory pressure: warn</span>
+    </div>
+  </div>
+  <div class="device-actions">
+    <a class="btn" href="http://192.168.1.42/" target="_blank" rel="noopener">Open device page ↗</a>
+    <button class="btn" type="button"><svg class="i" aria-hidden="true"><use href="#i-refresh"/></svg>Refresh</button>
+    <button class="btn" type="button"><svg class="i" aria-hidden="true"><use href="#i-backups"/></svg>Back up</button>
+    <button class="btn primary" type="button"><svg class="i" aria-hidden="true"><use href="#i-firmware"/></svg>Update</button>
+    <button class="btn" type="button"><svg class="i" aria-hidden="true"><use href="#i-power"/></svg>Reboot</button>
+  </div>
+</header>
+<nav class="tabs" aria-label="Device sections">
+  <a class="on" href="device-live.html" aria-current="page">Live</a>
+  <a href="device-pins.html">Pins &amp; add-ons</a>
+  <a href="device-network.html">Network</a>
+  <a href="device-system.html">System</a>
+</nav>
+  </div>
+  <details class="markup"><summary>Markup</summary><pre>&lt;header class="device-head"&gt;
+  &lt;a class="back" href="fleet.html"&gt;&lt;span aria-hidden="true"&gt;←&lt;/span&gt; Fleet&lt;/a&gt;
+  &lt;div&gt;
+    &lt;div class="device-title"&gt;&lt;h1&gt;Workshop node&lt;/h1&gt;&lt;/div&gt;
+    &lt;p class="device-sub mono"&gt;esp32-b3c4d5 · 192.168.1.42 · a4cf12b3c4d5&lt;/p&gt;
+    &lt;div class="chips"&gt;
+      &lt;span class="chip ok"&gt;Online&lt;/span&gt;
+      &lt;span class="chip warn"&gt;MQTT disconnected&lt;/span&gt;
+      &lt;span class="chip warn"&gt;Memory pressure: warn&lt;/span&gt;
+    &lt;/div&gt;
+  &lt;/div&gt;
+  &lt;div class="device-actions"&gt;
+    &lt;a class="btn" href="http://192.168.1.42/" target="_blank" rel="noopener"&gt;Open device page ↗&lt;/a&gt;
+    &lt;button class="btn" type="button"&gt;&lt;svg class="i" aria-hidden="true"&gt;&lt;use href="#i-refresh"/&gt;&lt;/svg&gt;Refresh&lt;/button&gt;
+    &lt;button class="btn" type="button"&gt;&lt;svg class="i" aria-hidden="true"&gt;&lt;use href="#i-backups"/&gt;&lt;/svg&gt;Back up&lt;/button&gt;
+    &lt;button class="btn primary" type="button"&gt;&lt;svg class="i" aria-hidden="true"&gt;&lt;use href="#i-firmware"/&gt;&lt;/svg&gt;Update&lt;/button&gt;
+    &lt;button class="btn" type="button"&gt;&lt;svg class="i" aria-hidden="true"&gt;&lt;use href="#i-power"/&gt;&lt;/svg&gt;Reboot&lt;/button&gt;
+  &lt;/div&gt;
+&lt;/header&gt;
+&lt;nav class="tabs" aria-label="Device sections"&gt;
+  &lt;a class="on" href="device-live.html" aria-current="page"&gt;Live&lt;/a&gt;
+  &lt;a href="device-pins.html"&gt;Pins &amp;amp; add-ons&lt;/a&gt;
+  &lt;a href="device-network.html"&gt;Network&lt;/a&gt;
+  &lt;a href="device-system.html"&gt;System&lt;/a&gt;
+&lt;/nav&gt;</pre></details>
+</section>
+<section class="sec" id="buttons">
+  <div><h2>Buttons and controls</h2></div>
+  <div class="demo">
+<button class="btn" type="button">Default</button>
+<button class="btn primary" type="button">Primary</button>
+<button class="btn danger" type="button">Danger</button>
+<button class="btn ghost" type="button">Ghost</button>
+<button class="btn sm" type="button">Small</button>
+<button class="btn" type="button" disabled>Disabled</button>
+<button class="btn icon" type="button" aria-label="Refresh"><svg class="i" aria-hidden="true"><use href="#i-refresh"/></svg></button>
+<button class="btn" type="button"><svg class="i" aria-hidden="true"><use href="#i-upload"/></svg>With icon</button>
+<a class="btn" href="#buttons">Link as button</a>
+  </div>
+  <details class="markup"><summary>Markup</summary><pre>&lt;button class="btn" type="button"&gt;Default&lt;/button&gt;
+&lt;button class="btn primary" type="button"&gt;Primary&lt;/button&gt;
+&lt;button class="btn danger" type="button"&gt;Danger&lt;/button&gt;
+&lt;button class="btn ghost" type="button"&gt;Ghost&lt;/button&gt;
+&lt;button class="btn sm" type="button"&gt;Small&lt;/button&gt;
+&lt;button class="btn" type="button" disabled&gt;Disabled&lt;/button&gt;
+&lt;button class="btn icon" type="button" aria-label="Refresh"&gt;&lt;svg class="i" aria-hidden="true"&gt;&lt;use href="#i-refresh"/&gt;&lt;/svg&gt;&lt;/button&gt;
+&lt;button class="btn" type="button"&gt;&lt;svg class="i" aria-hidden="true"&gt;&lt;use href="#i-upload"/&gt;&lt;/svg&gt;With icon&lt;/button&gt;
+&lt;a class="btn" href="#buttons"&gt;Link as button&lt;/a&gt;</pre></details>
+  <div class="demo">
+<div class="btn-group" role="group" aria-label="Actions">
+  <button class="btn" type="button">Back up</button>
+  <button class="btn" type="button">Restore</button>
+  <button class="btn" type="button">Clone</button>
+</div>
+<div class="seg" role="group" aria-label="View">
+  <button type="button" class="on" aria-pressed="true"><svg class="i sm" aria-hidden="true"><use href="#i-fleet"/></svg>Cards</button>
+  <button type="button" aria-pressed="false"><svg class="i sm" aria-hidden="true"><use href="#i-list"/></svg>Table</button>
+</div>
+<div class="seg" role="group" aria-label="Pin mode">
+  <button type="button" aria-pressed="false">Off</button><button type="button" class="on" aria-pressed="true">Output</button><button type="button" aria-pressed="false">Input</button><button type="button" aria-pressed="false">PWM</button>
+</div>
+  </div>
+  <details class="markup"><summary>Markup</summary><pre>&lt;div class="btn-group" role="group" aria-label="Actions"&gt;
+  &lt;button class="btn" type="button"&gt;Back up&lt;/button&gt;
+  &lt;button class="btn" type="button"&gt;Restore&lt;/button&gt;
+  &lt;button class="btn" type="button"&gt;Clone&lt;/button&gt;
+&lt;/div&gt;
+&lt;div class="seg" role="group" aria-label="View"&gt;
+  &lt;button type="button" class="on" aria-pressed="true"&gt;&lt;svg class="i sm" aria-hidden="true"&gt;&lt;use href="#i-fleet"/&gt;&lt;/svg&gt;Cards&lt;/button&gt;
+  &lt;button type="button" aria-pressed="false"&gt;&lt;svg class="i sm" aria-hidden="true"&gt;&lt;use href="#i-list"/&gt;&lt;/svg&gt;Table&lt;/button&gt;
+&lt;/div&gt;
+&lt;div class="seg" role="group" aria-label="Pin mode"&gt;
+  &lt;button type="button" aria-pressed="false"&gt;Off&lt;/button&gt;&lt;button type="button" class="on" aria-pressed="true"&gt;Output&lt;/button&gt;&lt;button type="button" aria-pressed="false"&gt;Input&lt;/button&gt;&lt;button type="button" aria-pressed="false"&gt;PWM&lt;/button&gt;
+&lt;/div&gt;</pre></details>
+  <div class="demo">
+<label class="check"><button class="switch" type="button" role="switch" aria-checked="true" aria-label="Enabled"></button><span>Enabled</span></label>
+<button class="switch" type="button" role="switch" aria-checked="false" aria-label="Rule enabled"></button>
+<div class="chips" data-single>
+  <button type="button" class="filter-chip on" aria-pressed="true">All <span class="count">8</span></button>
+  <button type="button" class="filter-chip" aria-pressed="false">Online <span class="count">6</span></button>
+  <button type="button" class="filter-chip" aria-pressed="false">Needs attention <span class="count">4</span></button>
+</div>
+<div style="flex:1 1 220px"><label class="sr" for="rng">Duty</label><input id="rng" type="range" min="0" max="100" value="40"></div>
+  </div>
+  <details class="markup"><summary>Markup</summary><pre>&lt;label class="check"&gt;&lt;button class="switch" type="button" role="switch" aria-checked="true" aria-label="Enabled"&gt;&lt;/button&gt;&lt;span&gt;Enabled&lt;/span&gt;&lt;/label&gt;
+&lt;button class="switch" type="button" role="switch" aria-checked="false" aria-label="Rule enabled"&gt;&lt;/button&gt;
+&lt;div class="chips" data-single&gt;
+  &lt;button type="button" class="filter-chip on" aria-pressed="true"&gt;All &lt;span class="count"&gt;8&lt;/span&gt;&lt;/button&gt;
+  &lt;button type="button" class="filter-chip" aria-pressed="false"&gt;Online &lt;span class="count"&gt;6&lt;/span&gt;&lt;/button&gt;
+  &lt;button type="button" class="filter-chip" aria-pressed="false"&gt;Needs attention &lt;span class="count"&gt;4&lt;/span&gt;&lt;/button&gt;
+&lt;/div&gt;
+&lt;div style="flex:1 1 220px"&gt;&lt;label class="sr" for="rng"&gt;Duty&lt;/label&gt;&lt;input id="rng" type="range" min="0" max="100" value="40"&gt;&lt;/div&gt;</pre></details>
+</section>
+<section class="sec" id="status">
+  <div><h2>Chips, badges, progress and banners</h2><p class="mut">Chips with a dot are status (<code>.ok .warn .bad .off .acc</code>); a plain chip is neutral metadata such as a firmware version or an RSSI value.</p></div>
+  <div class="demo">
+<span class="chip ok">Online</span>
+<span class="chip warn">Unreachable</span>
+<span class="chip off">Offline</span>
+<span class="chip bad">Safe mode</span>
+<span class="chip acc">Updating 42%</span>
+<span class="chip"><svg class="i" aria-hidden="true"><use href="#i-wifi"/></svg>-58 dBm</span>
+<span class="chip mono">9dcba89</span>
+<span class="chip warn mono">0de951c · differs</span>
+<span class="badge">8</span> <span class="badge bad">3</span>
+  </div>
+  <details class="markup"><summary>Markup</summary><pre>&lt;span class="chip ok"&gt;Online&lt;/span&gt;
+&lt;span class="chip warn"&gt;Unreachable&lt;/span&gt;
+&lt;span class="chip off"&gt;Offline&lt;/span&gt;
+&lt;span class="chip bad"&gt;Safe mode&lt;/span&gt;
+&lt;span class="chip acc"&gt;Updating 42%&lt;/span&gt;
+&lt;span class="chip"&gt;&lt;svg class="i" aria-hidden="true"&gt;&lt;use href="#i-wifi"/&gt;&lt;/svg&gt;-58 dBm&lt;/span&gt;
+&lt;span class="chip mono"&gt;9dcba89&lt;/span&gt;
+&lt;span class="chip warn mono"&gt;0de951c · differs&lt;/span&gt;
+&lt;span class="badge"&gt;8&lt;/span&gt; &lt;span class="badge bad"&gt;3&lt;/span&gt;</pre></details>
+  <div class="demo block">
+<div class="stack" style="width:100%">
+  <div class="progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="40"><i style="width:40%"></i></div>
+  <div class="progress ok" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="100"><i style="width:100%"></i></div>
+  <div class="progress warn" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="75"><i style="width:75%"></i></div>
+  <div class="progress bad" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="30"><i style="width:30%"></i></div>
+  <div class="progress ind" role="progressbar" aria-label="Working"><i></i></div>
+</div>
+  </div>
+  <details class="markup"><summary>Markup</summary><pre>&lt;div class="stack" style="width:100%"&gt;
+  &lt;div class="progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="40"&gt;&lt;i style="width:40%"&gt;&lt;/i&gt;&lt;/div&gt;
+  &lt;div class="progress ok" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="100"&gt;&lt;i style="width:100%"&gt;&lt;/i&gt;&lt;/div&gt;
+  &lt;div class="progress warn" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="75"&gt;&lt;i style="width:75%"&gt;&lt;/i&gt;&lt;/div&gt;
+  &lt;div class="progress bad" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="30"&gt;&lt;i style="width:30%"&gt;&lt;/i&gt;&lt;/div&gt;
+  &lt;div class="progress ind" role="progressbar" aria-label="Working"&gt;&lt;i&gt;&lt;/i&gt;&lt;/div&gt;
+&lt;/div&gt;</pre></details>
+  <div class="demo block">
+<div class="stack" style="width:100%">
+  <div class="banner info" role="status"><svg class="i" aria-hidden="true"><use href="#i-info"/></svg><div class="txt"><strong>Target firmware is Latest CI build (9dcba89).</strong> Built Nov 10 2026.</div><div class="act"><button class="btn sm" type="button">Change</button></div></div>
+  <div class="banner warn" role="status"><svg class="i" aria-hidden="true"><use href="#i-alert"/></svg><div class="txt"><strong>Safe mode.</strong> Boot loop: 3 resets before healthy. I/O configuration was not applied.</div><div class="act"><button class="btn sm" type="button">Reboot</button></div></div>
+  <div class="banner bad" role="alert"><svg class="i" aria-hidden="true"><use href="#i-alert"/></svg><div class="txt">Lost connection to the Manager server — retrying…</div><div class="act"><button class="btn sm" type="button">Retry now</button></div></div>
+</div>
+  </div>
+  <details class="markup"><summary>Markup</summary><pre>&lt;div class="stack" style="width:100%"&gt;
+  &lt;div class="banner info" role="status"&gt;&lt;svg class="i" aria-hidden="true"&gt;&lt;use href="#i-info"/&gt;&lt;/svg&gt;&lt;div class="txt"&gt;&lt;strong&gt;Target firmware is Latest CI build (9dcba89).&lt;/strong&gt; Built Nov 10 2026.&lt;/div&gt;&lt;div class="act"&gt;&lt;button class="btn sm" type="button"&gt;Change&lt;/button&gt;&lt;/div&gt;&lt;/div&gt;
+  &lt;div class="banner warn" role="status"&gt;&lt;svg class="i" aria-hidden="true"&gt;&lt;use href="#i-alert"/&gt;&lt;/svg&gt;&lt;div class="txt"&gt;&lt;strong&gt;Safe mode.&lt;/strong&gt; Boot loop: 3 resets before healthy. I/O configuration was not applied.&lt;/div&gt;&lt;div class="act"&gt;&lt;button class="btn sm" type="button"&gt;Reboot&lt;/button&gt;&lt;/div&gt;&lt;/div&gt;
+  &lt;div class="banner bad" role="alert"&gt;&lt;svg class="i" aria-hidden="true"&gt;&lt;use href="#i-alert"/&gt;&lt;/svg&gt;&lt;div class="txt"&gt;Lost connection to the Manager server — retrying…&lt;/div&gt;&lt;div class="act"&gt;&lt;button class="btn sm" type="button"&gt;Retry now&lt;/button&gt;&lt;/div&gt;&lt;/div&gt;
+&lt;/div&gt;</pre></details>
+</section>
+<section class="sec" id="forms">
+  <div><h2>Forms</h2><p class="mut">Wrap each control in <code>.field</code>. The error state is <code>.field.err</code> with a <code>.msg</code>; give the input <code>aria-invalid</code> and <code>aria-describedby</code>.</p></div>
+  <div class="demo block">
+<div class="grid" style="--min:260px;width:100%">
+  <div class="field"><label for="f1">Device name</label><input id="f1" value="Workshop node" maxlength="31"><div class="hint">Up to 31 characters. Changes the MQTT topic.</div></div>
+  <div class="field err"><label for="f2">IP address or hostname</label><input id="f2" value="192.168.1.5O" aria-invalid="true" aria-describedby="f2m"><div class="msg" id="f2m"><svg class="i sm" aria-hidden="true"><use href="#i-alert"/></svg>Not a valid IP address or hostname.</div></div>
+  <div class="field"><label for="f3">Mode</label><select id="f3"><option>Output</option><option>Input</option><option>PWM</option></select></div>
+  <div class="field"><label for="f4">Notes</label><textarea id="f4" placeholder="Manager-only notes"></textarea></div>
+</div>
+  </div>
+  <details class="markup"><summary>Markup</summary><pre>&lt;div class="grid" style="--min:260px;width:100%"&gt;
+  &lt;div class="field"&gt;&lt;label for="f1"&gt;Device name&lt;/label&gt;&lt;input id="f1" value="Workshop node" maxlength="31"&gt;&lt;div class="hint"&gt;Up to 31 characters. Changes the MQTT topic.&lt;/div&gt;&lt;/div&gt;
+  &lt;div class="field err"&gt;&lt;label for="f2"&gt;IP address or hostname&lt;/label&gt;&lt;input id="f2" value="192.168.1.5O" aria-invalid="true" aria-describedby="f2m"&gt;&lt;div class="msg" id="f2m"&gt;&lt;svg class="i sm" aria-hidden="true"&gt;&lt;use href="#i-alert"/&gt;&lt;/svg&gt;Not a valid IP address or hostname.&lt;/div&gt;&lt;/div&gt;
+  &lt;div class="field"&gt;&lt;label for="f3"&gt;Mode&lt;/label&gt;&lt;select id="f3"&gt;&lt;option&gt;Output&lt;/option&gt;&lt;option&gt;Input&lt;/option&gt;&lt;option&gt;PWM&lt;/option&gt;&lt;/select&gt;&lt;/div&gt;
+  &lt;div class="field"&gt;&lt;label for="f4"&gt;Notes&lt;/label&gt;&lt;textarea id="f4" placeholder="Manager-only notes"&gt;&lt;/textarea&gt;&lt;/div&gt;
+&lt;/div&gt;</pre></details>
+  <div class="demo">
+<label class="check"><input type="checkbox" checked> Include rules</label>
+<label class="check"><input type="checkbox"> Include MQTT settings</label>
+<label class="check"><input type="radio" name="mode" checked> Push from Manager</label>
+<label class="check"><input type="radio" name="mode"> Device pulls from URL</label>
+<label class="search"><svg class="i" aria-hidden="true"><use href="#i-search"/></svg><input type="search" placeholder="Search name, IP or ID" aria-label="Search"></label>
+  </div>
+  <details class="markup"><summary>Markup</summary><pre>&lt;label class="check"&gt;&lt;input type="checkbox" checked&gt; Include rules&lt;/label&gt;
+&lt;label class="check"&gt;&lt;input type="checkbox"&gt; Include MQTT settings&lt;/label&gt;
+&lt;label class="check"&gt;&lt;input type="radio" name="mode" checked&gt; Push from Manager&lt;/label&gt;
+&lt;label class="check"&gt;&lt;input type="radio" name="mode"&gt; Device pulls from URL&lt;/label&gt;
+&lt;label class="search"&gt;&lt;svg class="i" aria-hidden="true"&gt;&lt;use href="#i-search"/&gt;&lt;/svg&gt;&lt;input type="search" placeholder="Search name, IP or ID" aria-label="Search"&gt;&lt;/label&gt;</pre></details>
+</section>
+<section class="sec" id="toolbar">
+  <div><h2>Toolbar</h2><p class="mut">Search, filter chips, a spacer, then sort / view controls and buttons. Wraps on narrow screens.</p></div>
+  <div class="demo block">
+<div class="toolbar" style="width:100%">
+  <label class="search"><svg class="i" aria-hidden="true"><use href="#i-search"/></svg><input type="search" placeholder="Search name, IP or ID" aria-label="Search"></label>
+  <div class="chips" data-single>
+    <button type="button" class="filter-chip on" aria-pressed="true">All <span class="count">8</span></button>
+    <button type="button" class="filter-chip" aria-pressed="false">Online <span class="count">6</span></button>
+    <button type="button" class="filter-chip" aria-pressed="false">Offline <span class="count">2</span></button>
+  </div>
+  <span class="spacer"></span>
+  <label class="sr" for="tb-sort">Sort by</label>
+  <select class="input" id="tb-sort"><option>Name</option><option>Health</option><option>Last seen</option><option>Firmware</option></select>
+  <div class="seg" role="group" aria-label="View"><button type="button" class="on" aria-pressed="true">Cards</button><button type="button" aria-pressed="false">Table</button></div>
+  <button class="btn primary" type="button">Scan network</button>
+</div>
+  </div>
+  <details class="markup"><summary>Markup</summary><pre>&lt;div class="toolbar" style="width:100%"&gt;
+  &lt;label class="search"&gt;&lt;svg class="i" aria-hidden="true"&gt;&lt;use href="#i-search"/&gt;&lt;/svg&gt;&lt;input type="search" placeholder="Search name, IP or ID" aria-label="Search"&gt;&lt;/label&gt;
+  &lt;div class="chips" data-single&gt;
+    &lt;button type="button" class="filter-chip on" aria-pressed="true"&gt;All &lt;span class="count"&gt;8&lt;/span&gt;&lt;/button&gt;
+    &lt;button type="button" class="filter-chip" aria-pressed="false"&gt;Online &lt;span class="count"&gt;6&lt;/span&gt;&lt;/button&gt;
+    &lt;button type="button" class="filter-chip" aria-pressed="false"&gt;Offline &lt;span class="count"&gt;2&lt;/span&gt;&lt;/button&gt;
+  &lt;/div&gt;
+  &lt;span class="spacer"&gt;&lt;/span&gt;
+  &lt;label class="sr" for="tb-sort"&gt;Sort by&lt;/label&gt;
+  &lt;select class="input" id="tb-sort"&gt;&lt;option&gt;Name&lt;/option&gt;&lt;option&gt;Health&lt;/option&gt;&lt;option&gt;Last seen&lt;/option&gt;&lt;option&gt;Firmware&lt;/option&gt;&lt;/select&gt;
+  &lt;div class="seg" role="group" aria-label="View"&gt;&lt;button type="button" class="on" aria-pressed="true"&gt;Cards&lt;/button&gt;&lt;button type="button" aria-pressed="false"&gt;Table&lt;/button&gt;&lt;/div&gt;
+  &lt;button class="btn primary" type="button"&gt;Scan network&lt;/button&gt;
+&lt;/div&gt;</pre></details>
+</section>
+<section class="sec" id="table">
+  <div><h2>Table and bulk bar</h2><p class="mut">Wrap in <code>.table-wrap</code> (scrolls horizontally on its own below its min-width; add <code>.scroll</code> for a height-limited body with a sticky header). Numeric columns: <code>th.num</code> / <code>td.num</code>. Selected row: <code>tr.sel</code>. Offline row: <code>tr.is-offline</code>. The <code>.bulkbar</code> is sticky and uses <code>hidden</code> when nothing is selected.</p></div>
+  <div class="demo block">
+<div class="table-wrap" style="width:100%">
+  <table class="table">
+    <thead><tr><th class="sel"><label class="check"><input type="checkbox" aria-label="Select all"></label></th><th>Name</th><th>Health</th><th>IP</th><th>Firmware</th><th class="num">Uptime</th><th class="num">RSSI</th></tr></thead>
+    <tbody>
+      <tr><td class="sel"><label class="check"><input type="checkbox" aria-label="Select Workshop node"></label></td><td><a class="cell-main" href="device-live.html">Workshop node</a><span class="cell-sub">esp32-b3c4d5</span></td><td><span class="chip ok">Online</span></td><td class="mono">192.168.1.42</td><td><span class="chip mono">9dcba89</span></td><td class="num">1h 27m</td><td class="num">-58 dBm</td></tr>
+      <tr class="sel"><td class="sel"><label class="check"><input type="checkbox" checked aria-label="Select Garage door"></label></td><td><a class="cell-main" href="device-live.html">Garage door</a><span class="cell-sub">esp32-0a9e11</span></td><td><span class="chip ok">Online</span></td><td class="mono">192.168.1.63</td><td><span class="chip warn mono">0de951c · differs</span></td><td class="num">12d 2h</td><td class="num">-66 dBm</td></tr>
+      <tr class="is-offline"><td class="sel"><label class="check"><input type="checkbox" aria-label="Select Kitchen relay"></label></td><td><a class="cell-main" href="device-live.html">Kitchen relay</a><span class="cell-sub">esp32-c0ffee</span></td><td><span class="chip off">Offline</span></td><td class="mono">192.168.1.88</td><td><span class="chip warn mono">5e3c76f · differs</span></td><td class="num">—</td><td class="num">—</td></tr>
+    </tbody>
+  </table>
+</div>
+  </div>
+  <details class="markup"><summary>Markup</summary><pre>&lt;div class="table-wrap" style="width:100%"&gt;
+  &lt;table class="table"&gt;
+    &lt;thead&gt;&lt;tr&gt;&lt;th class="sel"&gt;&lt;label class="check"&gt;&lt;input type="checkbox" aria-label="Select all"&gt;&lt;/label&gt;&lt;/th&gt;&lt;th&gt;Name&lt;/th&gt;&lt;th&gt;Health&lt;/th&gt;&lt;th&gt;IP&lt;/th&gt;&lt;th&gt;Firmware&lt;/th&gt;&lt;th class="num"&gt;Uptime&lt;/th&gt;&lt;th class="num"&gt;RSSI&lt;/th&gt;&lt;/tr&gt;&lt;/thead&gt;
+    &lt;tbody&gt;
+      &lt;tr&gt;&lt;td class="sel"&gt;&lt;label class="check"&gt;&lt;input type="checkbox" aria-label="Select Workshop node"&gt;&lt;/label&gt;&lt;/td&gt;&lt;td&gt;&lt;a class="cell-main" href="device-live.html"&gt;Workshop node&lt;/a&gt;&lt;span class="cell-sub"&gt;esp32-b3c4d5&lt;/span&gt;&lt;/td&gt;&lt;td&gt;&lt;span class="chip ok"&gt;Online&lt;/span&gt;&lt;/td&gt;&lt;td class="mono"&gt;192.168.1.42&lt;/td&gt;&lt;td&gt;&lt;span class="chip mono"&gt;9dcba89&lt;/span&gt;&lt;/td&gt;&lt;td class="num"&gt;1h 27m&lt;/td&gt;&lt;td class="num"&gt;-58 dBm&lt;/td&gt;&lt;/tr&gt;
+      &lt;tr class="sel"&gt;&lt;td class="sel"&gt;&lt;label class="check"&gt;&lt;input type="checkbox" checked aria-label="Select Garage door"&gt;&lt;/label&gt;&lt;/td&gt;&lt;td&gt;&lt;a class="cell-main" href="device-live.html"&gt;Garage door&lt;/a&gt;&lt;span class="cell-sub"&gt;esp32-0a9e11&lt;/span&gt;&lt;/td&gt;&lt;td&gt;&lt;span class="chip ok"&gt;Online&lt;/span&gt;&lt;/td&gt;&lt;td class="mono"&gt;192.168.1.63&lt;/td&gt;&lt;td&gt;&lt;span class="chip warn mono"&gt;0de951c · differs&lt;/span&gt;&lt;/td&gt;&lt;td class="num"&gt;12d 2h&lt;/td&gt;&lt;td class="num"&gt;-66 dBm&lt;/td&gt;&lt;/tr&gt;
+      &lt;tr class="is-offline"&gt;&lt;td class="sel"&gt;&lt;label class="check"&gt;&lt;input type="checkbox" aria-label="Select Kitchen relay"&gt;&lt;/label&gt;&lt;/td&gt;&lt;td&gt;&lt;a class="cell-main" href="device-live.html"&gt;Kitchen relay&lt;/a&gt;&lt;span class="cell-sub"&gt;esp32-c0ffee&lt;/span&gt;&lt;/td&gt;&lt;td&gt;&lt;span class="chip off"&gt;Offline&lt;/span&gt;&lt;/td&gt;&lt;td class="mono"&gt;192.168.1.88&lt;/td&gt;&lt;td&gt;&lt;span class="chip warn mono"&gt;5e3c76f · differs&lt;/span&gt;&lt;/td&gt;&lt;td class="num"&gt;—&lt;/td&gt;&lt;td class="num"&gt;—&lt;/td&gt;&lt;/tr&gt;
+    &lt;/tbody&gt;
+  &lt;/table&gt;
+&lt;/div&gt;</pre></details>
+  <div class="demo block">
+<div class="bulkbar" role="region" aria-label="Bulk actions" style="position:static;width:100%">
+  <span class="count">2 selected</span>
+  <a class="btn sm primary" href="firmware.html">Update firmware…</a>
+  <button class="btn sm" type="button">Back up</button>
+  <button class="btn sm" type="button">Reboot</button>
+  <button class="btn sm" type="button">Forget</button>
+  <span class="spacer"></span>
+  <button class="btn sm ghost" type="button">Clear</button>
+</div>
+  </div>
+  <details class="markup"><summary>Markup</summary><pre>&lt;div class="bulkbar" role="region" aria-label="Bulk actions" style="position:static;width:100%"&gt;
+  &lt;span class="count"&gt;2 selected&lt;/span&gt;
+  &lt;a class="btn sm primary" href="firmware.html"&gt;Update firmware…&lt;/a&gt;
+  &lt;button class="btn sm" type="button"&gt;Back up&lt;/button&gt;
+  &lt;button class="btn sm" type="button"&gt;Reboot&lt;/button&gt;
+  &lt;button class="btn sm" type="button"&gt;Forget&lt;/button&gt;
+  &lt;span class="spacer"&gt;&lt;/span&gt;
+  &lt;button class="btn sm ghost" type="button"&gt;Clear&lt;/button&gt;
+&lt;/div&gt;</pre></details>
+</section>
+<section class="sec" id="surfaces">
+  <div><h2>Cards, grid, tiles, key-value and stat tiles</h2></div>
+  <div class="demo block">
+<div class="grid" style="--min:260px;width:100%">
+  <section class="card">
+    <div class="card-head"><h3>Wi-Fi</h3><div class="actions"><button class="btn sm" type="button">Move to another network…</button></div></div>
+    <dl class="kv">
+      <dt>State</dt><dd><span class="chip ok">Connected</span></dd>
+      <dt>IP</dt><dd class="mono">192.168.1.42</dd>
+      <dt>Hostname</dt><dd class="mono">esp32-b3c4d5.local</dd>
+      <dt>RSSI</dt><dd>-58 dBm</dd>
+    </dl>
+  </section>
+  <section class="card"><div class="card-head"><h3>Plain card</h3></div><p class="mut">Cards are the default container: 16px radius, 1px line, subtle shadow.</p></section>
+</div>
+  </div>
+  <details class="markup"><summary>Markup</summary><pre>&lt;div class="grid" style="--min:260px;width:100%"&gt;
+  &lt;section class="card"&gt;
+    &lt;div class="card-head"&gt;&lt;h3&gt;Wi-Fi&lt;/h3&gt;&lt;div class="actions"&gt;&lt;button class="btn sm" type="button"&gt;Move to another network…&lt;/button&gt;&lt;/div&gt;&lt;/div&gt;
+    &lt;dl class="kv"&gt;
+      &lt;dt&gt;State&lt;/dt&gt;&lt;dd&gt;&lt;span class="chip ok"&gt;Connected&lt;/span&gt;&lt;/dd&gt;
+      &lt;dt&gt;IP&lt;/dt&gt;&lt;dd class="mono"&gt;192.168.1.42&lt;/dd&gt;
+      &lt;dt&gt;Hostname&lt;/dt&gt;&lt;dd class="mono"&gt;esp32-b3c4d5.local&lt;/dd&gt;
+      &lt;dt&gt;RSSI&lt;/dt&gt;&lt;dd&gt;-58 dBm&lt;/dd&gt;
+    &lt;/dl&gt;
+  &lt;/section&gt;
+  &lt;section class="card"&gt;&lt;div class="card-head"&gt;&lt;h3&gt;Plain card&lt;/h3&gt;&lt;/div&gt;&lt;p class="mut"&gt;Cards are the default container: 16px radius, 1px line, subtle shadow.&lt;/p&gt;&lt;/section&gt;
+&lt;/div&gt;</pre></details>
+  <div class="demo block">
+<div class="grid" style="--min:170px;width:100%">
+  <div class="tile on"><div class="top"><span>Output · GPIO 4</span><button class="switch" type="button" role="switch" aria-checked="true" aria-label="GPIO 4"></button></div><div class="rd">On</div><div class="foot"><span class="led on"></span><span class="sb">Driven by rule r32</span></div></div>
+  <div class="tile"><div class="top"><span>Analog · GPIO 34</span></div><div class="rd">1.84 <small>V</small></div><div class="sb">raw 2286 · 1840 mV</div><div class="progress" style="margin-top:auto"><i style="width:56%"></i></div></div>
+  <div class="tile ok"><div class="top"><span>BME280</span></div><div class="rd">23.4 <small>°C</small></div><div class="sb">48 %RH · 1011 hPa</div></div>
+  <div class="tile is-offline"><div class="top"><span>Input · GPIO 13</span></div><div class="rd">Low</div><div class="foot"><span class="led"></span><span class="sb">Last seen 2 h ago</span></div></div>
+</div>
+  </div>
+  <details class="markup"><summary>Markup</summary><pre>&lt;div class="grid" style="--min:170px;width:100%"&gt;
+  &lt;div class="tile on"&gt;&lt;div class="top"&gt;&lt;span&gt;Output · GPIO 4&lt;/span&gt;&lt;button class="switch" type="button" role="switch" aria-checked="true" aria-label="GPIO 4"&gt;&lt;/button&gt;&lt;/div&gt;&lt;div class="rd"&gt;On&lt;/div&gt;&lt;div class="foot"&gt;&lt;span class="led on"&gt;&lt;/span&gt;&lt;span class="sb"&gt;Driven by rule r32&lt;/span&gt;&lt;/div&gt;&lt;/div&gt;
+  &lt;div class="tile"&gt;&lt;div class="top"&gt;&lt;span&gt;Analog · GPIO 34&lt;/span&gt;&lt;/div&gt;&lt;div class="rd"&gt;1.84 &lt;small&gt;V&lt;/small&gt;&lt;/div&gt;&lt;div class="sb"&gt;raw 2286 · 1840 mV&lt;/div&gt;&lt;div class="progress" style="margin-top:auto"&gt;&lt;i style="width:56%"&gt;&lt;/i&gt;&lt;/div&gt;&lt;/div&gt;
+  &lt;div class="tile ok"&gt;&lt;div class="top"&gt;&lt;span&gt;BME280&lt;/span&gt;&lt;/div&gt;&lt;div class="rd"&gt;23.4 &lt;small&gt;°C&lt;/small&gt;&lt;/div&gt;&lt;div class="sb"&gt;48 %RH · 1011 hPa&lt;/div&gt;&lt;/div&gt;
+  &lt;div class="tile is-offline"&gt;&lt;div class="top"&gt;&lt;span&gt;Input · GPIO 13&lt;/span&gt;&lt;/div&gt;&lt;div class="rd"&gt;Low&lt;/div&gt;&lt;div class="foot"&gt;&lt;span class="led"&gt;&lt;/span&gt;&lt;span class="sb"&gt;Last seen 2 h ago&lt;/span&gt;&lt;/div&gt;&lt;/div&gt;
+&lt;/div&gt;</pre></details>
+  <div class="demo block">
+<div class="stats" style="width:100%">
+  <div class="stat"><span class="label">Total</span><span class="value">8</span><span class="hint">devices in your fleet</span></div>
+  <div class="stat ok"><span class="label">Online</span><span class="value">6</span><span class="hint">4 need attention</span></div>
+  <div class="stat warn"><span class="label">Needs attention</span><span class="value">4</span><span class="hint">+1 since yesterday</span></div>
+  <div class="stat bad"><span class="label">Failed updates</span><span class="value">1</span><span class="hint">last job 10:02</span></div>
+</div>
+  </div>
+  <details class="markup"><summary>Markup</summary><pre>&lt;div class="stats" style="width:100%"&gt;
+  &lt;div class="stat"&gt;&lt;span class="label"&gt;Total&lt;/span&gt;&lt;span class="value"&gt;8&lt;/span&gt;&lt;span class="hint"&gt;devices in your fleet&lt;/span&gt;&lt;/div&gt;
+  &lt;div class="stat ok"&gt;&lt;span class="label"&gt;Online&lt;/span&gt;&lt;span class="value"&gt;6&lt;/span&gt;&lt;span class="hint"&gt;4 need attention&lt;/span&gt;&lt;/div&gt;
+  &lt;div class="stat warn"&gt;&lt;span class="label"&gt;Needs attention&lt;/span&gt;&lt;span class="value"&gt;4&lt;/span&gt;&lt;span class="hint"&gt;+1 since yesterday&lt;/span&gt;&lt;/div&gt;
+  &lt;div class="stat bad"&gt;&lt;span class="label"&gt;Failed updates&lt;/span&gt;&lt;span class="value"&gt;1&lt;/span&gt;&lt;span class="hint"&gt;last job 10:02&lt;/span&gt;&lt;/div&gt;
+&lt;/div&gt;</pre></details>
+</section>
+<section class="sec" id="feedback">
+  <div><h2>Empty state, skeleton, dropzone, steps, log</h2></div>
+  <div class="demo block">
+<div class="empty" style="width:100%">
+  <span class="ico"><svg class="i" aria-hidden="true"><use href="#i-discover"/></svg></span>
+  <h3>No devices yet</h3>
+  <p>Scan your network to find boards running de-esp32, or add one by its IP address.</p>
+  <div class="actions"><a class="btn primary" href="discover.html">Scan network</a><button class="btn" type="button">Add by IP</button></div>
+</div>
+  </div>
+  <details class="markup"><summary>Markup</summary><pre>&lt;div class="empty" style="width:100%"&gt;
+  &lt;span class="ico"&gt;&lt;svg class="i" aria-hidden="true"&gt;&lt;use href="#i-discover"/&gt;&lt;/svg&gt;&lt;/span&gt;
+  &lt;h3&gt;No devices yet&lt;/h3&gt;
+  &lt;p&gt;Scan your network to find boards running de-esp32, or add one by its IP address.&lt;/p&gt;
+  &lt;div class="actions"&gt;&lt;a class="btn primary" href="discover.html"&gt;Scan network&lt;/a&gt;&lt;button class="btn" type="button"&gt;Add by IP&lt;/button&gt;&lt;/div&gt;
+&lt;/div&gt;</pre></details>
+  <div class="demo block">
+<div class="grid" style="--min:220px;width:100%" aria-busy="true">
+  <div class="card stack"><span class="skeleton title"></span><span class="skeleton line"></span><span class="skeleton block"></span></div>
+  <div class="card stack"><span class="skeleton title"></span><span class="skeleton line"></span><span class="skeleton block"></span></div>
+</div>
+  </div>
+  <details class="markup"><summary>Markup</summary><pre>&lt;div class="grid" style="--min:220px;width:100%" aria-busy="true"&gt;
+  &lt;div class="card stack"&gt;&lt;span class="skeleton title"&gt;&lt;/span&gt;&lt;span class="skeleton line"&gt;&lt;/span&gt;&lt;span class="skeleton block"&gt;&lt;/span&gt;&lt;/div&gt;
+  &lt;div class="card stack"&gt;&lt;span class="skeleton title"&gt;&lt;/span&gt;&lt;span class="skeleton line"&gt;&lt;/span&gt;&lt;span class="skeleton block"&gt;&lt;/span&gt;&lt;/div&gt;
+&lt;/div&gt;</pre></details>
+  <div class="demo block">
+<label class="dropzone" style="width:100%">
+  <input type="file" accept=".bin" aria-label="Choose a firmware .bin file">
+  <svg class="i" aria-hidden="true"><use href="#i-upload"/></svg>
+  <strong>Drop a firmware .bin here</strong>
+  <span>or click to choose a file</span>
+</label>
+  </div>
+  <details class="markup"><summary>Markup</summary><pre>&lt;label class="dropzone" style="width:100%"&gt;
+  &lt;input type="file" accept=".bin" aria-label="Choose a firmware .bin file"&gt;
+  &lt;svg class="i" aria-hidden="true"&gt;&lt;use href="#i-upload"/&gt;&lt;/svg&gt;
+  &lt;strong&gt;Drop a firmware .bin here&lt;/strong&gt;
+  &lt;span&gt;or click to choose a file&lt;/span&gt;
+&lt;/label&gt;</pre></details>
+  <div class="demo">
+<ol class="steps">
+  <li class="done">Source device</li>
+  <li class="done">Target devices</li>
+  <li class="on">Choose what to copy</li>
+  <li>Review plan</li>
+  <li>Apply</li>
+</ol>
+  </div>
+  <details class="markup"><summary>Markup</summary><pre>&lt;ol class="steps"&gt;
+  &lt;li class="done"&gt;Source device&lt;/li&gt;
+  &lt;li class="done"&gt;Target devices&lt;/li&gt;
+  &lt;li class="on"&gt;Choose what to copy&lt;/li&gt;
+  &lt;li&gt;Review plan&lt;/li&gt;
+  &lt;li&gt;Apply&lt;/li&gt;
+&lt;/ol&gt;</pre></details>
+  <div class="demo block">
+<div class="log" role="log" aria-label="Device log" style="width:100%">
+  <div class="lv-i">I (1203) wifi: connected, ip 192.168.1.42</div>
+  <div class="lv-d">D (1210) mqtt: reconnect in 2000 ms</div>
+  <div class="lv-w">W (5120) mem: pressure warn, largest block 38 KB</div>
+  <div class="lv-e">E (5302) mqtt: connection refused (5)</div>
+</div>
+  </div>
+  <details class="markup"><summary>Markup</summary><pre>&lt;div class="log" role="log" aria-label="Device log" style="width:100%"&gt;
+  &lt;div class="lv-i"&gt;I (1203) wifi: connected, ip 192.168.1.42&lt;/div&gt;
+  &lt;div class="lv-d"&gt;D (1210) mqtt: reconnect in 2000 ms&lt;/div&gt;
+  &lt;div class="lv-w"&gt;W (5120) mem: pressure warn, largest block 38 KB&lt;/div&gt;
+  &lt;div class="lv-e"&gt;E (5302) mqtt: connection refused (5)&lt;/div&gt;
+&lt;/div&gt;</pre></details>
+</section>
+<section class="sec" id="overlays">
+  <div><h2>Sheet, modal, type-to-confirm and toasts</h2><p class="mut">Dialogs are native <code>&lt;dialog&gt;</code>: open with <code>showModal()</code> (here via <code>data-open="id"</code>), close with <code>data-close</code>, Esc or a backdrop click. The sheet is a right drawer on desktop and a bottom sheet below 768px. Put <code>autofocus</code> on the first field.</p></div>
+  <div class="demo">
+<button class="btn" type="button" data-open="demo-sheet">Open sheet</button>
+<button class="btn" type="button" data-open="demo-modal">Open modal</button>
+<button class="btn danger" type="button" data-open="demo-danger">Open type-to-confirm modal</button>
+<button class="btn" type="button" data-toast="ok">Show ok toast</button>
+<button class="btn" type="button" data-toast="bad">Show error toast</button>
+  </div>
+  <details class="markup"><summary>Markup</summary><pre>&lt;button class="btn" type="button" data-open="demo-sheet"&gt;Open sheet&lt;/button&gt;
+&lt;button class="btn" type="button" data-open="demo-modal"&gt;Open modal&lt;/button&gt;
+&lt;button class="btn danger" type="button" data-open="demo-danger"&gt;Open type-to-confirm modal&lt;/button&gt;
+&lt;button class="btn" type="button" data-toast="ok"&gt;Show ok toast&lt;/button&gt;
+&lt;button class="btn" type="button" data-toast="bad"&gt;Show error toast&lt;/button&gt;</pre></details>
+  <details class="markup" open><summary>Markup: sheet, modal, danger modal (live copies are at the bottom of this page)</summary><pre>&lt;dialog class="sheet" id="demo-sheet" aria-labelledby="demo-sheet-t"&gt;
+  &lt;div class="dlg"&gt;
+    &lt;div class="dlg-head"&gt;&lt;h2 id="demo-sheet-t"&gt;GPIO 4&lt;/h2&gt;&lt;button type="button" class="btn icon ghost" data-close aria-label="Close"&gt;&lt;svg class="i" aria-hidden="true"&gt;&lt;use href="#i-x"/&gt;&lt;/svg&gt;&lt;/button&gt;&lt;/div&gt;
+    &lt;div class="dlg-body"&gt;
+      &lt;div class="seg" role="group" aria-label="Mode"&gt;&lt;button type="button" aria-pressed="false"&gt;Off&lt;/button&gt;&lt;button type="button" class="on" aria-pressed="true"&gt;Output&lt;/button&gt;&lt;button type="button" aria-pressed="false"&gt;Input&lt;/button&gt;&lt;/div&gt;
+      &lt;div class="field"&gt;&lt;label for="sh-boot"&gt;Initial level&lt;/label&gt;&lt;select id="sh-boot"&gt;&lt;option&gt;Low&lt;/option&gt;&lt;option&gt;High&lt;/option&gt;&lt;/select&gt;&lt;/div&gt;
+    &lt;/div&gt;
+    &lt;div class="dlg-foot"&gt;&lt;button type="button" class="btn" data-close&gt;Cancel&lt;/button&gt;&lt;button type="button" class="btn primary" data-close&gt;Apply&lt;/button&gt;&lt;/div&gt;
+  &lt;/div&gt;
+&lt;/dialog&gt;
+
+&lt;dialog class="modal" id="demo-modal" aria-labelledby="demo-modal-t"&gt;
+  &lt;form method="dialog" class="dlg"&gt;
+    &lt;div class="dlg-head"&gt;&lt;h2 id="demo-modal-t"&gt;Reboot Workshop node?&lt;/h2&gt;&lt;button type="button" class="btn icon ghost" data-close aria-label="Close"&gt;&lt;svg class="i" aria-hidden="true"&gt;&lt;use href="#i-x"/&gt;&lt;/svg&gt;&lt;/button&gt;&lt;/div&gt;
+    &lt;div class="dlg-body"&gt;&lt;p&gt;The device restarts and is unavailable for about 15 seconds.&lt;/p&gt;&lt;/div&gt;
+    &lt;div class="dlg-foot"&gt;&lt;button type="button" class="btn" data-close&gt;Cancel&lt;/button&gt;&lt;button class="btn primary" value="reboot"&gt;Reboot&lt;/button&gt;&lt;/div&gt;
+  &lt;/form&gt;
+&lt;/dialog&gt;
+
+&lt;dialog class="modal danger" id="demo-danger" aria-labelledby="demo-danger-t"&gt;
+  &lt;form method="dialog" class="dlg"&gt;
+    &lt;div class="dlg-head"&gt;&lt;h2 id="demo-danger-t"&gt;Factory reset Workshop node?&lt;/h2&gt;&lt;button type="button" class="btn icon ghost" data-close aria-label="Close"&gt;&lt;svg class="i" aria-hidden="true"&gt;&lt;use href="#i-x"/&gt;&lt;/svg&gt;&lt;/button&gt;&lt;/div&gt;
+    &lt;div class="dlg-body"&gt;
+      &lt;p&gt;This erases Wi-Fi, pins, add-ons, rules, MQTT settings and the name. The device leaves your network and reappears as Wi-Fi network &lt;span class="mono"&gt;esp32-b3c4d5&lt;/span&gt;.&lt;/p&gt;
+      &lt;div class="field"&gt;&lt;label for="tc"&gt;Type &lt;strong&gt;Workshop node&lt;/strong&gt; to confirm&lt;/label&gt;&lt;input id="tc" autocomplete="off" data-confirm="Workshop node"&gt;&lt;/div&gt;
+    &lt;/div&gt;
+    &lt;div class="dlg-foot"&gt;&lt;button type="button" class="btn" data-close&gt;Cancel&lt;/button&gt;&lt;button class="btn danger" value="reset" data-confirm-btn disabled&gt;Factory reset&lt;/button&gt;&lt;/div&gt;
+  &lt;/form&gt;
+&lt;/dialog&gt;</pre></details>
+  <div class="demo block">
+<div class="stack" style="width:100%;max-width:420px">
+  <div class="toast ok" role="status"><svg class="i" aria-hidden="true"><use href="#i-check"/></svg><div class="txt"><strong>Backup saved</strong><div class="mut">Workshop node · 7 pins, 2 add-ons, 1 rule</div></div><button class="btn icon ghost sm" type="button" data-dismiss aria-label="Dismiss"><svg class="i sm" aria-hidden="true"><use href="#i-x"/></svg></button></div>
+  <div class="toast bad" role="alert"><svg class="i" aria-hidden="true"><use href="#i-alert"/></svg><div class="txt"><strong>Update failed</strong><div class="mut">Greenhouse: ota busy</div></div><button class="btn icon ghost sm" type="button" data-dismiss aria-label="Dismiss"><svg class="i sm" aria-hidden="true"><use href="#i-x"/></svg></button></div>
+</div>
+<p class="mut">Live toasts stack in <code>&lt;div class="toasts" id="toasts" aria-live="polite"&gt;&lt;/div&gt;</code> (fixed, bottom-right).</p>
+  </div>
+  <details class="markup"><summary>Markup</summary><pre>&lt;div class="stack" style="width:100%;max-width:420px"&gt;
+  &lt;div class="toast ok" role="status"&gt;&lt;svg class="i" aria-hidden="true"&gt;&lt;use href="#i-check"/&gt;&lt;/svg&gt;&lt;div class="txt"&gt;&lt;strong&gt;Backup saved&lt;/strong&gt;&lt;div class="mut"&gt;Workshop node · 7 pins, 2 add-ons, 1 rule&lt;/div&gt;&lt;/div&gt;&lt;button class="btn icon ghost sm" type="button" data-dismiss aria-label="Dismiss"&gt;&lt;svg class="i sm" aria-hidden="true"&gt;&lt;use href="#i-x"/&gt;&lt;/svg&gt;&lt;/button&gt;&lt;/div&gt;
+  &lt;div class="toast bad" role="alert"&gt;&lt;svg class="i" aria-hidden="true"&gt;&lt;use href="#i-alert"/&gt;&lt;/svg&gt;&lt;div class="txt"&gt;&lt;strong&gt;Update failed&lt;/strong&gt;&lt;div class="mut"&gt;Greenhouse: ota busy&lt;/div&gt;&lt;/div&gt;&lt;button class="btn icon ghost sm" type="button" data-dismiss aria-label="Dismiss"&gt;&lt;svg class="i sm" aria-hidden="true"&gt;&lt;use href="#i-x"/&gt;&lt;/svg&gt;&lt;/button&gt;&lt;/div&gt;
+&lt;/div&gt;
+&lt;p class="mut"&gt;Live toasts stack in &lt;code&gt;&amp;lt;div class="toasts" id="toasts" aria-live="polite"&amp;gt;&amp;lt;/div&amp;gt;&lt;/code&gt; (fixed, bottom-right).&lt;/p&gt;</pre></details>
+</section>
+<section class="sec" id="icons">
+  <div><h2>Icons</h2><p class="mut">Inline sprite (24px viewBox, stroke currentColor, 2px). Copy the <code>&lt;svg width="0" …&gt;&lt;defs&gt;…</code> block from the top of this file into your page, then use <code>&lt;svg class="i"&gt;&lt;use href="#i-name"/&gt;&lt;/svg&gt;</code>. Add <code>.sm</code> for 16px.</p></div>
+  <div class="demo"><span class="icon-cell"><svg class="i" aria-hidden="true"><use href="#i-chip"/></svg><code>chip</code></span><span class="icon-cell"><svg class="i" aria-hidden="true"><use href="#i-fleet"/></svg><code>fleet</code></span><span class="icon-cell"><svg class="i" aria-hidden="true"><use href="#i-discover"/></svg><code>discover</code></span><span class="icon-cell"><svg class="i" aria-hidden="true"><use href="#i-firmware"/></svg><code>firmware</code></span><span class="icon-cell"><svg class="i" aria-hidden="true"><use href="#i-backups"/></svg><code>backups</code></span><span class="icon-cell"><svg class="i" aria-hidden="true"><use href="#i-settings"/></svg><code>settings</code></span><span class="icon-cell"><svg class="i" aria-hidden="true"><use href="#i-theme"/></svg><code>theme</code></span><span class="icon-cell"><svg class="i" aria-hidden="true"><use href="#i-search"/></svg><code>search</code></span><span class="icon-cell"><svg class="i" aria-hidden="true"><use href="#i-plus"/></svg><code>plus</code></span><span class="icon-cell"><svg class="i" aria-hidden="true"><use href="#i-refresh"/></svg><code>refresh</code></span><span class="icon-cell"><svg class="i" aria-hidden="true"><use href="#i-ext"/></svg><code>ext</code></span><span class="icon-cell"><svg class="i" aria-hidden="true"><use href="#i-check"/></svg><code>check</code></span><span class="icon-cell"><svg class="i" aria-hidden="true"><use href="#i-alert"/></svg><code>alert</code></span><span class="icon-cell"><svg class="i" aria-hidden="true"><use href="#i-info"/></svg><code>info</code></span><span class="icon-cell"><svg class="i" aria-hidden="true"><use href="#i-x"/></svg><code>x</code></span><span class="icon-cell"><svg class="i" aria-hidden="true"><use href="#i-trash"/></svg><code>trash</code></span><span class="icon-cell"><svg class="i" aria-hidden="true"><use href="#i-list"/></svg><code>list</code></span><span class="icon-cell"><svg class="i" aria-hidden="true"><use href="#i-upload"/></svg><code>upload</code></span><span class="icon-cell"><svg class="i" aria-hidden="true"><use href="#i-wifi"/></svg><code>wifi</code></span><span class="icon-cell"><svg class="i" aria-hidden="true"><use href="#i-power"/></svg><code>power</code></span><span class="icon-cell"><svg class="i" aria-hidden="true"><use href="#i-clock"/></svg><code>clock</code></span><span class="icon-cell"><svg class="i" aria-hidden="true"><use href="#i-server"/></svg><code>server</code></span></div>
+</section>
+
+</main>
+</div>
+
+<dialog class="sheet" id="demo-sheet" aria-labelledby="demo-sheet-t">
+  <div class="dlg">
+    <div class="dlg-head"><h2 id="demo-sheet-t">GPIO 4</h2><button type="button" class="btn icon ghost" data-close aria-label="Close"><svg class="i" aria-hidden="true"><use href="#i-x"/></svg></button></div>
+    <div class="dlg-body">
+      <div class="seg" role="group" aria-label="Mode"><button type="button" aria-pressed="false">Off</button><button type="button" class="on" aria-pressed="true">Output</button><button type="button" aria-pressed="false">Input</button></div>
+      <div class="field"><label for="sh-boot">Initial level</label><select id="sh-boot"><option>Low</option><option>High</option></select></div>
+    </div>
+    <div class="dlg-foot"><button type="button" class="btn" data-close>Cancel</button><button type="button" class="btn primary" data-close>Apply</button></div>
+  </div>
+</dialog>
+<dialog class="modal" id="demo-modal" aria-labelledby="demo-modal-t">
+  <form method="dialog" class="dlg">
+    <div class="dlg-head"><h2 id="demo-modal-t">Reboot Workshop node?</h2><button type="button" class="btn icon ghost" data-close aria-label="Close"><svg class="i" aria-hidden="true"><use href="#i-x"/></svg></button></div>
+    <div class="dlg-body"><p>The device restarts and is unavailable for about 15 seconds.</p></div>
+    <div class="dlg-foot"><button type="button" class="btn" data-close>Cancel</button><button class="btn primary" value="reboot">Reboot</button></div>
+  </form>
+</dialog>
+<dialog class="modal danger" id="demo-danger" aria-labelledby="demo-danger-t">
+  <form method="dialog" class="dlg">
+    <div class="dlg-head"><h2 id="demo-danger-t">Factory reset Workshop node?</h2><button type="button" class="btn icon ghost" data-close aria-label="Close"><svg class="i" aria-hidden="true"><use href="#i-x"/></svg></button></div>
+    <div class="dlg-body">
+      <p>This erases Wi-Fi, pins, add-ons, rules, MQTT settings and the name. The device leaves your network and reappears as Wi-Fi network <span class="mono">esp32-b3c4d5</span>.</p>
+      <div class="field"><label for="tc">Type <strong>Workshop node</strong> to confirm</label><input id="tc" autocomplete="off" data-confirm="Workshop node"></div>
+    </div>
+    <div class="dlg-foot"><button type="button" class="btn" data-close>Cancel</button><button class="btn danger" value="reset" data-confirm-btn disabled>Factory reset</button></div>
+  </form>
+</dialog>
+<dialog class="modal" id="add-ip" aria-labelledby="add-ip-t">
+  <form method="dialog" class="dlg">
+    <div class="dlg-head"><h2 id="add-ip-t">Add device by IP</h2><button type="button" class="btn icon ghost" data-close aria-label="Close"><svg class="i" aria-hidden="true"><use href="#i-x"/></svg></button></div>
+    <div class="dlg-body"><div class="field"><label for="add-ip-host">IP address or hostname</label><input id="add-ip-host" autocomplete="off" spellcheck="false" placeholder="192.168.1.50 or esp32-b3c4d5.local"><div class="hint">The Manager checks <code>/api/v1/status</code> on that address.</div></div></div>
+    <div class="dlg-foot"><button type="button" class="btn" data-close>Cancel</button><button class="btn primary" value="add">Add device</button></div>
+  </form>
+</dialog>
+<div class="toasts" id="toasts" aria-live="polite"></div>
+<script>
+(function(){
+  var root=document.documentElement,modes=['system','light','dark'],cur='system',KEY='deesp32-theme';
+  try{var s=localStorage.getItem(KEY);if(s==='light'||s==='dark')cur=s}catch(e){}
+  function apply(){
+    if(cur==='system')root.removeAttribute('data-theme');else root.setAttribute('data-theme',cur);
+    document.querySelectorAll('[data-theme-toggle]').forEach(function(b){
+      var l=b.querySelector('.lbl');if(l)l.textContent='Theme: '+cur;
+      b.title='Theme: '+cur;b.setAttribute('aria-label','Theme: '+cur+' (click to change)');
+    });
+  }
+  apply();
+  document.addEventListener('click',function(e){
+    var t=e.target.closest('[data-theme-toggle]');
+    if(t){cur=modes[(modes.indexOf(cur)+1)%3];try{localStorage.setItem(KEY,cur)}catch(x){}apply();return}
+    var o=e.target.closest('[data-open]');
+    if(o){var d=document.getElementById(o.getAttribute('data-open'));if(d&&d.showModal)d.showModal();return}
+    var c=e.target.closest('[data-close]');
+    if(c){var dd=c.closest('dialog');if(dd)dd.close();return}
+    if(e.target.tagName==='DIALOG'&&e.target.open){e.target.close();return}
+    var sg=e.target.closest('.seg button');
+    if(sg){sg.parentNode.querySelectorAll('button').forEach(function(b){var on=b===sg;b.classList.toggle('on',on);b.setAttribute('aria-pressed',on)});return}
+    var fc=e.target.closest('.filter-chip');
+    if(fc){
+      var grp=fc.closest('[data-single]');
+      if(grp){grp.querySelectorAll('.filter-chip').forEach(function(b){var on=b===fc;b.classList.toggle('on',on);b.setAttribute('aria-pressed',on)})}
+      else{var on=fc.classList.toggle('on');fc.setAttribute('aria-pressed',on)}
+      return;
+    }
+    var sw=e.target.closest('.switch');
+    if(sw){sw.setAttribute('aria-checked',sw.getAttribute('aria-checked')!=='true');return}
+    var dm=e.target.closest('[data-dismiss]');
+    if(dm){var tt=dm.closest('.toast');if(tt)tt.remove()}
+  });
+})();
+(function(){
+  document.addEventListener('input',function(e){
+    var t=e.target;if(!t.matches||!t.matches('[data-confirm]'))return;
+    var b=t.closest('dialog').querySelector('[data-confirm-btn]');
+    if(b)b.disabled=t.value.trim()!==t.getAttribute('data-confirm');
+  });
+  document.addEventListener('close',function(e){
+    var i=e.target.querySelector&&e.target.querySelector('[data-confirm]');
+    if(i){i.value='';var b=e.target.querySelector('[data-confirm-btn]');if(b)b.disabled=true}
+  },true);
+  document.addEventListener('click',function(e){
+    var t=e.target.closest('[data-toast]');if(!t)return;
+    var bad=t.getAttribute('data-toast')==='bad',el=document.createElement('div');
+    el.className='toast '+(bad?'bad':'ok');el.setAttribute('role',bad?'alert':'status');
+    el.innerHTML='<svg class="i" aria-hidden="true"><use href="#i-'+(bad?'alert':'check')+'"/></svg><div class="txt"><strong>'+(bad?'Update failed':'Backup saved')+'</strong><div class="mut">'+(bad?'Greenhouse: ota busy':'Workshop node · 7 pins, 2 add-ons, 1 rule')+'</div></div><button class="btn icon ghost sm" type="button" data-dismiss aria-label="Dismiss"><svg class="i sm" aria-hidden="true"><use href="#i-x"/></svg></button>';
+    document.getElementById('toasts').appendChild(el);
+    setTimeout(function(){if(el.parentNode)el.remove()},4500);
+  });
+})();
+</script>
+</body>
+</html>

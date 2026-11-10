@@ -1,0 +1,378 @@
+<!doctype html>
+<!--
+Discover screen (spec 3.3 and 4.4 screen 2). Uses the CANONICAL MOCK FLEET from fleet.html.
+Mid-scan snapshot: mDNS done, sweep in progress (WS message {t:"scan", phase:"sweep", probed:120, total:254, found:[...]}).
+New / recovery devices below are discovery-only values invented for this prototype:
+  c8f09e5a7710 esp32-5a7710 192.168.1.130 9dcba89 (mDNS + sweep)
+  c8f09e5a8821 esp32-5a8821 "Bench test" 192.168.1.131 0de951c (sweep)
+  30aea4123456 esp32-123456 192.168.1.140 network.state apsta_recovery
+  c8f09e112233 (ignored)
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>Discover - de-esp32 Manager</title>
+<script>try{var t=localStorage.getItem('deesp32-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t)}catch(e){}</script>
+<link rel="stylesheet" href="tokens.css">
+<style>
+/* Page-specific, built from tokens only */
+.disc{display:grid;grid-template-columns:minmax(0,2fr) minmax(280px,1fr);gap:var(--s5);align-items:start}
+.disc-main,.disc-side{display:grid;gap:var(--s4);min-width:0}
+.disc-side{position:sticky;top:var(--s4)}
+@media(max-width:1023.98px){.disc{grid-template-columns:minmax(0,1fr)}.disc-side{position:static}}
+
+.scan-top{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:var(--s3) var(--s5)}
+.scan-found{display:flex;align-items:baseline;gap:8px}
+.scan-found .n{font-size:var(--fs-2xl);font-weight:700;line-height:1;font-variant-numeric:tabular-nums}
+.subnets{display:grid;gap:var(--s3);margin:var(--s4) 0 0;padding:0;list-style:none}
+.subnet{display:grid;grid-template-columns:minmax(190px,1.1fr) minmax(120px,2fr) auto;align-items:center;gap:var(--s2) var(--s4)}
+.subnet .cnt{font-size:var(--fs-sm);white-space:nowrap;text-align:right}
+@media(max-width:600px){.subnet{grid-template-columns:minmax(0,1fr) auto}.subnet .progress{grid-column:1/-1;order:3}}
+.scan-foot{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:var(--s3);margin-top:var(--s4);padding-top:var(--s4);border-top:1px solid var(--line)}
+.scan-foot p{font-size:var(--fs-sm);color:var(--mut);max-width:64ch}
+
+.grp-head{display:flex;flex-wrap:wrap;align-items:center;gap:var(--s2) var(--s3);padding:var(--s4) var(--s5)}
+.grp-head h2{font-size:var(--fs-md)}
+.grp-head .spacer{flex:1}
+details.grp>summary{list-style:none;cursor:pointer}
+details.grp>summary::-webkit-details-marker{display:none}
+details.grp>summary::before{content:"";width:8px;height:8px;border-right:2px solid var(--mut);border-bottom:2px solid var(--mut);transform:rotate(-45deg);transition:transform .15s;flex:none}
+details.grp[open]>summary::before{transform:rotate(45deg)}
+.res{list-style:none;margin:0;padding:0}
+.res-row{display:flex;flex-wrap:wrap;align-items:center;gap:var(--s2) var(--s4);padding:var(--s3) var(--s5);border-top:1px solid var(--line)}
+.res-row.hl{background:var(--acc-bg)}
+.res-row.muted{color:var(--mut);font-size:var(--fs-sm)}
+.res-main{flex:1 1 240px;min-width:0}
+.res-name{font-weight:650;overflow-wrap:anywhere}
+.res-sub{font-family:var(--mono);font-size:var(--fs-xs);color:var(--mut);overflow-wrap:anywhere}
+.res-meta{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.res-act{display:flex;flex-wrap:wrap;gap:var(--s2);margin-left:auto}
+.res-note{flex:1 1 100%;display:flex;align-items:flex-start;gap:8px;font-size:var(--fs-sm)}
+.res-note .i{margin-top:2px}
+.res-note p{max-width:70ch}
+.res-row.compact{padding:10px var(--s5)}
+
+.side-list{margin:0;padding-left:20px;display:grid;gap:var(--s2);font-size:14px}
+.side-list li::marker{color:var(--mut)}
+
+.states h3.eyebrow{margin-bottom:var(--s3)}
+.states>.grid>.card{display:flex;flex-direction:column;gap:var(--s3)}
+.states .full{grid-column:1/-1}
+.states .empty{border-style:solid}
+.demo-err{display:grid;gap:var(--s4)}
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false"><defs>
+<symbol id="i-chip" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2"/><path d="M9 2v4M15 2v4M9 18v4M15 18v4M2 9h4M2 15h4M18 9h4M18 15h4"/></symbol>
+<symbol id="i-fleet" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></symbol>
+<symbol id="i-discover" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4"/><path d="M12 12l5-5"/></symbol>
+<symbol id="i-firmware" viewBox="0 0 24 24"><path d="M12 3v12M7 10l5 5 5-5"/><path d="M4 20h16"/></symbol>
+<symbol id="i-backups" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="5" rx="1.5"/><path d="M5 9v9a2 2 0 002 2h10a2 2 0 002-2V9M10 13h4"/></symbol>
+<symbol id="i-settings" viewBox="0 0 24 24"><path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="17" r="2"/></symbol>
+<symbol id="i-theme" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 010 18z" fill="currentColor"/></symbol>
+<symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></symbol>
+<symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+<symbol id="i-refresh" viewBox="0 0 24 24"><path d="M20 11a8 8 0 00-14-4L4 9"/><path d="M4 4v5h5"/><path d="M4 13a8 8 0 0014 4l2-2"/><path d="M20 20v-5h-5"/></symbol>
+<symbol id="i-ext" viewBox="0 0 24 24"><path d="M14 4h6v6M20 4l-9 9"/><path d="M18 14v5a1 1 0 01-1 1H5a1 1 0 01-1-1V7a1 1 0 011-1h5"/></symbol>
+<symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12l5 5 9-10"/></symbol>
+<symbol id="i-alert" viewBox="0 0 24 24"><path d="M12 3l10 18H2z"/><path d="M12 10v5M12 18v.01"/></symbol>
+<symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.01"/></symbol>
+<symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></symbol>
+<symbol id="i-trash" viewBox="0 0 24 24"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></symbol>
+<symbol id="i-list" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/></symbol>
+<symbol id="i-upload" viewBox="0 0 24 24"><path d="M12 16V4M7 9l5-5 5 5"/><path d="M4 20h16"/></symbol>
+<symbol id="i-wifi" viewBox="0 0 24 24"><path d="M2 9a15 15 0 0120 0M5 12.5a10 10 0 0114 0M8.5 16a5 5 0 017 0"/><path d="M12 19.5v.01"/></symbol>
+<symbol id="i-power" viewBox="0 0 24 24"><path d="M12 3v9"/><path d="M6.3 7a8 8 0 1011.4 0"/></symbol>
+<symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></symbol>
+<symbol id="i-server" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="7" rx="2"/><rect x="3" y="13" width="18" height="7" rx="2"/><path d="M7 7.5v.01M7 16.5v.01"/></symbol>
+</defs></svg>
+<div class="app">
+<aside class="nav">
+  <a class="brand" href="fleet.html" aria-label="de-esp32 Manager"><span class="logo"><svg class="i" aria-hidden="true"><use href="#i-chip"/></svg></span><span class="lbl">de-esp32 Manager</span></a>
+  <nav class="nav-list" aria-label="Main">
+    <a class="nav-item" href="fleet.html" title="Fleet"><svg class="i" aria-hidden="true"><use href="#i-fleet"/></svg><span class="lbl">Fleet</span><span class="badge">8</span></a>
+    <a class="nav-item on" href="discover.html" aria-current="page" title="Discover"><svg class="i" aria-hidden="true"><use href="#i-discover"/></svg><span class="lbl">Discover</span></a>
+    <a class="nav-item" href="firmware.html" title="Firmware"><svg class="i" aria-hidden="true"><use href="#i-firmware"/></svg><span class="lbl">Firmware</span></a>
+    <a class="nav-item" href="backups.html" title="Backups"><svg class="i" aria-hidden="true"><use href="#i-backups"/></svg><span class="lbl">Backups</span></a>
+    <a class="nav-item" href="settings.html" title="Settings"><svg class="i" aria-hidden="true"><use href="#i-settings"/></svg><span class="lbl">Settings</span></a>
+  </nav>
+  <div class="nav-foot">
+    <div class="srv" title="Server connected · localhost:5180"><span class="dot ok"></span><span class="lbl">Server connected · localhost:5180</span></div>
+    <button class="btn ghost" type="button" data-theme-toggle title="Theme: system" aria-label="Theme: system"><svg class="i" aria-hidden="true"><use href="#i-theme"/></svg><span class="lbl">Theme: system</span></button>
+  </div>
+</aside>
+<main class="page">
+<div class="page-head">
+  <div>
+    <h1>Discover</h1>
+    <p>Find de-esp32 boards on this network</p>
+  </div>
+  <div class="actions">
+    <button class="btn primary" type="button"><svg class="i" aria-hidden="true"><use href="#i-refresh"/></svg>Scan again</button>
+  </div>
+</div>
+
+<!-- Scan card (mid-scan) -->
+<section class="card" aria-labelledby="scan-h" aria-live="polite">
+  <div class="scan-top">
+    <div>
+      <h2 id="scan-h" class="sr">Scan progress</h2>
+      <ol class="steps" aria-label="Scan phases">
+        <li class="done">mDNS</li>
+        <li class="on" aria-current="step">Network sweep</li>
+        <li>Done</li>
+      </ol>
+    </div>
+    <div class="scan-found"><span class="n num">5</span><span class="mut strong">found</span></div>
+  </div>
+  <ul class="subnets" aria-label="Subnets being swept">
+    <li class="subnet">
+      <span><span class="strong mono">192.168.1.0/24</span> <span class="mut">· Wi-Fi</span></span>
+      <div class="progress" role="progressbar" aria-label="192.168.1.0/24 progress" aria-valuemin="0" aria-valuemax="254" aria-valuenow="120"><i style="width:47%"></i></div>
+      <span class="cnt num"><span class="strong">120</span> <span class="mut">/ 254 probed</span></span>
+    </li>
+    <li class="subnet">
+      <span><span class="strong mono">10.0.0.0/24</span> <span class="mut">· Ethernet</span></span>
+      <div class="progress ok" role="progressbar" aria-label="10.0.0.0/24 progress" aria-valuemin="0" aria-valuemax="254" aria-valuenow="254"><i style="width:100%"></i></div>
+      <span class="cnt num"><span class="strong">254</span> <span class="mut">/ 254 · none found</span></span>
+    </li>
+  </ul>
+  <div class="scan-foot">
+    <p>Windows often misses mDNS replies; the sweep checks every address on your local /24 networks.</p>
+    <button class="btn" type="button"><svg class="i" aria-hidden="true"><use href="#i-x"/></svg>Cancel</button>
+  </div>
+</section>
+
+<div class="disc">
+<div class="disc-main">
+
+  <!-- New -->
+  <section class="card flush" aria-labelledby="g-new">
+    <div class="grp-head">
+      <h2 id="g-new">New</h2><span class="badge">2</span>
+      <span class="mut" style="font-size:var(--fs-sm)">Not in your fleet yet</span>
+      <span class="spacer"></span>
+      <button class="btn sm primary" type="button"><svg class="i sm" aria-hidden="true"><use href="#i-plus"/></svg>Add all (2)</button>
+    </div>
+    <ul class="res">
+      <li class="res-row" data-id="c8f09e5a7710">
+        <div class="res-main">
+          <div class="res-name">esp32-5a7710 <span class="mut strong" style="font-size:var(--fs-sm);font-weight:500">· no name set</span></div>
+          <div class="res-sub">c8f09e5a7710 · 192.168.1.130</div>
+        </div>
+        <div class="res-meta"><span class="chip mono">9dcba89</span><span class="chip">mDNS + sweep</span></div>
+        <div class="res-act"><button class="btn sm primary" type="button">Add</button><button class="btn sm" type="button">Ignore</button></div>
+      </li>
+      <li class="res-row" data-id="c8f09e5a8821">
+        <div class="res-main">
+          <div class="res-name">Bench test <span class="mut" style="font-size:var(--fs-sm);font-weight:500">· esp32-5a8821</span></div>
+          <div class="res-sub">c8f09e5a8821 · 192.168.1.131</div>
+        </div>
+        <div class="res-meta"><span class="chip warn mono">0de951c · differs</span><span class="chip">sweep</span></div>
+        <div class="res-act"><button class="btn sm primary" type="button">Add</button><button class="btn sm" type="button">Ignore</button></div>
+      </li>
+    </ul>
+  </section>
+
+  <!-- Setup / recovery -->
+  <section class="card flush" aria-labelledby="g-rec">
+    <div class="grp-head">
+      <h2 id="g-rec">Setup / recovery</h2><span class="badge">1</span>
+    </div>
+    <ul class="res">
+      <li class="res-row" data-id="30aea4123456">
+        <div class="res-main">
+          <div class="res-name">esp32-123456</div>
+          <div class="res-sub">30aea4123456 · 192.168.1.140</div>
+        </div>
+        <div class="res-meta"><span class="chip warn">Setup AP open</span><span class="chip mono">apsta_recovery</span></div>
+        <div class="res-act">
+          <button class="btn sm primary" type="button">Add</button>
+          <a class="btn sm" href="http://192.168.1.140/" target="_blank" rel="noopener" aria-label="Open device page for esp32-123456">Open device page ↗</a>
+        </div>
+        <div class="res-note t-warn"><svg class="i sm" aria-hidden="true"><use href="#i-alert"/></svg><p class="" style="color:var(--fg)">This board lost its Wi-Fi and opened its Setup AP <code>esp32-123456</code>. It's still reachable here, so you can add it, but it may drop off the network.</p></div>
+      </li>
+    </ul>
+  </section>
+
+  <!-- Already in fleet -->
+  <details class="card flush grp" open>
+    <summary class="grp-head" aria-label="Already in fleet, 7 boards">
+      <h2>Already in fleet</h2><span class="badge">7</span>
+      <span class="mut" style="font-size:var(--fs-sm)">Updated automatically, nothing to do</span>
+    </summary>
+    <ul class="res">
+      <li class="res-row compact hl">
+        <div class="res-main">
+          <div class="res-name">Kitchen relay <span class="mut" style="font-size:var(--fs-sm);font-weight:500">· esp32-c0ffee</span></div>
+          <div class="res-sub">246f28c0ffee · 192.168.1.95</div>
+        </div>
+        <div class="res-meta"><span class="chip acc">IP changed</span><span class="chip warn mono">5e3c76f · differs</span></div>
+        <div class="res-act"><a class="btn sm" href="device-live.html">Open</a></div>
+        <div class="res-note"><svg class="i sm" aria-hidden="true" style="color:var(--acc)"><use href="#i-info"/></svg><p>IP changed from <span class="mono">192.168.1.88</span> — updated automatically.</p></div>
+      </li>
+      <li class="res-row compact"><div class="res-main"><div class="res-name">Workshop node</div><div class="res-sub">a4cf12b3c4d5 · 192.168.1.42</div></div><div class="res-meta"><span class="chip mono">9dcba89</span></div><div class="res-act"><a class="btn sm ghost" href="device-live.html">Open</a></div></li>
+      <li class="res-row compact"><div class="res-main"><div class="res-name">Greenhouse</div><div class="res-sub">a4cf12e81f20 · 192.168.1.57</div></div><div class="res-meta"><span class="chip mono">9dcba89</span></div><div class="res-act"><a class="btn sm ghost" href="device-live.html">Open</a></div></li>
+      <li class="res-row compact"><div class="res-main"><div class="res-name">Garage door</div><div class="res-sub">3c71bf0a9e11 · 192.168.1.63</div></div><div class="res-meta"><span class="chip warn mono">0de951c · differs</span></div><div class="res-act"><a class="btn sm ghost" href="device-live.html">Open</a></div></li>
+      <li class="res-row compact"><div class="res-main"><div class="res-name">Front gate RFID</div><div class="res-sub">3c71bf44d702 · 192.168.1.71</div></div><div class="res-meta"><span class="chip mono">9dcba89</span></div><div class="res-act"><a class="btn sm ghost" href="device-live.html">Open</a></div></li>
+      <li class="res-row compact"><div class="res-main"><div class="res-name">Pump controller</div><div class="res-sub">246f2811ab09 · 192.168.1.90</div></div><div class="res-meta"><span class="chip mono">9dcba89</span></div><div class="res-act"><a class="btn sm ghost" href="device-live.html">Open</a></div></li>
+      <li class="res-row compact"><div class="res-main"><div class="res-name">esp32-9a3b6c</div><div class="res-sub">7821849a3b6c · 192.168.1.104</div></div><div class="res-meta"><span class="chip mono">9dcba89</span></div><div class="res-act"><a class="btn sm ghost" href="device-live.html">Open</a></div></li>
+      <li class="res-row compact muted"><svg class="i sm" aria-hidden="true"><use href="#i-clock"/></svg><span>Not found this scan: Desk lamp (<span class="mono">192.168.1.112</span>)</span></li>
+    </ul>
+  </details>
+
+  <!-- Ignored -->
+  <details class="card flush grp">
+    <summary class="grp-head" aria-label="Ignored, 1 board">
+      <h2>Ignored</h2><span class="badge">1</span>
+      <span class="mut" style="font-size:var(--fs-sm)">Hidden from results</span>
+    </summary>
+    <ul class="res">
+      <li class="res-row compact">
+        <div class="res-main"><div class="res-name mono" style="font-size:.92em">c8f09e112233</div><div class="res-sub">Not shown in New while ignored</div></div>
+        <div class="res-act"><button class="btn sm" type="button">Un-ignore</button></div>
+      </li>
+    </ul>
+  </details>
+</div>
+
+<aside class="disc-side" aria-label="Add by IP and help">
+  <section class="card" aria-labelledby="addip-h">
+    <h2 id="addip-h" style="margin-bottom:var(--s3)">Add by IP</h2>
+    <form class="stack" onsubmit="return false">
+      <div class="field">
+        <label for="ip-host">IP address or hostname</label>
+        <input id="ip-host" name="host" autocomplete="off" spellcheck="false" placeholder="192.168.1.50 or esp32-b3c4d5.local">
+        <div class="hint">The Manager checks <code>/api/v1/status</code> on that address and adds it if it's a de-esp32 board.</div>
+      </div>
+      <div><button class="btn primary" type="submit"><svg class="i" aria-hidden="true"><use href="#i-plus"/></svg>Add device</button></div>
+    </form>
+  </section>
+  <section class="card" aria-labelledby="help-h">
+    <h2 id="help-h" style="margin-bottom:var(--s3)">Can't find a board?</h2>
+    <ul class="side-list">
+      <li>Make sure the board is on the same network (subnet) as this PC.</li>
+      <li>Boards on their Setup AP (<code>esp32-xxxxxx</code>, <span class="mono">192.168.4.1</span>) are only visible if this PC joins that Wi-Fi.</li>
+      <li>VPNs and guest networks block discovery.</li>
+    </ul>
+    <p style="margin-top:var(--s4)"><a href="https://terraseraph.github.io/esp32-joat/" target="_blank" rel="noopener">Flash a new board with the browser installer ↗</a></p>
+  </section>
+</aside>
+</div>
+
+<hr class="divider">
+
+<section class="states" aria-labelledby="states-h">
+  <h2 id="states-h">States (prototype only)</h2>
+  <p class="mut" style="margin-top:4px;margin-bottom:var(--s4)">Compact mockups of the other states this screen must handle. Not part of the real page.</p>
+  <div class="grid" style="--min:420px">
+    <div class="card">
+      <h3 class="eyebrow">Never scanned</h3>
+      <div class="empty">
+        <span class="ico"><svg class="i" aria-hidden="true"><use href="#i-discover"/></svg></span>
+        <h3>No scan yet</h3>
+        <p>Scan this network to find boards running de-esp32. Results stay here until the next scan.</p>
+        <div class="actions"><button class="btn primary" type="button"><svg class="i" aria-hidden="true"><use href="#i-discover"/></svg>Scan network</button></div>
+        <span class="mut" style="font-size:var(--fs-sm)">Last scan: never</span>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3 class="eyebrow">Scan finished, nothing new</h3>
+      <div class="banner" role="status">
+        <svg class="i" aria-hidden="true"><use href="#i-check"/></svg>
+        <div class="txt"><strong>Scan complete</strong> · 0 new · 7 already in fleet<div class="mut" style="font-size:var(--fs-sm)">Finished 4 min ago · Desk lamp (192.168.1.112) was not found this scan.</div></div>
+        <div class="act"><button class="btn sm" type="button"><svg class="i sm" aria-hidden="true"><use href="#i-refresh"/></svg>Scan again</button></div>
+      </div>
+    </div>
+
+    <div class="card full">
+      <h3 class="eyebrow">Nothing found at all</h3>
+      <div class="empty">
+        <span class="ico"><svg class="i" aria-hidden="true"><use href="#i-search"/></svg></span>
+        <h3>No boards found</h3>
+        <p>Scanned 192.168.1.0/24 and 10.0.0.0/24 and got no answers from any de-esp32 board.</p>
+        <ul class="side-list" style="text-align:left;max-width:56ch">
+          <li>Check that this PC is on the same network and subnet as your boards.</li>
+          <li>Windows often misses mDNS replies, so the sweep does the real work. A firewall prompt for the Manager can block it; allow it and scan again.</li>
+          <li>VPNs and guest Wi-Fi networks hide devices from each other.</li>
+          <li>A board on its Setup AP (<code>esp32-xxxxxx</code>, <span class="mono">192.168.4.1</span>) is only visible if this PC joins that Wi-Fi.</li>
+          <li>You know the address? Use Add by IP.</li>
+        </ul>
+        <div class="actions"><button class="btn primary" type="button"><svg class="i" aria-hidden="true"><use href="#i-refresh"/></svg>Scan again</button><a class="btn" href="https://terraseraph.github.io/esp32-joat/" target="_blank" rel="noopener">Browser installer ↗</a></div>
+      </div>
+    </div>
+
+    <div class="card full">
+      <h3 class="eyebrow">Add by IP · errors</h3>
+      <div class="grid" style="--min:300px">
+        <div class="field err">
+          <label for="e1">IP address or hostname</label>
+          <input id="e1" value="192.168.1.50" aria-invalid="true" aria-describedby="e1-m" spellcheck="false">
+          <div class="msg" id="e1-m"><svg class="i sm" aria-hidden="true"><use href="#i-alert"/></svg>No answer from 192.168.1.50 (timed out after 2 s)</div>
+          <div class="hint">The Manager checks <code>/api/v1/status</code> on that address.</div>
+        </div>
+        <div class="field err">
+          <label for="e2">IP address or hostname</label>
+          <input id="e2" value="192.168.1.1" aria-invalid="true" aria-describedby="e2-m" spellcheck="false">
+          <div class="msg" id="e2-m"><svg class="i sm" aria-hidden="true"><use href="#i-alert"/></svg>192.168.1.1 answered but isn't a de-esp32 device</div>
+          <div class="hint">The Manager checks <code>/api/v1/status</code> on that address.</div>
+        </div>
+        <div class="field err">
+          <label for="e3">IP address or hostname</label>
+          <input id="e3" value="192.168.1.60" aria-invalid="true" aria-describedby="e3-m" spellcheck="false">
+          <div class="msg" id="e3-m"><svg class="i sm" aria-hidden="true"><use href="#i-alert"/></svg>That address redirected to 192.168.4.1 — it's a board's Setup AP page, not its LAN address</div>
+          <div class="hint">The Manager checks <code>/api/v1/status</code> on that address.</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3 class="eyebrow">Add by IP · success</h3>
+      <div class="toast ok" role="status"><svg class="i" aria-hidden="true"><use href="#i-check"/></svg><div class="txt"><strong>Added Bench test (192.168.1.131)</strong><div class="mut">It now appears in your fleet.</div></div><button class="btn icon ghost sm" type="button" data-dismiss aria-label="Dismiss"><svg class="i sm" aria-hidden="true"><use href="#i-x"/></svg></button></div>
+    </div>
+  </div>
+</section>
+</main>
+</div>
+<script>
+(function(){
+  var root=document.documentElement,modes=['system','light','dark'],cur='system',KEY='deesp32-theme';
+  try{var s=localStorage.getItem(KEY);if(s==='light'||s==='dark')cur=s}catch(e){}
+  function apply(){
+    if(cur==='system')root.removeAttribute('data-theme');else root.setAttribute('data-theme',cur);
+    document.querySelectorAll('[data-theme-toggle]').forEach(function(b){
+      var l=b.querySelector('.lbl');if(l)l.textContent='Theme: '+cur;
+      b.title='Theme: '+cur;b.setAttribute('aria-label','Theme: '+cur+' (click to change)');
+    });
+  }
+  apply();
+  document.addEventListener('click',function(e){
+    var t=e.target.closest('[data-theme-toggle]');
+    if(t){cur=modes[(modes.indexOf(cur)+1)%3];try{localStorage.setItem(KEY,cur)}catch(x){}apply();return}
+    var o=e.target.closest('[data-open]');
+    if(o){var d=document.getElementById(o.getAttribute('data-open'));if(d&&d.showModal)d.showModal();return}
+    var c=e.target.closest('[data-close]');
+    if(c){var dd=c.closest('dialog');if(dd)dd.close();return}
+    if(e.target.tagName==='DIALOG'&&e.target.open){e.target.close();return}
+    var sg=e.target.closest('.seg button');
+    if(sg){sg.parentNode.querySelectorAll('button').forEach(function(b){var on=b===sg;b.classList.toggle('on',on);b.setAttribute('aria-pressed',on)});return}
+    var fc=e.target.closest('.filter-chip');
+    if(fc){
+      var grp=fc.closest('[data-single]');
+      if(grp){grp.querySelectorAll('.filter-chip').forEach(function(b){var on=b===fc;b.classList.toggle('on',on);b.setAttribute('aria-pressed',on)})}
+      else{var on=fc.classList.toggle('on');fc.setAttribute('aria-pressed',on)}
+      return;
+    }
+    var sw=e.target.closest('.switch');
+    if(sw){sw.setAttribute('aria-checked',sw.getAttribute('aria-checked')!=='true');return}
+    var dm=e.target.closest('[data-dismiss]');
+    if(dm){var tt=dm.closest('.toast');if(tt)tt.remove()}
+  });
+})();
+</script>
+</body>
+</html>

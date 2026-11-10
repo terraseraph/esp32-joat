@@ -1,0 +1,29 @@
+.nt-tab { display: grid; gap: var(--s4); min-width: 0; }
+.nt-grid { display: grid; gap: var(--s4); grid-template-columns: repeat(auto-fit, minmax(min(100%, 360px), 1fr)); align-items: start; }
+.nt-grid > * { min-width: 0; }
+.nt-full { grid-column: 1 / -1; }
+.nt-card { display: grid; gap: var(--s3); align-content: start; }
+.nt-card.is-down { opacity: 0.6; }
+.nt-note { font-size: var(--fs-sm); color: var(--mut); }
+.nt-sub { margin-top: var(--s1); padding-top: var(--s4); border-top: 1px solid var(--line); display: grid; gap: var(--s3); }
+.nt-actions { display: flex; flex-wrap: wrap; gap: var(--s2); }
+.nt-actions .btn { flex: none; }
+.nt-sig { display: inline-flex; align-items: flex-end; gap: 2px; height: 16px; vertical-align: middle; margin-right: var(--s2); }
+.nt-sig i { display: block; width: 4px; border-radius: 1px; background: var(--line); }
+.nt-sig i:nth-child(1) { height: 5px; }
+.nt-sig i:nth-child(2) { height: 8px; }
+.nt-sig i:nth-child(3) { height: 12px; }
+.nt-sig i:nth-child(4) { height: 16px; }
+.nt-sig[data-l="1"] i:nth-child(-n + 1),
+.nt-sig[data-l="2"] i:nth-child(-n + 2),
+.nt-sig[data-l="3"] i:nth-child(-n + 3),
+.nt-sig[data-l="4"] i:nth-child(-n + 4) { background: var(--fg); }
+.nt-mqtt { display: grid; gap: var(--s5); grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr)); align-items: start; }
+.nt-mqtt > * { min-width: 0; }
+.nt-topics { display: grid; gap: var(--s2); margin: 0; padding: 0; list-style: none; }
+.nt-topics li { display: flex; gap: var(--s2); align-items: baseline; flex-wrap: wrap; overflow-wrap: anywhere; font-size: var(--fs-sm); }
+.nt-topics .nt-dir { color: var(--mut); min-width: 74px; }
+.nt-ref { border: 1px solid var(--line); border-radius: var(--r-sm); background: var(--card); }
+.nt-ref > summary { cursor: pointer; min-height: 40px; display: flex; align-items: center; padding: 0 var(--s3); font-weight: 600; font-size: var(--fs-sm); }
+.nt-ref > div { padding: var(--s3); border-top: 1px solid var(--line); display: grid; gap: var(--s3); }
+.nt-err { overflow-wrap: anywhere; }

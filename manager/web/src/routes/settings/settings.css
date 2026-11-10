@@ -1,0 +1,27 @@
+/* Settings screen: one column of cards, readable at ~800 px and on a phone. */
+.settings-col { display: grid; gap: var(--s4); max-width: 760px; }
+.settings-col .field .input { max-width: 100%; }
+
+.save-bar { display: grid; gap: var(--s2); padding-top: var(--s3); border-top: 1px solid var(--line); }
+
+.le-add { display: flex; gap: var(--s2); align-items: stretch; }
+.le-add > :first-child { flex: 1 1 auto; min-width: 0; }
+.le-add .btn { flex: none; }
+.list-editor { display: grid; gap: var(--s2); }
+.le-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; border: 1px solid var(--line); border-radius: var(--r-sm); }
+.le-list li { padding: 2px var(--s2); }
+.le-list li + li { border-top: 1px solid var(--line); }
+.le-list li.bad { background: color-mix(in srgb, var(--bad) 8%, transparent); }
+.le-row { display: flex; align-items: center; justify-content: space-between; gap: var(--s2); min-width: 0; }
+.le-row code { min-width: 0; overflow-wrap: anywhere; }
+.le-list .msg { display: flex; gap: var(--s1); padding-bottom: var(--s1); color: var(--bad); font-size: var(--fs-sm); }
+.le-empty { margin: 0; }
+
+.set-state { margin: 0; color: var(--mut); font-size: var(--fs-sm); }
+.path-row { display: flex; align-items: center; gap: var(--s1); min-width: 0; }
+.path-row code { min-width: 0; overflow-wrap: anywhere; }
+
+@media (max-width: 520px) {
+  .le-add { flex-wrap: wrap; }
+  .le-add .btn { flex: 1 1 100%; }
+}

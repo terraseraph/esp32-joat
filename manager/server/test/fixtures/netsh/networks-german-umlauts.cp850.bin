@@ -1,0 +1,33 @@
+
+Schnittstellenname : WLAN
+Zurzeit sind 3 Netzwerke sichtbar.
+
+SSID 1 : CafÇ-Wi-Fi Å?
+    Netzwerktyp             : Infrastruktur
+    Authentifizierung       : WPA2-Personal
+    VerschlÅsselung         : CCMP
+    BSSID 1                 : 02:00:00:00:00:31
+         SignalstÑrke       : 74%
+         Funktyp            : 802.11n
+         Band               : 2,4 GHz
+         Kanal              : 6
+
+SSID 2 : GÑstenetz ohne Passwort
+    Netzwerktyp             : Infrastruktur
+    Authentifizierung       : Offen
+    VerschlÅsselung         : Keine
+    BSSID 1                 : 02:00:00:00:00:32
+         SignalstÑrke       : 41%
+         Funktyp            : 802.11n
+         Band               : 2,4 GHz
+         Kanal              : 1
+
+SSID 3 : esp32-4d5e6f
+    Netzwerktyp             : Infrastruktur
+    Authentifizierung       : WPA2-Personal
+    VerschlÅsselung         : CCMP
+    BSSID 1                 : 02:00:00:00:00:33
+         SignalstÑrke       : 66%
+         Funktyp            : 802.11n
+         Band               : 2,4 GHz
+         Kanal              : 11

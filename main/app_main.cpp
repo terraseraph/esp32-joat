@@ -121,20 +121,10 @@ static void boot_button_task(void*) {
 static void recovery_watch_task(void*) {
     while (true) {
         vTaskDelay(pdMS_TO_TICKS(2000));
-        if (!runtime::config_has_wifi()) {
-            continue;
-        }
-        if (runtime::sta_connected()) {
-            continue;
-        }
-        if (runtime::RuntimeStatus::instance().uptime_s() * 1000U >=
-            static_cast<uint32_t>(CONFIG_RUNTIME_WIFI_FAIL_AP_MS)) {
-            if (runtime::network_state() != runtime::NetState::kApOnly &&
-                runtime::network_state() != runtime::NetState::kApStaRecovery) {
-                ESP_LOGW(TAG, "STA unreachable — enabling recovery SoftAP");
-                runtime::network_enable_recovery_ap();
-                runtime::provisioning_start_dns();
-            }
+        // Background retry + recovery SoftAP after CONFIG_RUNTIME_WIFI_FAIL_AP_MS without the saved
+        // network (see network_manager_README.md "Lost network").
+        if (runtime::network_watch_tick(static_cast<uint32_t>(CONFIG_RUNTIME_WIFI_FAIL_AP_MS))) {
+            runtime::provisioning_start_dns();
         }
     }
 }

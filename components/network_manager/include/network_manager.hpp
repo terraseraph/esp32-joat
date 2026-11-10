@@ -32,5 +32,9 @@ cJSON* network_status_json();
 void network_start_mdns();
 void network_mdns_refresh_identity();
 void network_note_sta_lost_for_recovery();
+// Call every ~2 s. Retries an unreachable saved network in the background, raises the recovery
+// SoftAP after fail_ap_ms without it, drops an auto-raised SoftAP once the STA is stable.
+// Returns true when it has just raised the SoftAP (caller starts the captive DNS).
+bool network_watch_tick(uint32_t fail_ap_ms);
 
 }  // namespace runtime

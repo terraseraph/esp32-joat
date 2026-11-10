@@ -16,7 +16,7 @@ Kconfig (`main/Kconfig.projbuild`):
 - `CONFIG_RUNTIME_BOOT_PROVISION_MS` (default 10000)
 - `CONFIG_RUNTIME_BOOT_FACTORY_MS` (default 20000)
 - `CONFIG_RUNTIME_CRASH_LOOP_THRESHOLD` (default 5)
-- `CONFIG_RUNTIME_WIFI_FAIL_AP_MS` (default 60000)
+- `CONFIG_RUNTIME_WIFI_FAIL_AP_MS` (default 60000): time the saved network has been unreachable (since boot or since the drop) before the recovery SoftAP comes up. The STA keeps retrying; see [network_manager_README.md](../../components/network_manager/network_manager_README.md) "Lost network".
 - `CONFIG_RUNTIME_HEALTHY_CLEAR_MS` (default 30000)
 
 UART console: `status`, `ota`, `name [new_name]`, `reboot`, `factory_reset`, `wifi_clear`, `recovery_ap`, plus `hello` / `bye` / `hydrate` and JSON lines (see [serial_session_README.md](../../components/serial_session/serial_session_README.md)). Windows flashing: [flash_tool_README.md](flash_tool_README.md).
@@ -54,7 +54,7 @@ Keep init order: NVS before identity, capability before I/O, `module_manager_ini
 
 ## How to test
 
-Hardware: power-cycle, panic loop (temporarily force abort) should enter safe mode after threshold. Hold BOOT 5/10/20 s after serial banner. Unplug router and wait `WIFI_FAIL_AP_MS` for SoftAP.
+Hardware: power-cycle, panic loop (temporarily force abort) should enter safe mode after threshold. Hold BOOT 5/10/20 s after serial banner. Unplug router and wait `WIFI_FAIL_AP_MS` for SoftAP; plug it back and the board rejoins and drops the SoftAP.
 
 ## Known limits
 

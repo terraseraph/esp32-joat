@@ -52,6 +52,21 @@ bool s_sta_link;          // associated (WIFI_EVENT_STA_CONNECTED seen, no disco
 uint8_t s_last_reason;    // last STA disconnect reason this test, 0 = none
 bool s_restore_sta_only;  // on next GOT_IP: drop the SoftAP the test raised (old mode was STA)
 volatile bool s_swapping; // switch_sta() in progress: event handler must not reconnect or fail
+volatile bool s_testing;  // network_try_sta() running: network_watch_tick() stands aside
+// Outage handling (network_watch_tick). See README "Lost network".
+constexpr int kFastRetries = 8;          // back-to-back reconnects after a drop
+constexpr uint32_t kBgRetryMs = 30000;   // then one attempt this often, only with no AP clients
+constexpr uint32_t kApStableMs = 60000;  // STA up this long with no AP clients -> auto SoftAP off
+uint8_t s_ap_clients;           // stations on our SoftAP (event task writes)
+bool s_auto_ap;                 // SoftAP raised by us (outage or Wi-Fi change), not by the user
+bool s_sta_down;                // saved network not connected since s_sta_down_tick
+TickType_t s_sta_down_tick;
+TickType_t s_sta_up_tick;
+TickType_t s_bg_tick;
+
+bool elapsed(TickType_t since, TickType_t now, uint32_t ms) {
+    return static_cast<TickType_t>(now - since) >= pdMS_TO_TICKS(ms);
+}
 struct WifiChange {
     const char* result = "none";  // none | testing | ok | failed
     const char* reason = "";      // auth | no_ap | no_ip | timeout | connect_failed | save_failed
@@ -159,6 +174,14 @@ void wifi_event(void*, esp_event_base_t base, int32_t id, void* data) {
         }
     } else if (base == WIFI_EVENT && id == WIFI_EVENT_STA_CONNECTED) {
         s_sta_link = true;
+    } else if (base == WIFI_EVENT && id == WIFI_EVENT_AP_STACONNECTED) {
+        s_ap_clients++;
+    } else if (base == WIFI_EVENT && id == WIFI_EVENT_AP_STADISCONNECTED) {
+        if (s_ap_clients) {
+            s_ap_clients--;
+        }
+    } else if (base == WIFI_EVENT && id == WIFI_EVENT_AP_STOP) {
+        s_ap_clients = 0;
     } else if (base == WIFI_EVENT && id == WIFI_EVENT_STA_DISCONNECTED) {
         auto* ev = static_cast<wifi_event_sta_disconnected_t*>(data);
         ESP_LOGW(TAG, "STA disconnected reason=%d", ev ? ev->reason : -1);
@@ -168,12 +191,16 @@ void wifi_event(void*, esp_event_base_t base, int32_t id, void* data) {
             s_last_reason = ev->reason;
         }
         s_sta_ip[0] = '\0';
+        if (!s_sta_down) {
+            s_sta_down = true;
+            s_sta_down_tick = xTaskGetTickCount();
+        }
         if (s_swapping) {
             // switch_sta() is replacing the STA config and calls esp_wifi_connect() itself.
             return;
         }
         s_retry++;
-        if (s_retry < 8 && s_pending_ssid[0]) {
+        if (s_retry < kFastRetries && s_pending_ssid[0]) {
             esp_wifi_connect();
             set_state(NetState::kStaConnecting);
         } else {
@@ -181,8 +208,9 @@ void wifi_event(void*, esp_event_base_t base, int32_t id, void* data) {
             if (s_want_ap || !config_has_wifi()) {
                 set_state(s_want_ap ? NetState::kApStaRecovery : NetState::kApOnly);
             } else {
-                set_state(NetState::kApStaRecovery);
-                network_enable_recovery_ap();
+                // Saved network unreachable: network_watch_tick() keeps retrying it and raises the
+                // recovery SoftAP once it has been down for the configured time.
+                set_state(NetState::kStaConnecting);
             }
         }
     } else if (base == WIFI_EVENT && id == WIFI_EVENT_SCAN_DONE) {
@@ -191,6 +219,8 @@ void wifi_event(void*, esp_event_base_t base, int32_t id, void* data) {
         auto* ev = static_cast<ip_event_got_ip_t*>(data);
         snprintf(s_sta_ip, sizeof(s_sta_ip), IPSTR, IP2STR(&ev->ip_info.ip));
         s_retry = 0;
+        s_sta_down = false;
+        s_sta_up_tick = xTaskGetTickCount();
         xEventGroupSetBits(s_wifi_eg, GOT_IP_BIT);
         wifi_ap_record_t ap{};
         if (esp_wifi_sta_get_ap_info(&ap) == ESP_OK) {
@@ -240,7 +270,7 @@ esp_err_t apply_sta_config(const char* ssid, const char* pass) {
 // esp_wifi_set_config(STA) fails with ESP_ERR_WIFI_STATE while a connect is in flight, and the
 // event handler would otherwise reconnect (or raise FAIL_BIT) on our own disconnect, so the
 // handler stands aside while s_swapping is set.
-void switch_sta(const char* ssid, const char* pass) {
+void switch_sta(const char* ssid, const char* pass, bool connect = true) {
     s_swapping = true;
     esp_wifi_disconnect();
     esp_err_t err = apply_sta_config(ssid, pass);
@@ -259,15 +289,23 @@ void switch_sta(const char* ssid, const char* pass) {
     xEventGroupClearBits(s_wifi_eg, GOT_IP_BIT | FAIL_BIT);
     set_state(NetState::kStaConnecting);
     s_swapping = false;
-    esp_wifi_connect();
+    if (connect) {
+        esp_wifi_connect();
+    } else {
+        s_retry = kFastRetries;  // leave it to network_watch_tick()'s background retry
+    }
 }
 
 // Go back to the saved network after a failed test. Returns at once; the event handler finishes
-// the reconnect (8 retries, then recovery AP - same as at boot).
+// the reconnect (8 retries, then background retry - same as at boot).
+// With a client on our SoftAP (setup over 192.168.4.1) only the config is restored: joining the old
+// network, or scanning for it, moves the SoftAP channel and can drop that client before it reads
+// wifi_change. The background retry reconnects once the AP has no clients.
 void rollback_sta(const char* ssid, const char* pass, bool sta_only) {
-    ESP_LOGW(TAG, "wifi change failed - reconnecting to saved ssid=%s", ssid);
     s_restore_sta_only = sta_only;
-    switch_sta(ssid, pass);
+    bool now = s_ap_clients == 0;
+    ESP_LOGW(TAG, "wifi change failed - %s saved ssid=%s", now ? "reconnecting to" : "restored (AP client attached)", ssid);
+    switch_sta(ssid, pass, now);
 }
 
 }  // namespace
@@ -304,6 +342,8 @@ esp_err_t network_start() {
     }
 
     s_want_ap = !have;
+    s_sta_down = have;
+    s_sta_down_tick = xTaskGetTickCount();
     snprintf(s_pending_ssid, sizeof(s_pending_ssid), "%s", have ? ssid : "");
     snprintf(s_pending_pass, sizeof(s_pending_pass), "%s", have ? pass : "");
 
@@ -353,6 +393,7 @@ bool sta_connected() { return s_sta_ip[0] != '\0'; }
 
 esp_err_t network_enable_recovery_ap() {
     s_want_ap = true;
+    s_auto_ap = false;  // asked for (BOOT hold, command, safe mode): stays up until reboot
     wifi_mode_t mode;
     esp_wifi_get_mode(&mode);
     if (mode != WIFI_MODE_APSTA) {
@@ -380,6 +421,7 @@ esp_err_t network_try_sta(const char* ssid, const char* password, int timeout_ms
         ESP_LOGW(TAG, "wifi test already running");
         return ESP_ERR_INVALID_STATE;
     }
+    s_testing = true;
     // The saved network stays in NVS until network_commit_wifi; remember it so a failed test can
     // reconnect to it now instead of waiting for a reboot.
     char prev_ssid[33] = {0};
@@ -403,6 +445,7 @@ esp_err_t network_try_sta(const char* ssid, const char* password, int timeout_ms
                                            pdMS_TO_TICKS(timeout_ms));
     if (bits & GOT_IP_BIT) {
         // Result stays "testing" until network_commit_wifi saves it.
+        s_testing = false;
         xSemaphoreGive(s_mu);
         return ESP_OK;
     }
@@ -413,6 +456,7 @@ esp_err_t network_try_sta(const char* ssid, const char* password, int timeout_ms
         rollback_sta(prev_ssid, prev_pass, prev_sta_only);
     }
     // else first-time provisioning: nothing to go back to; the SoftAP stays up as before.
+    s_testing = false;
     xSemaphoreGive(s_mu);
     return ESP_ERR_TIMEOUT;
 }
@@ -430,6 +474,7 @@ esp_err_t network_commit_wifi(const char* ssid, const char* password) {
     uint8_t provisioned = 1;
     config_set_u8("system", "provisioned", provisioned);
     s_want_ap = true;  // keep AP briefly so the portal can show STA IP
+    s_auto_ap = true;  // network_watch_tick() drops it once the STA is stable and the AP is empty
     record_change("ok", nullptr, ssid, false);
     ESP_LOGI(TAG, "wifi committed ssid=%s sta_ip=%s mdns=%s.local", ssid, s_sta_ip, hostname());
     return ESP_OK;
@@ -443,6 +488,8 @@ esp_err_t network_clear_wifi() {
     s_pending_pass[0] = '\0';
     s_sta_ip[0] = '\0';
     s_want_ap = true;
+    s_auto_ap = false;
+    s_sta_down = false;
     esp_wifi_disconnect();
     esp_wifi_set_mode(WIFI_MODE_APSTA);
     apply_ap_config();
@@ -493,6 +540,7 @@ cJSON* network_status_json() {
     cJSON_AddNumberToObject(o, "rssi", s_rssi);
     cJSON_AddBoolToObject(o, "provisioned", config_has_wifi());
     cJSON_AddBoolToObject(o, "sta_connected", sta_connected());
+    cJSON_AddNumberToObject(o, "ap_clients", s_ap_clients);
     cJSON* wc = cJSON_AddObjectToObject(o, "wifi_change");
     if (wc) {
         cJSON_AddStringToObject(wc, "result", s_change.result);
@@ -548,6 +596,39 @@ void network_mdns_refresh_identity() {
 }
 
 void on_identity_rename(const char*, cJSON*, void*) { network_mdns_refresh_identity(); }
+
+bool network_watch_tick(uint32_t fail_ap_ms) {
+    if (s_testing || s_swapping || !config_has_wifi()) {
+        return false;
+    }
+    TickType_t now = xTaskGetTickCount();
+    if (s_sta_down) {
+        bool raised = false;
+        if (!s_want_ap && elapsed(s_sta_down_tick, now, fail_ap_ms)) {
+            ESP_LOGW(TAG, "saved network down %ums - recovery SoftAP up, still retrying",
+                     (unsigned)fail_ap_ms);
+            network_enable_recovery_ap();
+            s_auto_ap = true;
+            raised = true;
+        }
+        // One attempt at a time after the fast retries. Not while a client is on the SoftAP: each
+        // attempt scans every channel and a join moves the SoftAP to the router's channel.
+        if (s_retry >= kFastRetries && s_ap_clients == 0 && elapsed(s_bg_tick, now, kBgRetryMs)) {
+            s_bg_tick = now;
+            esp_wifi_connect();
+        }
+        return raised;
+    }
+    if (s_auto_ap && s_want_ap && s_ap_clients == 0 && sta_connected() &&
+        elapsed(s_sta_up_tick, now, kApStableMs)) {
+        s_auto_ap = false;
+        s_want_ap = false;
+        esp_wifi_set_mode(WIFI_MODE_STA);
+        set_state(NetState::kStaConnected);
+        ESP_LOGI(TAG, "station stable - SoftAP off");
+    }
+    return false;
+}
 
 void network_note_sta_lost_for_recovery() {
     network_enable_recovery_ap();

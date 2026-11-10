@@ -54,6 +54,8 @@ class Device:
         self.change = {"result": "none"}
         self.seq = 0
         self.busy = False
+        self.ap_clients = 0
+        self.connecting = False   # STA told to connect now (False = wait for background retry)
 
     def try_sta(self, ssid, password, outcome, reason=0, associated=False):
         """outcome: 'got_ip' or 'fail' (FAIL_BIT or timeout). Returns True on success."""
@@ -76,6 +78,8 @@ class Device:
         if prev is not None:
             self.restore_sta_only = prev_sta_only
             self.sta = prev
+            # rollback_sta: with a client on the SoftAP only restore the config.
+            self.connecting = self.ap_clients == 0
         return False
 
     def commit(self, ssid, password):
@@ -199,6 +203,163 @@ class ChangeTest(unittest.TestCase):
         d.wifi_set("a", "x", "fail")
         d.wifi_set("b", "x", "fail")
         self.assertEqual(d.change["seq"], 2)
+
+
+class SoftApRollbackTest(unittest.TestCase):
+    def test_wrong_password_over_softap_keeps_client(self):
+        d = Device(saved=("home", "goodpass"), mode="APSTA", want_ap=True)
+        d.ap_clients = 1
+        r = d.wifi_set("home", "typo", "fail", reason=AUTH_FAIL)
+        self.assertFalse(r["ok"])
+        self.assertEqual(d.sta, ("home", "goodpass"))
+        self.assertFalse(d.connecting)  # no join/scan that would move the AP channel
+        self.assertEqual(d.change["reason"], "auth")
+        self.assertEqual(d.mode, "APSTA")
+
+    def test_lan_rollback_connects_now(self):
+        d = Device(saved=("home", "goodpass"))
+        d.wifi_set("home", "typo", "fail", reason=AUTH_FAIL)
+        self.assertTrue(d.connecting)
+
+
+# --- network_watch_tick (Lost network) ---
+FAST_RETRIES = 8
+BG_RETRY_MS = 30000
+AP_STABLE_MS = 60000
+FAIL_AP_MS = 60000
+
+
+class Watch:
+    """Mirror of network_watch_tick() plus the event-handler bits it relies on. Times in ms."""
+
+    def __init__(self, saved=True, now=0):
+        self.saved = saved
+        self.want_ap = not saved
+        self.auto_ap = False
+        self.ap_clients = 0
+        self.sta_down = saved
+        self.down_at = now
+        self.up_at = 0
+        self.bg_at = None
+        self.retry = 0
+        self.connected = False
+        self.testing = False
+        self.attempts = []
+
+    # event handler
+    def disconnected(self, now):
+        self.connected = False
+        if not self.sta_down:
+            self.sta_down = True
+            self.down_at = now
+        self.retry += 1
+
+    def got_ip(self, now):
+        self.connected = True
+        self.retry = 0
+        self.sta_down = False
+        self.up_at = now
+
+    def manual_ap(self):
+        self.want_ap = True
+        self.auto_ap = False
+
+    def tick(self, now):
+        if self.testing or not self.saved:
+            return False
+        if self.sta_down:
+            raised = False
+            if not self.want_ap and now - self.down_at >= FAIL_AP_MS:
+                self.manual_ap()
+                self.auto_ap = True
+                raised = True
+            if (self.retry >= FAST_RETRIES and self.ap_clients == 0
+                    and (self.bg_at is None or now - self.bg_at >= BG_RETRY_MS)):
+                self.bg_at = now
+                self.attempts.append(now)
+            return raised
+        if (self.auto_ap and self.want_ap and self.ap_clients == 0 and self.connected
+                and now - self.up_at >= AP_STABLE_MS):
+            self.auto_ap = False
+            self.want_ap = False
+        return False
+
+
+def run(w, start, end, step=2000):
+    raised = []
+    for t in range(start, end, step):
+        if w.tick(t):
+            raised.append(t)
+    return raised
+
+
+class LostNetworkTest(unittest.TestCase):
+    def test_router_off_at_boot(self):
+        w = Watch(saved=True, now=0)
+        for _ in range(FAST_RETRIES):
+            w.disconnected(1000)
+        raised = run(w, 2000, 120000)
+        self.assertEqual(raised, [60000])
+        self.assertTrue(w.want_ap and w.auto_ap)
+        self.assertGreaterEqual(len(w.attempts), 3)  # keeps retrying in the background
+        gaps = [b - a for a, b in zip(w.attempts, w.attempts[1:])]
+        self.assertTrue(all(g >= BG_RETRY_MS for g in gaps))
+
+    def test_router_off_mid_run_counts_from_drop(self):
+        w = Watch(saved=True, now=0)
+        w.got_ip(5000)
+        self.assertEqual(run(w, 6000, 600000), [])
+        w.disconnected(600000)
+        self.assertEqual(run(w, 600000, 658000), [])  # not before WIFI_FAIL_AP_MS
+        self.assertEqual(run(w, 658000, 662000), [660000])
+
+    def test_router_back_drops_auto_ap(self):
+        w = Watch(saved=True, now=0)
+        for _ in range(FAST_RETRIES):
+            w.disconnected(0)
+        run(w, 0, 70000)
+        w.got_ip(80000)
+        run(w, 80000, 138000)
+        self.assertTrue(w.want_ap)  # not stable yet
+        run(w, 138000, 142000)
+        self.assertFalse(w.want_ap)
+
+    def test_ap_kept_while_client_attached(self):
+        w = Watch(saved=True, now=0)
+        for _ in range(FAST_RETRIES):
+            w.disconnected(0)
+        run(w, 0, 62000)
+        w.ap_clients = 1
+        n = len(w.attempts)
+        run(w, 62000, 300000)
+        self.assertEqual(len(w.attempts), n)  # no scans while a client is on the AP
+        w.got_ip(300000)
+        run(w, 300000, 500000)
+        self.assertTrue(w.want_ap)
+        w.ap_clients = 0
+        run(w, 500000, 504000)
+        self.assertFalse(w.want_ap)
+
+    def test_manual_ap_stays(self):
+        w = Watch(saved=True, now=0)
+        w.got_ip(1000)
+        w.manual_ap()
+        run(w, 2000, 500000)
+        self.assertTrue(w.want_ap)
+
+    def test_no_saved_network_untouched(self):
+        w = Watch(saved=False, now=0)
+        self.assertEqual(run(w, 0, 300000), [])
+        self.assertTrue(w.want_ap)
+        self.assertEqual(w.attempts, [])
+
+    def test_idle_during_test(self):
+        w = Watch(saved=True, now=0)
+        w.testing = True
+        for _ in range(FAST_RETRIES):
+            w.disconnected(0)
+        self.assertEqual(run(w, 0, 200000), [])
+        self.assertEqual(w.attempts, [])
 
 
 if __name__ == "__main__":

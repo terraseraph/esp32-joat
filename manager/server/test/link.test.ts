@@ -456,8 +456,13 @@ async function shadowIs(srv: TestServer, id: string, gpio: number, want: Record<
   let last: Record<string, unknown> | undefined;
   try {
     await waitUntil(() => {
-      const reg = JSON.parse(readFileSync(path.join(srv.dataDir, "registry.json"), "utf8")) as { devices: Array<{ id: string; pinShadow: Record<string, Record<string, unknown>> }> };
-      last = reg.devices.find((d) => d.id === id)?.pinShadow[String(gpio)];
+      let reg: { devices: Array<{ id: string; pinShadow: Record<string, Record<string, unknown>> }> };
+      try {
+        reg = JSON.parse(readFileSync(path.join(srv.dataDir, "registry.json"), "utf8")) as typeof reg;
+      } catch {
+        return false; // not written yet, or caught mid-save: look again
+      }
+      last = reg.devices.find((d) => d.id === id)?.pinShadow?.[String(gpio)];
       return JSON.stringify(last) === JSON.stringify(want);
     }, 3000, "saved pin shadow");
   } catch {

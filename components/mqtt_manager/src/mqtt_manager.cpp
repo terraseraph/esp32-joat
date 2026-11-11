@@ -1,5 +1,6 @@
 #include "mqtt_manager.hpp"
 
+#include <atomic>
 #include <cstdio>
 #include <cstring>
 
@@ -9,6 +10,7 @@
 #include "device_identity.hpp"
 #include "esp_log.h"
 #include "event_bus.hpp"
+#include "io_delivery.hpp"
 #include "json_util.hpp"
 #include "mqtt_client.h"
 #include "runtime_status.hpp"
@@ -142,6 +144,40 @@ void mqtt_publish_discovery() {
 void mqtt_publish_discovery();
 void retire_topics(const char* old_root, const char* old_id);
 
+// Backpressure for the live io stream, measured on the client outbox (bytes not yet sent,
+// plus QoS 1 messages not yet acknowledged).
+//   above kOutboxHigh:        backlog begins; "latest" sources are sent at QoS 0
+//   above kOutboxMax:         "latest" frames are dropped
+//   above kOutboxReliableMax: "reliable" frames are dropped too (heap protection)
+//   back below kOutboxLow:    backlog ends; if anything was dropped, every pin and module
+//                             is re-emitted once so subscribers end on the current values
+constexpr int kOutboxLow = 2 * 1024;
+constexpr int kOutboxHigh = 8 * 1024;
+constexpr int kOutboxMax = 16 * 1024;
+constexpr int kOutboxReliableMax = 32 * 1024;
+
+std::atomic<bool> s_backlog{false};
+std::atomic<bool> s_lossy{false};
+int s_backlogs;
+int s_io_dropped;
+
+// Runs on the MQTT task (a publish was acknowledged) and the telemetry task (every 15 s),
+// never on an io producer task: the resync walks the whole state registry.
+void backlog_recover() {
+    if (!s_client || !s_connected || !s_backlog.load()) {
+        return;
+    }
+    if (esp_mqtt_client_get_outbox_size(s_client) > kOutboxLow) {
+        return;
+    }
+    s_backlog = false;
+    const bool resync = s_lossy.exchange(false);
+    ESP_LOGI(TAG, "backlog cleared%s", resync ? ", resyncing io" : "");
+    if (resync) {
+        io_emit_snapshot();
+    }
+}
+
 static void mqtt_event_handler(void*, esp_event_base_t, int32_t event_id, void* event_data) {
     auto* ev = static_cast<esp_mqtt_event_t*>(event_data);
     switch (static_cast<esp_mqtt_event_id_t>(event_id)) {
@@ -165,9 +201,14 @@ static void mqtt_event_handler(void*, esp_event_base_t, int32_t event_id, void* 
             }
             mqtt_publish_status();
             mqtt_publish_discovery();
+            s_backlog = false;
+            s_lossy = false;  // the hydrate below is itself a full resync
             io_emit_snapshot();
             break;
         }
+        case MQTT_EVENT_PUBLISHED:
+            backlog_recover();
+            break;
         case MQTT_EVENT_DISCONNECTED:
             s_connected = false;
             RuntimeStatus::instance().set_live_mqtt(false);
@@ -228,22 +269,32 @@ void on_io(const char* bus_topic, cJSON* payload, void*) {
     if (!bus_topic || !s_client || !s_connected) {
         return;
     }
-    cJSON* wrap = cJSON_CreateObject();
-    cJSON_AddStringToObject(wrap, "topic", bus_topic);
-    if (payload) {
-        cJSON_AddItemToObject(wrap, "data", cJSON_Duplicate(payload, 1));
+    const int outbox = esp_mqtt_client_get_outbox_size(s_client);
+    const bool reliable = io_delivery_reliable(payload);
+    if (outbox > kOutboxHigh && !s_backlog.exchange(true)) {
+        s_backlogs++;
+        ESP_LOGW(TAG, "outbox %d bytes: backlog, value streams drop to QoS 0", outbox);
     }
-    char* printed = cJSON_PrintUnformatted(wrap);
-    cJSON_Delete(wrap);
-    if (!printed) {
+    const bool backlog = s_backlog.load();
+    if (outbox > (reliable ? kOutboxReliableMax : kOutboxMax)) {
+        s_io_dropped++;
+        s_lossy = true;
+        return;
+    }
+    size_t len = 0;
+    const char* frame = event_bus_frame(bus_topic, payload, &len);  // shared, freed by the bus
+    if (!frame) {
         return;
     }
     char t[128];
     topic(t, sizeof(t), "io");
-    int msg_id = esp_mqtt_client_publish(s_client, t, printed, 0, 1, 0);
-    cJSON_free(printed);
+    // Queued for the MQTT task to send instead of writing to the socket here, so a slow
+    // broker cannot stall adc_live / gpio_irq. QoS 1 unless backed up and the source is "latest".
+    const int qos = (backlog && !reliable) ? 0 : 1;
+    int msg_id = esp_mqtt_client_enqueue(s_client, t, frame, static_cast<int>(len), qos, 0, true);
     if (msg_id < 0) {
         s_pub_fail++;
+        s_lossy = true;
     } else {
         s_pub_ok++;
     }
@@ -339,6 +390,10 @@ cJSON* mqtt_status_json() {
     cJSON_AddNumberToObject(o, "publish_fail", s_pub_fail);
     cJSON_AddNumberToObject(o, "received", s_rx);
     cJSON_AddStringToObject(o, "last_error", s_last_err);
+    cJSON_AddBoolToObject(o, "backlog", s_backlog.load());
+    cJSON_AddNumberToObject(o, "backlogs", s_backlogs);
+    cJSON_AddNumberToObject(o, "io_dropped", s_io_dropped);
+    cJSON_AddNumberToObject(o, "outbox", s_client ? esp_mqtt_client_get_outbox_size(s_client) : 0);
     cJSON_AddStringToObject(o, "root", root());
     char prefix[80];
     snprintf(prefix, sizeof(prefix), "%s/%s", root(), device_topic_id());
@@ -387,16 +442,24 @@ void mqtt_publish_telemetry(cJSON* payload) {
         return;
     }
     char* printed = cJSON_PrintUnformatted(payload);
+    if (printed) {
+        mqtt_publish_telemetry_raw(printed, static_cast<int>(strlen(printed)));
+        cJSON_free(printed);
+    }
+}
+
+void mqtt_publish_telemetry_raw(const char* json, int len) {
+    if (!s_client || !s_connected || !json || len <= 0) {
+        return;
+    }
+    backlog_recover();  // a backlog of QoS 0 frames drains without acknowledgements
     char t[128];
     topic(t, sizeof(t), "telemetry");
-    if (printed) {
-        int msg_id = esp_mqtt_client_publish(s_client, t, printed, 0, 0, 0);
-        if (msg_id < 0) {
-            s_pub_fail++;
-        } else {
-            s_pub_ok++;
-        }
-        cJSON_free(printed);
+    int msg_id = esp_mqtt_client_publish(s_client, t, json, len, 0, 0);
+    if (msg_id < 0) {
+        s_pub_fail++;
+    } else {
+        s_pub_ok++;
     }
 }
 

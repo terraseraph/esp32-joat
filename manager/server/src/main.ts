@@ -43,7 +43,6 @@ async function main(): Promise<void> {
     dataDir: cli.dataDir,
     publicDir: resolvePublicDir(process.argv[1]),
     allowOrigins: cli.allowOrigins,
-    networkScan: cli.networkScan,
     wifiAdapter: cli.wifiAdapter,
     ...(cli.fakeAps.length > 0 ? { setup: { fakeAps: cli.fakeAps } } : {}),
     ...(Object.keys(cli.ipChangeMap).length > 0 ? { ipChange: { hostMap: cli.ipChangeMap } } : {}),
@@ -53,7 +52,6 @@ async function main(): Promise<void> {
   console.log(`de-esp32 Manager ${VERSION}`);
   console.log(`  Local:    ${running.url}`);
   console.log(`  Data dir: ${cli.dataDir}`);
-  if (!cli.networkScan) console.log("  Network scanning is OFF (--no-network-scan): only typed addresses and known devices are probed.");
   if (cli.wifiAdapter !== "system") console.log(`  Wi-Fi adapter: ${cli.wifiAdapter}`);
   // The ONLY place the token is printed: plain stdout at start-up (spec 3.1), never through log() or any file.
   // LAN access switched on later from Settings is logged without the token (see http/access.ts).

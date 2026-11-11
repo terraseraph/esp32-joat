@@ -72,7 +72,7 @@ export async function createSetupFeature(app: AppContext, opts: { adapterKind: W
   const gates = new Map<string, ChooseGate>();
   let activeJobId: string | null = null;
   let closing = false;
-  let apCache: { scannedAt: string; aps: SetupApList["aps"] } | null = null;
+  let apCache: { scannedAt: string; aps: Omit<SetupApList["aps"][number], "knownDeviceId" | "knownDeviceOnline">[] } | null = null;
 
   const leftover = await readMarker(app.dataDir, log);
   if (leftover) {
@@ -124,7 +124,6 @@ export async function createSetupFeature(app: AppContext, opts: { adapterKind: W
         } catch (err) {
           throw new HttpError(502, "wifi_scan_failed", `Could not list the Wi-Fi networks around this PC: ${err instanceof Error ? err.message : String(err)}`);
         }
-        const ids = app.registry.list().map((d) => d.id.toLowerCase());
         const aps = nets
           .filter((n) => SETUP_SSID_RE.test(n.ssid))
           .map((n) => {
@@ -134,15 +133,19 @@ export async function createSetupFeature(app: AppContext, opts: { adapterKind: W
               idSuffix,
               secured: n.secured,
               signal: n.signal,
-              knownDeviceId: ids.find((id) => id.endsWith(idSuffix)) ?? null,
             };
           })
           .sort((a, b) => (b.signal ?? -1) - (a.signal ?? -1) || a.ssid.localeCompare(b.ssid));
         apCache = { scannedAt: new Date().toISOString(), aps };
       }
-      // Known-device links follow the registry even for a cached scan.
+      // Known-device links and their health follow the registry even for a cached scan.
       const ids = app.registry.list().map((d) => d.id.toLowerCase());
-      return { supported: true, reason: null, aps: apCache.aps.map((a) => ({ ...a, knownDeviceId: ids.find((id) => id.endsWith(a.idSuffix)) ?? null })), scannedAt: apCache.scannedAt };
+      const link = (idSuffix: string): { knownDeviceId: string | null; knownDeviceOnline: boolean } => {
+        const id = ids.find((x) => x.endsWith(idSuffix)) ?? null;
+        return { knownDeviceId: id, knownDeviceOnline: id !== null && app.summaries.get(id)?.health === "online" };
+      };
+      const cache = apCache;
+      return { supported: true, reason: null, aps: cache.aps.map((a) => ({ ...a, ...link(a.idSuffix) })), scannedAt: cache.scannedAt };
     },
 
     async start(body) {

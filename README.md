@@ -2,7 +2,9 @@
 
 Native **ESP-IDF 5.4.2** firmware for classic ESP32 (WROOM-32 DevKitC, 4 MB, no PSRAM). Flash once, then configure GPIO/PWM/ADC1, hobby servos, optional RFID (MFRC522) and BME280, Wi-Fi, and MQTT from a local UI. **Not Arduino.**
 
-Feature index (start here): **[docs/FEATURES_README.md](docs/FEATURES_README.md)**
+How firmware, flasher, Node-RED and Manager fit together (start here): **[docs/HOW-IT-FITS.md](docs/HOW-IT-FITS.md)**. Before pushing: `node tools/precheck.mjs`.
+
+Feature index: [docs/FEATURES_README.md](docs/FEATURES_README.md)
 
 ## Hardware baseline
 
@@ -11,7 +13,7 @@ Feature index (start here): **[docs/FEATURES_README.md](docs/FEATURES_README.md)
 
 ## Build / flash
 
-See [docs/features/toolchain_README.md](docs/features/toolchain_README.md).
+See [docs/dev/toolchain.md](docs/dev/toolchain.md).
 
 ```powershell
 . .\tools\env.ps1        # finds ESP-IDF 5.4 (C:\esp, D:\esp, ~\esp, C:\Espressif, or $env:IDF_PATH)
@@ -39,7 +41,7 @@ Once the board is on Wi-Fi, find it and OTA without USB:
 
 On first boot join SoftAP `esp32-<last6>` (open, no password). The phone should show **Sign in to network** and open the portal; otherwise go to `http://192.168.4.1`. Set an AP password from the Network tab if you want; factory reset makes it open again.
 
-Node-RED (same LAN as a provisioned board): see [docs/features/nodered_README.md](docs/features/nodered_README.md).
+Node-RED (same LAN as a provisioned board): see [nodered/node-red-contrib-de-esp32/README.md](nodered/node-red-contrib-de-esp32/README.md).
 
 Browser install (Chrome or Edge, USB serial): see [install/README.md](install/README.md).
 
@@ -54,7 +56,7 @@ python test/test_rule_spec.py
 ## Layout
 
 - `main/` — boot orchestrator
-- `components/` — one IDF component per feature (`<name>_README.md` beside the code)
+- `components/` — one IDF component per feature; feature docs in `docs/features/`, internal components keep `<name>_README.md` beside the code
 - `web/dist/index.html` — embedded UI
 - `nodered/node-red-contrib-de-esp32/` — Node-RED palette (not part of the IDF build)
 - `install/` — browser flash page (Web Serial; stage bins with `tools/stage_web_flash.ps1`)

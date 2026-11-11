@@ -30,7 +30,6 @@ export const HealthResponseSchema = Type.Object({
   dataDir: Type.String(),
   uptime: Type.Number({ description: "Seconds since the server started" }),
   startedAt: Type.Number({ description: "When the server started: epoch milliseconds" }),
-  networkScan: Type.Boolean({ description: "false when started with --no-network-scan: no mDNS, no subnet sweeps (typed addresses and known devices are still probed)" }),
   wifiAdapter: Type.Union([Type.Literal("fake"), Type.Literal("system"), Type.Literal("none")], {
     description: "How SoftAP setup reaches a board's Wi-Fi: fake (simulated, for development), system (this PC's Wi-Fi adapter) or none (setup disabled)",
   }),
@@ -243,7 +242,8 @@ export const DiscoveryResultSchema = Type.Object({
   board: Type.Optional(Type.String()),
   via: Type.String({ description: "How it was found: any of mdns, sweep, target, registry joined with + (e.g. mdns+sweep)" }),
   classification: DiscoveryClassificationSchema,
-  setup: Type.Boolean({ description: "network.state is ap_only or apsta_recovery (in setup / recovery)" }),
+  setup: Type.Boolean({ description: "Needs setting up: network.state is ap_only, or apsta_recovery without a Wi-Fi (STA) connection" }),
+  setupApOpen: Type.Boolean({ description: "The board's own setup Wi-Fi is up (ap_only or apsta_recovery), even when it is connected to this network" }),
   netState: Type.String({ description: "network.state as reported ('' when unknown)" }),
   ipChanged: Type.Optional(Type.Object({ from: Type.String(), to: Type.String() }, { description: "A known device answered at a different address; the registry was updated" })),
   txt: Type.Optional(Type.Record(Type.String(), Type.String(), { description: "mDNS TXT record (when found via mDNS)" })),
@@ -262,7 +262,6 @@ export const DiscoveryStateSchema = Type.Object({
   subnets: Type.Array(Type.String(), { description: "The ranges the sweep covers (a /24 each unless a smaller one was given), as CIDR" }),
   results: Type.Array(DiscoveryResultSchema),
   ignored: Type.Array(Type.String(), { description: "Ignored device ids (the registry's ignore list)" }),
-  networkScan: Type.Boolean({ description: "false when the Manager runs with --no-network-scan: mDNS and sweeps are off whatever a scan asks for" }),
 });
 export type DiscoveryState = Static<typeof DiscoveryStateSchema>;
 

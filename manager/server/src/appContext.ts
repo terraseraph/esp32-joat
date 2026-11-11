@@ -56,8 +56,6 @@ export interface AppContext {
   backups: BackupsFeature;
   /** Move a device to another Wi-Fi network (L1, batch 4). */
   wifiMove: WifiMoveFeature;
-  /** false = started with --no-network-scan: no mDNS, no sweeps anywhere (typed addresses and known devices are still probed). */
-  networkScan: boolean;
   /** Which Wi-Fi adapter the setup feature uses (--wifi-adapter). */
   wifiAdapterKind: WifiAdapterKind;
   /** Timeout of the probe in `POST /api/devices` (2 s; test override via `StartOptions.pollTimeoutMs`). */

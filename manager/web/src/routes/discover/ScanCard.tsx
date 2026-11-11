@@ -46,14 +46,12 @@ interface Props {
   starting: boolean;
   onScan(): void;
   onCancel(): void;
-  /** false when the Manager runs with --no-network-scan (the scan only checks typed addresses and known boards). */
-  networkScan?: boolean;
   /** The "Advanced" disclosure (hidden while a scan runs). */
   advanced: ReactNode;
 }
 
 /** The scan card: never scanned, scanning (progress, subnets, Cancel) or the summary of the last scan. */
-export function ScanCard({ state, starting, onScan, onCancel, advanced, networkScan = true }: Props) {
+export function ScanCard({ state, starting, onScan, onCancel, advanced }: Props) {
   const { phase } = state;
 
   if (phase === "idle" && !state.running) {
@@ -69,14 +67,12 @@ export function ScanCard({ state, starting, onScan, onCancel, advanced, networkS
             <div className="actions">
               <Button variant="primary" onClick={onScan} disabled={starting} aria-busy={starting}>
                 <Radar className="i" aria-hidden="true" />
-                {networkScan ? "Scan network" : "Check addresses"}
+                Scan network
               </Button>
             </div>
           }
         >
-          {networkScan
-            ? "A scan asks your network for boards running de-esp32 (mDNS), then checks every address on your local networks. Nothing is added until you choose to. Results stay here until the next scan."
-            : "Network scanning is off, so a scan only checks the addresses you list under Advanced and the boards already in your fleet. Nothing is added until you choose to."}
+          A scan asks your network for boards running de-esp32 (mDNS), then checks every address on your local networks. Nothing is added until you choose to. Results stay here until the next scan.
         </EmptyState>
         {advanced}
       </Card>
@@ -122,7 +118,7 @@ export function ScanCard({ state, starting, onScan, onCancel, advanced, networkS
           </div>
         )}
         <div className="scan-foot">
-          <p>{networkScan ? "Windows often misses mDNS replies; the sweep checks every address on your local /24 networks." : "Checking the addresses you entered and the boards already in your fleet."}</p>
+          <p>Windows often misses mDNS replies; the sweep checks every address on your local /24 networks.</p>
           <Button onClick={onCancel}>
             <X className="i" aria-hidden="true" />
             Cancel

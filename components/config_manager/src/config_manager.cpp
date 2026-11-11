@@ -206,7 +206,7 @@ esp_err_t config_erase_key(const char* ns, const char* key) {
 }
 
 esp_err_t config_factory_reset() {
-    static const char* kNamespaces[] = {"network", "mqtt", "io", "components", "ota", "security",
+    static const char* kNamespaces[] = {"network", "mqtt", "udp", "io", "components", "ota", "security",
                                         "stats", "system"};
     for (const char* ns : kNamespaces) {
         nvs_handle_t h;

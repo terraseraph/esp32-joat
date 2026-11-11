@@ -23,7 +23,7 @@ ESP-IDF `json`, `esp_timer`, `heap`, FreeRTOS.
 
 ## Used by
 
-[boot_state_machine_README.md](../../docs/features/boot_state_machine_README.md), config, telemetry, web, command_router.
+[boot.md](../../docs/dev/boot.md), config, telemetry, web, command_router.
 
 ## How to update and maintain
 

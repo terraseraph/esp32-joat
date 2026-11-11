@@ -57,4 +57,4 @@ A host is ours if `/api/v1/status` JSON has `ota.project == de_esp32_runtime`, o
 
 ## Details
 
-[lan_discover_ota_README.md](../../../docs/features/lan_discover_ota_README.md)
+[ota.md](../../../docs/features/ota.md)

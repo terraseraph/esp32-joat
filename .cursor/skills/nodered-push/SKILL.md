@@ -42,4 +42,4 @@ Skip for firmware-only, docs-only, or IDF builds. Do not `npm link`, do not copy
 
 ## Details
 
-[nodered_README.md](../../../docs/features/nodered_README.md)
+[Node-RED README](../../../nodered/node-red-contrib-de-esp32/README.md)

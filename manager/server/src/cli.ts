@@ -15,8 +15,6 @@ export interface CliOptions {
   dataDir: string;
   open: boolean;
   allowOrigins: string[];
-  /** false with --no-network-scan: no mDNS, no subnet sweeps anywhere. */
-  networkScan: boolean;
   wifiAdapter: WifiAdapterKind;
   /** Simulated setup access points (`--fake-ap`, only with `--wifi-adapter fake`). */
   fakeAps: FakeApSpec[];
@@ -35,8 +33,6 @@ export const HELP = `de-esp32-manager [options]
   --data-dir <path>     Where registry/settings/backups live (default: per-OS app data dir)
   --no-open             Do not open the browser
   --allow-origin <url>  Extra Origin accepted for POST/PUT/PATCH/DELETE and WebSocket (repeatable)
-  --no-network-scan     Never browse mDNS or sweep subnets (UI scans, background scan, setup). Typed addresses,
-                        settings targets and known devices are still probed
   --wifi-adapter <kind> How SoftAP setup reaches a board's Wi-Fi: system (this PC's adapter, default),
                         fake (simulated, for development) or none (setup disabled)
   --fake-ap <spec>      With --wifi-adapter fake, repeatable: a simulated device in setup mode,
@@ -59,7 +55,6 @@ export function parseCli(argv: string[], env: NodeJS.ProcessEnv = process.env): 
       "data-dir": { type: "string" },
       "no-open": { type: "boolean", default: false },
       "allow-origin": { type: "string", multiple: true },
-      "no-network-scan": { type: "boolean", default: false },
       "wifi-adapter": { type: "string" },
       "fake-ap": { type: "string", multiple: true },
       "ip-change-map": { type: "string", multiple: true },
@@ -85,7 +80,6 @@ export function parseCli(argv: string[], env: NodeJS.ProcessEnv = process.env): 
     dataDir: path.resolve(values["data-dir"] ?? defaultDataDir(process.platform, env)),
     open: values["no-open"] !== true,
     allowOrigins: values["allow-origin"] ?? [],
-    networkScan: values["no-network-scan"] !== true,
     wifiAdapter,
     fakeAps,
     ipChangeMap: parseIpChangeMap(values["ip-change-map"] ?? []),

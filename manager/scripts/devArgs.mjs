@@ -1,26 +1,9 @@
-// Arguments for the dev API server (used by dev.mjs). `npm run dev -- <args>` reaches the server unchanged, except:
-//   - the dev server defaults to --no-network-scan and --wifi-adapter fake, so a dev session never scans the real LAN
-//     or touches this PC's Wi-Fi by accident;
-//   - `--network-scan` opts back in to scanning (it is consumed here, the server has no such flag);
-//   - `--wifi-adapter <kind>` / `--wifi-adapter=<kind>` (for example `system`) replaces the fake adapter.
+// Arguments for the dev API server (used by dev.mjs). `npm run dev -- <args>` reaches the server unchanged.
+// The dev server is the real thing: it scans this network (mDNS + /24 sweep) and uses this PC's Wi-Fi adapter for
+// SoftAP setup, like the packaged app. Only the data folder (.data/dev), --no-open and the Vite origin are dev-specific.
+// For simulated boards use `npm run fake` and, if you want a simulated Wi-Fi adapter, `npm run dev -- --wifi-adapter fake`.
 
 /** @param {string[]} extra what the user typed after `npm run dev --` */
 export function devServerArgs(extra) {
-  const args = [];
-  let networkScan = false;
-  for (const a of extra) {
-    if (a === "--network-scan") networkScan = true;
-    else args.push(a);
-  }
-  const hasWifi = args.some((a) => a === "--wifi-adapter" || a.startsWith("--wifi-adapter="));
-  return [
-    "--no-open",
-    "--data-dir",
-    ".data/dev",
-    "--allow-origin",
-    "http://localhost:5173",
-    ...(networkScan || args.includes("--no-network-scan") ? [] : ["--no-network-scan"]),
-    ...(hasWifi ? [] : ["--wifi-adapter", "fake"]),
-    ...args,
-  ];
+  return ["--no-open", "--data-dir", ".data/dev", "--allow-origin", "http://localhost:5173", ...extra];
 }

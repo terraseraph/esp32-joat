@@ -68,8 +68,6 @@ export interface StartOptions {
   hydrateMaxMs?: number;
   /** Timeout of a browser command sent over the device socket (default 10000; tests). */
   linkCmdTimeoutMs?: number;
-  /** false = hard-disable mDNS browsing and subnet sweeps everywhere (CLI: --no-network-scan). Default true. */
-  networkScan?: boolean;
   /** Wi-Fi adapter used by SoftAP setup (CLI: --wifi-adapter). Default "system". */
   wifiAdapter?: WifiAdapterKind;
   /** Job service tuning: finished jobs kept (default 50) and WebSocket throttle per job (default 150 ms; tests). */
@@ -206,9 +204,8 @@ export async function start(opts: StartOptions): Promise<RunningServer> {
     }
     void links.command(id, body as { cmd: string }).then((res) => hub.send(ws, { t: "cmdResult", id, ...corr, res }));
   });
-  const networkScan = opts.networkScan !== false;
   const wifiAdapterKind = opts.wifiAdapter ?? "system";
-  const discovery = createDiscoveryService({ registry, health, settings, hub, log, networkScan, ...(opts.discovery ? { config: opts.discovery } : {}) });
+  const discovery = createDiscoveryService({ registry, health, settings, hub, log, ...(opts.discovery ? { config: opts.discovery } : {}) });
   const jobs = createJobService({ hub, log, dataDir: opts.dataDir, ...(opts.jobs ? { config: opts.jobs } : {}) });
   const routes = [...apiRoutes, ...(opts.extraRoutes ?? [])];
   // The feature seams (setup, ipChange, firmware, backups) are filled in below, once the context exists.
@@ -236,7 +233,6 @@ export async function start(opts: StartOptions): Promise<RunningServer> {
     links,
     discovery,
     jobs,
-    networkScan,
     wifiAdapterKind,
     probeTimeoutMs: opts.pollTimeoutMs ?? 2000,
     getPort: () => port,

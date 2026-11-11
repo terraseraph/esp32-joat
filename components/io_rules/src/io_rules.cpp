@@ -129,7 +129,7 @@ bool gpio_ok(int gpio) { return gpio >= 0 && gpio < kGpioMax; }
 
 cJSON* pin_state(int gpio) {
     char key[16];
-    const char* pref[] = {"gpio_", "adc_", "pwm_", "servo_"};
+    const char* pref[] = {"gpio_", "adc_", "touch_", "pwm_", "servo_"};
     for (const char* p : pref) {
         snprintf(key, sizeof(key), "%s%d", p, gpio);
         cJSON* st = state_get_clone(key);
@@ -281,7 +281,7 @@ void evaluate(const Ev& ev) {
     if (!gpio_ok(ev.gpio)) {
         return;
     }
-    if (strcmp(ev.mode, "adc") != 0 && strcmp(ev.mode, "in") != 0) {
+    if (strcmp(ev.mode, "adc") != 0 && strcmp(ev.mode, "in") != 0 && strcmp(ev.mode, "touch") != 0) {
         return;
     }
     Rule copy[kMaxRules];

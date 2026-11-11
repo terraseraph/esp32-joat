@@ -146,6 +146,13 @@ bool capability_allows(int gpio, const char* mode, char* err, size_t err_len) {
         }
         return true;
     }
+    if (strcmp(mode, "touch") == 0) {
+        // Touch pads have their own sensing hardware, so ADC2 sharing does not matter.
+        if ((p->flags & PIN_TOUCH) == 0 || p->touch_channel < 0) {
+            return fail("gpio has no touch channel (T0-T9: GPIO 4, 0, 2, 15, 13, 12, 14, 27, 33, 32)");
+        }
+        return true;
+    }
     return fail("unknown mode");
 }
 

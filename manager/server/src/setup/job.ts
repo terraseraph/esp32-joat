@@ -596,9 +596,7 @@ export async function runSetupJob(env: SetupJobEnv, ctl: JobControl, req: SetupR
       throw new JobFailure(
         "device_not_on_lan",
         `The device joined "${wifiSsid}" but did not appear on your network within ${seconds} s.` +
-          (app.networkScan
-            ? " Check that this PC and the device are on the same network, then add it from Discover."
-            : " Network scanning is turned off on this Manager (--no-network-scan), so only addresses it already knows were checked; add the device by its address."),
+          " Check that this PC and the device are on the same network, then add it from Discover.",
         "wait_lan",
       );
     }

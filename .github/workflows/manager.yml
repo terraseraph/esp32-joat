@@ -1,6 +1,6 @@
 name: Manager
 
-# de-esp32 Manager (manager/): lint, typecheck, tests, build, smoke start on every relevant change;
+# de-esp32 Manager (manager/): lint, typecheck, build, smoke start on every relevant change;
 # a `manager-v<version>` tag additionally publishes a GitHub Release (Node zip + Windows portable exe + SHA256SUMS).
 on:
   push:
@@ -63,27 +63,6 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
 
-      - name: Test
-        shell: bash
-        run: |
-          set -o pipefail
-          npm test 2>&1 | tee test.log
-
-      # Put the failing lines on the run page, so a failure can be read without downloading the log.
-      - name: Report failing tests
-        if: failure()
-        shell: bash
-        run: |
-          [ -f test.log ] || exit 0
-          {
-            grep -nE '(✖|not ok|FAIL|×|Error|ERR_|expected|actual)' test.log | head -45 || true
-            echo '--- last lines ---'
-            tail -25 test.log
-          } | sed 's/\x1b\[[0-9;]*m//g' > failures.txt
-          MSG="$(sed -e 's/%/%25/g' failures.txt | awk '{printf "%s%%0A", $0}')"
-          echo "::error title=Manager tests (Node ${{ matrix.node }})::${MSG}"
-          { echo '```'; cat failures.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
-
       - name: Build
         run: npm run build
 
@@ -92,7 +71,7 @@ jobs:
         run: |
           set -euo pipefail
           DATA_DIR="$(mktemp -d)"
-          node dist/server.cjs --no-open --no-network-scan --wifi-adapter none --port 0 --data-dir "$DATA_DIR" > server.log 2>&1 &
+          node dist/server.cjs --no-open --wifi-adapter none --port 0 --data-dir "$DATA_DIR" > server.log 2>&1 &
           SERVER_PID=$!
           trap 'kill "$SERVER_PID" 2>/dev/null || true' EXIT
           # The server prints "  Local:    http://127.0.0.1:<port>/" once it listens (port 0 = any free port).

@@ -50,7 +50,8 @@ export interface MemoryInfo {
   /** At most 8 entries. */
   boot: Array<{ stage: string; free: number; largest: number }>;
   /** At most 24 entries, refreshed at most every 5 s. */
-  tasks: Array<{ name: string; stack_min: number }>;
+  /** `cpu`: share of one core (%) since the previous sample, null on the first sample or for a new task. */
+  tasks: Array<{ name: string; stack_min: number; cpu?: number | null }>;
   tasks_truncated: boolean;
 }
 
@@ -256,6 +257,8 @@ export interface TelemetrySnapshot {
   heap_free: number;
   heap_min: number;
   memory: MemoryInfo;
+  /** Per-core load (%) over `window_s`; entries are null until two samples exist. Firmware 0.9.5+. */
+  cpu?: { load: Array<number | null>; window_s: number };
   boot_state: BootState;
   safe_mode: boolean;
   network: NetworkStatus;
@@ -370,6 +373,19 @@ export interface GpioState {
   debounce_ms?: number;
 }
 
+/** `touch_N` (`io_touch.cpp` publish). `level` 1 = touched; `raw` drops below `baseline` on touch. */
+export interface TouchState {
+  id: string;
+  mode: "touch";
+  gpio: number;
+  channel: number;
+  level: 0 | 1;
+  raw: number;
+  baseline: number;
+  threshold_pct: number;
+  sample_ms: number;
+}
+
 /** `adc_N` (`io_adc.cpp:65-81`). */
 export interface AdcState {
   id: string;
@@ -426,15 +442,15 @@ export interface Mfrc522State {
   tx: number;
 }
 
-export type IoState = GpioState | AdcState | PwmState | ServoState | Bme280State | Mfrc522State;
-/** `status.io`, `GET /pins`, up to 48 keys. Keys: `gpio_N`, `adc_N`, `pwm_N`, `servo_N`, `mod_<id>`. */
+export type IoState = GpioState | AdcState | TouchState | PwmState | ServoState | Bme280State | Mfrc522State;
+/** `status.io`, `GET /pins`, up to 48 keys. Keys: `gpio_N`, `adc_N`, `touch_N`, `pwm_N`, `servo_N`, `mod_<id>`. */
 export type IoMap = { [key: string]: IoState };
 
 // ---------------------------------------------------------------------------------------------------------------
 // Pins (§2.5 pin.configure)
 // ---------------------------------------------------------------------------------------------------------------
 
-export type PinMode = "disabled" | "out" | "in" | "pwm" | "servo" | "adc";
+export type PinMode = "disabled" | "out" | "in" | "pwm" | "servo" | "adc" | "touch";
 export type DeliveryMode = "reliable" | "latest";
 
 /**
@@ -889,6 +905,7 @@ export interface MqttReconfigureEvent {
 export type DeviceWsEvent =
   | { topic: "io/gpio"; data: GpioState }
   | { topic: "io/adc"; data: AdcState }
+  | { topic: "io/touch"; data: TouchState }
   | { topic: "io/pwm"; data: PwmState }
   | { topic: "io/servo"; data: ServoState }
   | { topic: "io/env"; data: Bme280State }

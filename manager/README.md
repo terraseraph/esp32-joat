@@ -7,7 +7,7 @@ their SoftAP, switches a board to a static IP, moves it to another Wi-Fi network
 devices: the web app never talks to a board directly. Everything it does is available as a REST API ([API.md](API.md),
 machine-readable at `/api/openapi.json`) plus a browser WebSocket.
 
-Node server (`node:http` + `ws`, no framework) serving a React single-page app. Spec: [../docs/manager-app.md](../docs/manager-app.md).
+Node server (`node:http` + `ws`, no framework) serving a React single-page app. Per-feature docs: [docs/](docs/) (see [../docs/FEATURES_README.md](../docs/FEATURES_README.md)).
 
 ## Install and run
 
@@ -44,17 +44,16 @@ Download `de-esp32-manager-<version>-portable.exe` from the GitHub Release and d
 npm run dev            # API on :5180 (tsx watch) + web app on http://localhost:5173 (Vite, proxies /api)
 npm run electron:dev   # build, then run the desktop app from a staging folder
 npm run dist:win       # build the portable exe into manager/release/
-npm test               # server (node:test), then web (vitest)
 npm run lint
 npm run typecheck
 ```
 
-`npm run dev` starts the API with `--no-network-scan --wifi-adapter fake`, so a dev session never browses mDNS, sweeps your LAN
-or touches this PC's Wi-Fi by accident. Extra arguments go to the server after `--`:
+`npm run dev` runs the real Manager from source: it scans your network (mDNS and the /24 sweep) and uses this PC's Wi-Fi
+adapter for setup, exactly like the packaged app. Its data lives in `manager/.data/dev`. Extra arguments go to the server after `--`:
 
 ```bash
-npm run dev -- --network-scan                 # allow mDNS and sweeps again
-npm run dev -- --wifi-adapter system          # use this PC's real Wi-Fi adapter
+npm run dev -- --port 5290                    # another API port
+npm run dev -- --wifi-adapter fake            # simulated Wi-Fi adapter (with npm run fake boards)
 ```
 
 Edits to `../nodered/node-red-contrib-de-esp32/lib` need another `npm install` here (it is installed as a copy).
@@ -65,7 +64,6 @@ For the desktop app, these environment variables are for testing and development
 |---|---|
 | `DE_ESP32_MANAGER_DATA_DIR=<dir>` | data folder; also Electron's user-data folder |
 | `DE_ESP32_MANAGER_WIFI_ADAPTER=fake\|system\|none` | default `system` |
-| `DE_ESP32_MANAGER_NO_NETWORK_SCAN=1` | never browse mDNS or sweep subnets |
 | `DE_ESP32_MANAGER_READY_FILE=<path>` | once listening, write `{url, port, pid}` JSON there |
 
 ## Command-line flags
@@ -82,7 +80,6 @@ node dist/server.cjs [options]      # or: node server.cjs [options] from a relea
 | `--data-dir <path>` | Where registry, settings, backups and firmware live. Default: per-OS app data dir (below). |
 | `--no-open` | Do not open the browser. |
 | `--allow-origin <url>` | Extra Origin accepted for POST/PUT/PATCH/DELETE and WebSocket. Repeatable. |
-| `--no-network-scan` | Never browse mDNS or sweep subnets (UI scans, background scan, setup). Typed addresses, Settings targets and known devices are still probed. |
 | `--wifi-adapter <kind>` | How SoftAP setup reaches a board's Wi-Fi: `system` (this PC's adapter, default), `fake` (simulated, for development) or `none` (setup disabled). |
 | `--fake-ap <spec>` | Dev only. With `--wifi-adapter fake`, repeatable: a simulated device in setup mode, `<ssid>=<host:port>[,secured=<password>][,lan=<host:port>]`. `host:port` is where 192.168.4.1 really is; `lan=` is where the device shows up afterwards. |
 | `--ip-change-map <ip>=<host:port>` | Dev only. Repeatable: where the IP change job looks for a device after it moved to `<ip>`. Fake devices cannot move; map to a closed port to see the revert path. |
@@ -135,10 +132,10 @@ This starts three boards on 127.0.0.1:8101-8103 ("Fake bench 1" to "3"). Options
 | `--ap-mode` | Start as an unprovisioned board in SoftAP setup mode (use with the Manager's `--fake-ap`). |
 | `--host`, `--seed demo\|empty`, `--telemetry-ms`, `--reboot-ms`, `--scan-delay-ms` | Listen address, seed data, timings. |
 
-Run the Manager with scanning off and a simulated Wi-Fi adapter, and a scratch data dir:
+Run the Manager with a simulated Wi-Fi adapter and a scratch data dir:
 
 ```bash
-node dist/server.cjs --no-network-scan --wifi-adapter fake --data-dir %TEMP%\manager-try
+node dist/server.cjs --wifi-adapter fake --data-dir %TEMP%\manager-try
 ```
 
 Then open Discover, choose "Add by IP", and enter `127.0.0.1:8101`. Recipes for the Wi-Fi move and IP change flows are in
@@ -173,4 +170,4 @@ Everything below is covered by unit tests and fake devices only.
 
 - [API.md](API.md): REST routes and the browser WebSocket.
 - [CONTRIBUTING-AGENTS.md](CONTRIBUTING-AGENTS.md): conventions for working in `manager/`.
-- [../docs/manager-app.md](../docs/manager-app.md): the specification.
+- [../docs/FEATURES_README.md](../docs/FEATURES_README.md): per-feature docs for firmware, Node-RED and Manager.

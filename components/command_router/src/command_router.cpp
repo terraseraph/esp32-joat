@@ -10,6 +10,8 @@
 #include "esp_system.h"
 #include "event_bus.hpp"
 #include "io_adc.hpp"
+#include "io_touch.hpp"
+#include "io_delivery.hpp"
 #include "io_gpio.hpp"
 #include "io_pwm.hpp"
 #include "io_rules.hpp"
@@ -22,6 +24,7 @@
 #include "runtime_status.hpp"
 #include "runtime_version.hpp"
 #include "state_registry.hpp"
+#include "udp_sink.hpp"
 
 static const char* TAG = "cmd";
 
@@ -121,9 +124,17 @@ cJSON* apply_one_pin(cJSON* pin, bool persist) {
     char err[96];
     err[0] = '\0';
     esp_err_t rc = ESP_OK;
+    // Inputs are one-off edges and default to reliable; everything else is a value stream.
+    bool reliable = false;
+    const bool edges = strcmp(mode, "in") == 0 || strcmp(mode, "touch") == 0;
+    if (!io_delivery_parse(json_str(pin, "delivery", ""), edges, &reliable)) {
+        return err_result(pin, "delivery must be reliable or latest");
+    }
+    io_delivery_set_pin(gpio, reliable);  // before configure: it publishes the first state
     io_gpio_release(gpio);
     io_pwm_release(gpio);
     io_adc_release(gpio);
+    io_touch_release(gpio);
     io_servo_release(gpio);
     if (strcmp(mode, "disabled") == 0) {
         rc = ESP_OK;
@@ -162,6 +173,12 @@ cJSON* apply_one_pin(cJSON* pin, bool persist) {
         set_num(pin, "hysteresis_mv", hysteresis_mv);
         set_num(pin, "smooth", smooth);
         rc = io_adc_configure(gpio, sample_ms, hysteresis_mv, smooth, err, sizeof(err));
+    } else if (strcmp(mode, "touch") == 0) {
+        int threshold_pct = clamp_int(json_int(pin, "threshold_pct", 30), 5, 80);
+        int sample_ms = clamp_int(json_int(pin, "sample_ms", 50), 20, 500);
+        set_num(pin, "threshold_pct", threshold_pct);
+        set_num(pin, "sample_ms", sample_ms);
+        rc = io_touch_configure(gpio, threshold_pct, sample_ms, err, sizeof(err));
     } else {
         return err_result(pin, "unknown mode");
     }
@@ -184,6 +201,8 @@ esp_err_t command_router_init() {
 }
 
 int io_emit_snapshot() {
+    io_adc_refresh();  // live ADC ticks only store state when the value moves past hysteresis
+    io_touch_refresh();
     cJSON* snap = state_snapshot();
     if (!snap) {
         return 0;
@@ -200,6 +219,8 @@ int io_emit_snapshot() {
             topic = "io/pwm";
         } else if (strncmp(it->string, "adc_", 4) == 0) {
             topic = "io/adc";
+        } else if (strncmp(it->string, "touch_", 6) == 0) {
+            topic = "io/touch";
         } else if (strncmp(it->string, "servo_", 6) == 0) {
             topic = "io/servo";
         } else if (strncmp(it->string, "mod_", 4) == 0) {
@@ -230,7 +251,7 @@ struct CmdInfo {
 
 // Names must match command_dispatch. OpenAPI and the UI read this, not a second list.
 const CmdInfo kCmds[] = {
-    {"pin.configure", "Validate and persist a GPIO mode",
+    {"pin.configure", "Validate and persist a GPIO mode; optional delivery: reliable | latest",
      "{\"cmd\":\"pin.configure\",\"pin\":{\"gpio\":4,\"mode\":\"out\",\"name\":\"gpio_4\"}}"},
     {"pin.set", "Set output, PWM duty (0-1000), or servo angle (0-180)",
      "{\"cmd\":\"pin.set\",\"gpio\":4,\"value\":90,\"mode\":\"servo\"}"},
@@ -243,6 +264,8 @@ const CmdInfo kCmds[] = {
      "{\"cmd\":\"network.ap.set_password\",\"password\":\"\"}"},
     {"mqtt.configure", "Broker URI, optional topic root (default devices), reconnect",
      "{\"cmd\":\"mqtt.configure\",\"uri\":\"mqtt://192.168.1.10:1883\",\"root\":\"devices\"}"},
+    {"udp.configure", "Live io as UDP datagrams to up to two ipv4:port targets ([] = off); optional announce, announce_addr, announce_s",
+     "{\"cmd\":\"udp.configure\",\"targets\":[\"192.168.1.10:9000\"]}"},
     {"identity.set_name", "Set display name; MQTT topics become devices/{name}/...",
      "{\"cmd\":\"identity.set_name\",\"name\":\"esp_joat_test\"}"},
     {"system.reboot", "Reboot now", "{\"cmd\":\"system.reboot\"}"},
@@ -258,7 +281,7 @@ const CmdInfo kCmds[] = {
     {"serial.bye", "Stop UART IO session", "{\"cmd\":\"serial.bye\"}"},
     {"module.catalog", "Addon types and pin schemas", "{\"cmd\":\"module.catalog\"}"},
     {"module.list", "Configured module instances plus live state", "{\"cmd\":\"module.list\"}"},
-    {"module.add", "Validate, apply, and persist a module instance",
+    {"module.add", "Validate, apply, and persist a module instance; optional delivery: reliable | latest",
      "{\"cmd\":\"module.add\",\"type\":\"bme280\",\"id\":\"env0\",\"bus\":\"i2c0\",\"pins\":{\"sda\":21,\"scl\":22},\"settings\":{\"addr\":118,\"sample_ms\":1000,\"osrs_t\":1,\"osrs_p\":1,\"osrs_h\":1,\"filter\":0,\"mode\":\"normal\"}}"},
     {"module.configure", "Re-apply pins for an existing module id",
      "{\"cmd\":\"module.configure\",\"id\":\"rfid0\",\"pins\":{\"sck\":18,\"miso\":19,\"mosi\":23,\"cs\":15}}"},
@@ -464,6 +487,15 @@ cJSON* command_dispatch(cJSON* req) {
         }
         cJSON_AddStringToObject(result, "root", shown);
         return ok_result(req, result);
+    }
+    if (strcmp(cmd, "udp.configure") == 0) {
+        char err[96];
+        err[0] = '\0';
+        esp_err_t rc = udp_configure(req, err, sizeof(err));
+        if (rc != ESP_OK) {
+            return err_result(req, err[0] ? err : esp_err_to_name(rc));
+        }
+        return ok_result(req, udp_status_json());
     }
     if (strcmp(cmd, "identity.set_name") == 0) {
         const char* name = json_str(req, "name", hostname());

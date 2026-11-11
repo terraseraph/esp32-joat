@@ -212,7 +212,7 @@ export function BulkBar({ count, hidden, allVisible, someVisible, busy, onSelect
 
 // ---- header actions ------------------------------------------------------------------------------------
 
-export function HeaderActions({ onScan, onAdd, onRefreshAll, refreshing, hasDevices, networkScan = true }: { networkScan?: boolean; onScan: () => void; onAdd: () => void; onRefreshAll: () => void; refreshing: boolean; hasDevices: boolean }) {
+export function HeaderActions({ onScan, onAdd, onRefreshAll, refreshing, hasDevices }: { onScan: () => void; onAdd: () => void; onRefreshAll: () => void; refreshing: boolean; hasDevices: boolean }) {
   return (
     <>
       {hasDevices && (
@@ -223,7 +223,7 @@ export function HeaderActions({ onScan, onAdd, onRefreshAll, refreshing, hasDevi
       )}
       <Button variant="primary" onClick={onScan}>
         <Radar className="i" aria-hidden="true" />
-        {networkScan ? "Scan network" : "Check addresses"}
+        Scan network
       </Button>
       <Button onClick={onAdd}>
         <Plus className="i" aria-hidden="true" />

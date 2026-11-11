@@ -1,6 +1,6 @@
 // npm run dev: API server (tsx watch, :5180) + Vite (:5173) with prefixed output; Ctrl+C stops both.
-// Extra arguments go to the server: `npm run dev -- --port 5290`. The dev server defaults to --no-network-scan and
-// --wifi-adapter fake; opt out with `--network-scan` / `--wifi-adapter system` (see devArgs.mjs).
+// Extra arguments go to the server: `npm run dev -- --port 5290`. Scanning and the Wi-Fi adapter are real, as in the
+// packaged app (see devArgs.mjs).
 import { spawn, spawnSync } from "node:child_process";
 import { createRequire } from "node:module";
 import path from "node:path";

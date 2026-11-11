@@ -91,7 +91,10 @@ int convert(int raw) {
     return raw;
 }
 
-int sample(int gpio, bool allow_bus) {
+// allow_bus: publish io/adc when the filtered value moved past hysteresis (or first sample).
+// store: always refresh the stored state. Otherwise state is only rebuilt when the value is
+// published, so an unchanged live tick allocates nothing.
+int sample(int gpio, bool allow_bus, bool store) {
     if (gpio < 0 || gpio >= kMaxGpio || !s_used[gpio] || !s_adc1) {
         return -1;
     }
@@ -123,10 +126,13 @@ int sample(int gpio, bool allow_bus) {
     const int hyst = s_hyst_mv[gpio] > 0 ? s_hyst_mv[gpio] : kHystDefault;
     const bool first = s_sent[gpio] < 0;
     const bool changed = first || abs(filt - s_sent[gpio]) >= hyst;
-    if (allow_bus && changed) {
+    const bool to_bus = allow_bus && changed;
+    if (to_bus) {
         s_sent[gpio] = filt;
     }
-    publish(gpio, filt, raw, allow_bus && changed);
+    if (to_bus || store) {
+        publish(gpio, filt, raw, to_bus);
+    }
     return filt;
 }
 
@@ -173,7 +179,7 @@ void live_task(void*) {
                 continue;
             }
             s_next[i] = now + pdMS_TO_TICKS(s_sample_ms[i]);
-            sample(i, true);
+            sample(i, true, false);
         }
     }
 }
@@ -245,16 +251,18 @@ esp_err_t io_adc_configure(int gpio, int sample_ms, int hysteresis_mv, int smoot
     s_hyst_mv[gpio] = clamp_int(hysteresis_mv, kHystMin, kHystMax);
     s_smooth[gpio] = clamp_int(smooth, kSmoothMin, kSmoothMax);
     s_next[gpio] = 0;
-    sample(gpio, true);
+    sample(gpio, true, true);
     return ESP_OK;
 }
 
-int io_adc_read(int gpio) { return sample(gpio, RuntimeStatus::instance().live_sinks() > 0); }
+int io_adc_read(int gpio) {
+    return sample(gpio, RuntimeStatus::instance().live_sinks() > 0, true);
+}
 
 void io_adc_refresh() {
     for (int i = 0; i < kMaxGpio; ++i) {
         if (s_used[i]) {
-            sample(i, false);
+            sample(i, false, true);
         }
     }
 }

@@ -46,6 +46,8 @@ struct ModuleTypeOps {
     int setting_count;
     /** Bytes this instance will take. Null means no declared cost (still refused when pressure is critical). */
     size_t (*memory_bytes)(const cJSON* spec);
+    /** Default delivery class when an instance does not say: true = "reliable", false = "latest". */
+    bool reliable_default;
 };
 
 esp_err_t module_manager_init();

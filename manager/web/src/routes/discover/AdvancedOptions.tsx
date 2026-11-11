@@ -21,14 +21,12 @@ interface Props {
   value: ScanOptions;
   onChange(next: ScanOptions): void;
   disabled?: boolean;
-  /** false when the Manager runs with --no-network-scan: mDNS and the sweep are off and cannot be switched on. */
-  networkScan?: boolean;
   /** Field problems from the server's `400 invalid_body` (opens the disclosure). */
   issues: ScanIssues | null;
 }
 
 /** "Advanced" disclosure of the scan card: what to scan and extra places to look. */
-export function AdvancedOptions({ value, onChange, disabled, networkScan = true, issues }: Props) {
+export function AdvancedOptions({ value, onChange, disabled, issues }: Props) {
   const uid = useId();
   const [open, setOpen] = useState(false);
   const hasIssues = issues !== null;
@@ -47,28 +45,23 @@ export function AdvancedOptions({ value, onChange, disabled, networkScan = true,
     <details className="disclosure adv" open={open} onToggle={(e) => setOpen(e.currentTarget.open)}>
       <summary>Advanced</summary>
       <div className="adv-body">
-        <fieldset className="adv-checks" disabled={disabled || !networkScan} aria-describedby={networkScan ? undefined : `${uid}-off`}>
+        <fieldset className="adv-checks" disabled={disabled}>
           <legend className="sr">What to scan</legend>
           <label className="check">
-            <input type="checkbox" checked={networkScan && value.mdns} onChange={(e) => set("mdns", e.target.checked)} />
+            <input type="checkbox" checked={value.mdns} onChange={(e) => set("mdns", e.target.checked)} />
             Use mDNS
           </label>
           <label className="check">
-            <input type="checkbox" checked={networkScan && value.sweep} onChange={(e) => set("sweep", e.target.checked)} />
+            <input type="checkbox" checked={value.sweep} onChange={(e) => set("sweep", e.target.checked)} />
             Sweep local networks
           </label>
         </fieldset>
-        {!networkScan && (
-          <div className="hint" id={`${uid}-off`}>
-            Off because this Manager was started with <code>--no-network-scan</code>. The addresses you list under Also probe addresses and the boards already in your fleet are still checked.
-          </div>
-        )}
         <div className={issues?.subnets.length ? "field err" : "field"}>
           <label htmlFor={subnetsId}>Extra subnets</label>
           <input
             id={subnetsId}
             value={value.subnets}
-            disabled={disabled || !networkScan}
+            disabled={disabled}
             onChange={(e) => set("subnets", e.target.value)}
             placeholder="10.0.5.0/24, 172.16.0.0/24"
             autoComplete="off"
@@ -78,7 +71,7 @@ export function AdvancedOptions({ value, onChange, disabled, networkScan = true,
           />
           <Issues id={`${subnetsId}-msg`} messages={issues?.subnets ?? []} />
           <div className="hint" id={`${subnetsId}-hint`}>
-            {networkScan ? "CIDR ranges to sweep as well, separated by commas or spaces. Anything wider than /24 is cut down to the /24 around the address." : "Needs the network sweep, which is off."}
+            CIDR ranges to sweep as well, separated by commas or spaces. Anything wider than /24 is cut down to the /24 around the address.
           </div>
         </div>
         <div className={issues?.targets.length ? "field err" : "field"}>

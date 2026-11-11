@@ -1,65 +1,61 @@
-# Feature barrel
+# Features
 
-This is the **only index** for product features. Humans and agents should start here, then follow the linked `*_README.md` files. Adding a component without a README **and** a row below is incomplete work.
+Every user-facing feature has **three docs with the same file name**, one per part:
 
-Pinned toolchain: **ESP-IDF 5.4.2**, target **esp32** (classic WROOM-32 DevKitC, 4 MB, no PSRAM). Native IDF only — no Arduino.
+| Part | Folder | Explains |
+|---|---|---|
+| Firmware | `docs/features/<name>.md` | How it works on the ESP: hardware, settings, commands, events |
+| Node-RED | `nodered/node-red-contrib-de-esp32/docs/<name>.md` | Which nodes use it, their properties, how they map to the firmware fields |
+| Manager | `manager/docs/<name>.md` | Which screens and routes use it, the fake device, how they map to the firmware fields |
 
-Template: [templates/FEATURE_README_TEMPLATE.md](templates/FEATURE_README_TEMPLATE.md)
-
-## Status key
-
-- **mvp** — implemented in this tree for the generic GPIO box
-- **spike** — present but incomplete
-- **later** — named so we do not pretend it exists
+How the parts connect: [HOW-IT-FITS.md](HOW-IT-FITS.md). Templates: [templates/](templates/). Known mismatches to fix: [lockstep-issues.md](lockstep-issues.md).
 
 ## Index
 
-| Feature | Status | README | One-line relationship |
+| Feature | Firmware | Node-RED | Manager |
 |---|---|---|---|
-| Toolchain | mvp | [toolchain_README.md](features/toolchain_README.md) | How to install IDF 5.4.2 and build this repo |
-| Boot state machine | mvp | [boot_state_machine_README.md](features/boot_state_machine_README.md) | Orchestrates every other component from `app_main` |
-| runtime_core | mvp | [runtime_core_README.md](../components/runtime_core/runtime_core_README.md) | Version, boot status, JSON helpers |
-| logging | mvp | [logging_README.md](../components/logging/logging_README.md) | IDF logs + RAM ring for UI |
-| config_manager | mvp | [config_manager_README.md](../components/config_manager/config_manager_README.md) | NVS persistence and schema |
-| device_identity | mvp | [device_identity_README.md](../components/device_identity/device_identity_README.md) | MAC id; optional name for MQTT topics |
-| security | mvp | [security_README.md](../components/security/security_README.md) | Open SoftAP; optional UI password |
-| event_bus | mvp | [event_bus_README.md](../components/event_bus/event_bus_README.md) | In-process pub/sub |
-| state_registry | mvp | [state_registry_README.md](../components/state_registry/state_registry_README.md) | Live I/O and system state |
-| capability_manager | mvp | [capability_manager_README.md](../components/capability_manager/capability_manager_README.md) | ESP32 pin truth; reject before mutate |
-| board_profiles | mvp | [board_profiles_README.md](../components/board_profiles/board_profiles_README.md) | DevKitC LED/BOOT + header pinout / buses |
-| resource_manager | mvp | [resource_manager_README.md](../components/resource_manager/resource_manager_README.md) | One owner per GPIO; SPI and I2C host refcount |
-| module_manager | mvp | [module_manager_README.md](../components/module_manager/module_manager_README.md) | Catalog + NVS instances; apply/teardown vtable |
-| io_gpio | mvp | [io_gpio_README.md](../components/io_gpio/io_gpio_README.md) | Digital in/out + debounce IRQ |
-| io_pwm | mvp | [io_pwm_README.md](../components/io_pwm/io_pwm_README.md) | LEDC PWM (8 ch, shared Hz) |
-| io_servo | mvp | [io_servo_README.md](../components/io_servo/io_servo_README.md) | Hobby servo 50 Hz (8 ch, own timer) |
-| io_adc | mvp | [io_adc_README.md](../components/io_adc/io_adc_README.md) | ADC1 only (Wi-Fi on) |
-| io_rules | mvp | [io_rules_README.md](../components/io_rules/io_rules_README.md) | On-device if-this-then-that (input → output) |
-| mod_mfrc522 | mvp | [mod_mfrc522_README.md](../components/mod_mfrc522/mod_mfrc522_README.md) | SPI RFID; shared bus, unique CS |
-| mod_bme280 | mvp | [mod_bme280_README.md](../components/mod_bme280/mod_bme280_README.md) | I2C env sensor; shared bus, unique addr |
-| Potential modules | later | [potential_modules_README.md](features/potential_modules_README.md) | More I2C chips + WS281x strip; not compiled in |
-| command_router | mvp | [command_router_README.md](../components/command_router/command_router_README.md) | Single command API for HTTP/WS/MQTT |
-| network_manager | mvp | [network_manager_README.md](../components/network_manager/network_manager_README.md) | STA + SoftAP + mDNS |
-| provisioning | mvp | [provisioning_README.md](../components/provisioning/provisioning_README.md) | Captive DNS + test-before-commit Wi-Fi |
-| web_server | mvp | [web_server_README.md](../components/web_server/web_server_README.md) | REST `/api/v1`, OpenAPI, WebSocket, embedded UI |
-| mqtt_manager | mvp | [mqtt_manager_README.md](../components/mqtt_manager/mqtt_manager_README.md) | Remote commands and live `io` events |
-| telemetry | mvp | [telemetry_README.md](../components/telemetry/telemetry_README.md) | 15 s diagnostics snapshot (hydrate), heap pools, module admission |
-| serial_session | mvp | [serial_session_README.md](../components/serial_session/serial_session_README.md) | UART0 REPL + hello/hydrate NDJSON IO stream |
-| ota_manager | mvp | [ota_manager_README.md](../components/ota_manager/ota_manager_README.md) | A/B apply, URL pull, pending confirm, rollback |
-| Flash tool (Windows) | mvp | [flash_tool_README.md](features/flash_tool_README.md) | Lists COM ports, flashes, optional device name |
-| LAN discover / OTA | mvp | [lan_discover_ota_README.md](features/lan_discover_ota_README.md) | mDNS+HTTP scan; Wi-Fi OTA push |
-| Node-RED contrib | mvp | [nodered_README.md](features/nodered_README.md) | Host palette: discover/rename + GPIO in/out pinout |
-| Browser flash installer | mvp | [web_flash_README.md](features/web_flash_README.md) | Chrome/Edge Web Serial flash, then name and Wi-Fi on UART |
+| Digital in/out, pull-ups, debounce | [gpio](features/gpio.md) | [gpio](../nodered/node-red-contrib-de-esp32/docs/gpio.md) | [gpio](../manager/docs/gpio.md) |
+| PWM | [pwm](features/pwm.md) | [pwm](../nodered/node-red-contrib-de-esp32/docs/pwm.md) | [pwm](../manager/docs/pwm.md) |
+| Hobby servo | [servo](features/servo.md) | [servo](../nodered/node-red-contrib-de-esp32/docs/servo.md) | [servo](../manager/docs/servo.md) |
+| Analog in (ADC1) | [adc](features/adc.md) | [adc](../nodered/node-red-contrib-de-esp32/docs/adc.md) | [adc](../manager/docs/adc.md) |
+| Capacitive touch | [touch](features/touch.md) | [touch](../nodered/node-red-contrib-de-esp32/docs/touch.md) | [touch](../manager/docs/touch.md) |
+| On-device rules | [rules](features/rules.md) | [rules](../nodered/node-red-contrib-de-esp32/docs/rules.md) | [rules](../manager/docs/rules.md) |
+| Addon modules (framework) | [modules](features/modules.md) | [modules](../nodered/node-red-contrib-de-esp32/docs/modules.md) | [modules](../manager/docs/modules.md) |
+| RFID (MFRC522) | [rfid](features/rfid.md) | [rfid](../nodered/node-red-contrib-de-esp32/docs/rfid.md) | [rfid](../manager/docs/rfid.md) |
+| BME280 environment sensor | [bme280](features/bme280.md) | [bme280](../nodered/node-red-contrib-de-esp32/docs/bme280.md) | [bme280](../manager/docs/bme280.md) |
+| Device id and name | [identity](features/identity.md) | [identity](../nodered/node-red-contrib-de-esp32/docs/identity.md) | [identity](../manager/docs/identity.md) |
+| Wi-Fi, SoftAP, mDNS | [wifi](features/wifi.md) | [wifi](../nodered/node-red-contrib-de-esp32/docs/wifi.md) | [wifi](../manager/docs/wifi.md) |
+| MQTT | [mqtt](features/mqtt.md) | [mqtt](../nodered/node-red-contrib-de-esp32/docs/mqtt.md) | [mqtt](../manager/docs/mqtt.md) |
+| UDP output | [udp](features/udp.md) | [udp](../nodered/node-red-contrib-de-esp32/docs/udp.md) | [udp](../manager/docs/udp.md) |
+| Firmware updates (OTA) | [ota](features/ota.md) | [ota](../nodered/node-red-contrib-de-esp32/docs/ota.md) | [ota](../manager/docs/ota.md) |
+| Status, telemetry, live events | [status](features/status.md) | [status](../nodered/node-red-contrib-de-esp32/docs/status.md) | [status](../manager/docs/status.md) |
+| Reboot, factory reset, safe mode, password | [system](features/system.md) | [system](../nodered/node-red-contrib-de-esp32/docs/system.md) | [system](../manager/docs/system.md) |
+| UART console | [serial](features/serial.md) | [serial](../nodered/node-red-contrib-de-esp32/docs/serial.md) | [serial](../manager/docs/serial.md) |
 
-## Dependency sketch
+## Adding or changing a feature
 
-Boot → identity + config → capability + resources → safe pins → network → web + MQTT → apply I/O then modules then rules (unless safe mode).
+1. Change the firmware and its doc in `docs/features/<name>.md`.
+2. Update or create `nodered/.../docs/<name>.md` and `manager/docs/<name>.md`. Even if a part doesn't support it yet, its doc says so under **Gaps**, with the fields and commands it would need.
+3. Update the fake device (`manager/server/fake/`) and `manager/server/src/types/device-api.ts` when a command or payload changes.
+4. Add a row above. `node tools/precheck.mjs` fails if a feature is missing one of its three docs.
 
-HTTP, WebSocket, MQTT, and UART JSON must call `command_router`. Do not fork behaviour in `web/dist/index.html`.
+New addon module: follow the checklist in [features/modules.md](features/modules.md).
 
-## How to add a feature
+## Internal firmware components
 
-1. Create `components/<name>/` with CMake + headers + sources.
-2. Add `<name>_README.md` from the template, with Depends on / Used by links.
-3. Add a row to this barrel.
-4. Wire `REQUIRES` in CMake. Avoid cycles (`mqtt_manager` may depend on `command_router`, not the reverse — use the event bus).
-5. If the feature is user-facing, add REST via the command router and a UI tab that only calls `/api/v1`.
+Plumbing with no Node-RED or Manager side. Each keeps its README beside the code.
+
+[runtime_core](../components/runtime_core/runtime_core_README.md) ·
+[logging](../components/logging/logging_README.md) ·
+[config_manager](../components/config_manager/config_manager_README.md) ·
+[event_bus](../components/event_bus/event_bus_README.md) ·
+[state_registry](../components/state_registry/state_registry_README.md) ·
+[capability_manager](../components/capability_manager/capability_manager_README.md) ·
+[board_profiles](../components/board_profiles/board_profiles_README.md) ·
+[resource_manager](../components/resource_manager/resource_manager_README.md) ·
+[command_router](../components/command_router/command_router_README.md) ·
+[web_server](../components/web_server/web_server_README.md)
+
+Build setup: [dev/toolchain.md](dev/toolchain.md). Boot sequence: [dev/boot.md](dev/boot.md).
+
+Rules for firmware code: HTTP, WebSocket, MQTT and UART all go through `command_router`; never put behaviour only in `web/dist/index.html`. Avoid component cycles (`mqtt_manager` may depend on `command_router`, not the reverse; use the event bus).

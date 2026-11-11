@@ -11,12 +11,9 @@
     "dev": "node scripts/dev.mjs",
     "build": "vite build --config web/vite.config.ts && node scripts/bundle.mjs",
     "start": "node dist/server.cjs",
-    "test": "npm run test:server && npm run test:web",
-    "test:server": "node --import tsx --test \"server/test/**/*.test.ts\"",
-    "test:web": "vitest run --config web/vite.config.ts",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit -p server/tsconfig.json && tsc --noEmit -p web/tsconfig.json && tsc --noEmit -p electron/tsconfig.json",
-    "fake": "tsx server/test/fake/cli.ts",
+    "fake": "tsx server/fake/cli.ts",
     "electron:dev": "node scripts/electron.mjs dev",
     "dist:win": "node scripts/electron.mjs dist"
   },

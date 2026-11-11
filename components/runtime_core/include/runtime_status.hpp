@@ -47,7 +47,10 @@ public:
     bool live_serial() const;
     void set_live_rules(bool on);
     bool live_rules() const;
-    /** WS + MQTT + serial + on-device ADC rules. ADC live-sample when > 0. */
+    /** UDP sink enabled with at least one target and an open socket. */
+    void set_live_udp(bool on);
+    bool live_udp() const;
+    /** WS + MQTT + serial + UDP + on-device ADC rules. ADC live-sample when > 0. */
     int live_sinks() const;
 
 private:
@@ -61,6 +64,7 @@ private:
     bool live_mqtt_;
     bool live_serial_;
     bool live_rules_;
+    bool live_udp_;
     char reason_[64];
 };
 

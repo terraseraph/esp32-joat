@@ -228,8 +228,18 @@ const char* network_state_name() {
 
 const char* sta_ip() { return s_sta_ip; }
 const char* ap_ip() { return s_ap_ip; }
-int sta_rssi() { return s_rssi; }
 bool sta_connected() { return s_sta_ip[0] != '\0'; }
+
+// The cached value is only set at connect time; re-read it so callers see the live signal.
+int sta_rssi() {
+    if (sta_connected()) {
+        wifi_ap_record_t ap{};
+        if (esp_wifi_sta_get_ap_info(&ap) == ESP_OK) {
+            s_rssi = ap.rssi;
+        }
+    }
+    return s_rssi;
+}
 
 esp_err_t network_enable_recovery_ap() {
     s_want_ap = true;
@@ -353,7 +363,7 @@ cJSON* network_status_json() {
     cJSON_AddStringToObject(o, "ap_ssid", ap_ssid());
     cJSON_AddBoolToObject(o, "ap_open", ap_is_open());
     cJSON_AddStringToObject(o, "hostname", hostname());
-    cJSON_AddNumberToObject(o, "rssi", s_rssi);
+    cJSON_AddNumberToObject(o, "rssi", sta_rssi());
     cJSON_AddBoolToObject(o, "provisioned", config_has_wifi());
     cJSON_AddBoolToObject(o, "sta_connected", sta_connected());
     return o;

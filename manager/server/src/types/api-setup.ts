@@ -30,7 +30,11 @@ export const SetupApSchema = Type.Object(
     idSuffix: Type.String({ description: "The last 6 hex characters of the device id" }),
     secured: Type.Boolean({ description: "true = the setup Wi-Fi needs a password" }),
     signal: Nullable(Type.Number({ minimum: 0, maximum: 100, description: "Signal strength in percent" })),
-    knownDeviceId: Nullable(Type.String({ description: "Id of a device in the fleet whose id ends with `idSuffix` (a device to recover)" })),
+    knownDeviceId: Nullable(Type.String({ description: "Id of a device in the fleet whose id ends with `idSuffix` (the setup Wi-Fi name is esp32-<last 6 hex of the id>)" })),
+    knownDeviceOnline: Type.Boolean({
+      description:
+        "true when that fleet device answers on the network right now: it is already set up and only its setup Wi-Fi is still on (firmware leaves it open until a restart). false = not in the fleet, or in the fleet but not answering (a device to recover)",
+    }),
   },
   { description: "A device that is raising its own setup Wi-Fi" },
 );

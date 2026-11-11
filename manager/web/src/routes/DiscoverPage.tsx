@@ -1,6 +1,5 @@
 import { AlertTriangle, Check, RefreshCw, X } from "lucide-react";
 import { useMemo, useState } from "react";
-import { Banner } from "../components/ui/Banner";
 import { Button } from "../components/ui/Button";
 import { Card } from "../components/ui/Card";
 import { PageHeader } from "../components/ui/PageHeader";
@@ -26,15 +25,12 @@ export function DiscoverPage() {
   const issues = d.startError?.code === "invalid_body" ? scanIssues(d.startError) : null;
   const generalError = d.startError && !issues ? d.startError : d.actionError;
 
-  // --no-network-scan: the server ignores mDNS and sweep anyway; ask for neither so the scan carries no warning (the banner explains).
-  const scanning = state?.networkScan !== false;
-  const startScan = () => void d.scan(toScanRequest(scanning ? options : { ...options, mdns: false, sweep: false }));
-  // With scanning off the info banner already says so; do not repeat the server warning that says the same.
-  const warnings = scanning ? (state?.warnings ?? []) : (state?.warnings ?? []).filter((w) => !/network scanning is turned off/i.test(w));
+  const startScan = () => void d.scan(toScanRequest(options));
+  const warnings = state?.warnings ?? [];
   const empty = groups !== null && !groups.fresh.length && !groups.setup.length && !groups.known.length && !groups.ignored.length;
   const finished = state !== null && (state.phase === "done" || state.phase === "cancelled");
 
-  const advanced = <AdvancedOptions value={options} onChange={setOptions} disabled={running || d.starting} networkScan={scanning} issues={issues} />;
+  const advanced = <AdvancedOptions value={options} onChange={setOptions} disabled={running || d.starting} issues={issues} />;
 
   let results = null;
   if (state && groups) {
@@ -90,12 +86,7 @@ export function DiscoverPage() {
           </div>
         </Card>
       )}
-      {state && !scanning && (
-        <Banner tone="info" title="Network scanning is turned off">
-          This Manager was started with <code>--no-network-scan</code>, so it does not browse mDNS or sweep your networks. A scan only checks the addresses you type under Advanced and the boards already in your fleet.
-        </Banner>
-      )}
-      {state && <ScanCard state={state} starting={d.starting} onScan={startScan} onCancel={() => void d.cancel()} advanced={advanced} networkScan={scanning} />}
+      {state && <ScanCard state={state} starting={d.starting} onScan={startScan} onCancel={() => void d.cancel()} advanced={advanced} />}
 
       {state && warnings.length > 0 && state.phase !== "error" && (
         <div className="banner warn disc-warn" role="status">

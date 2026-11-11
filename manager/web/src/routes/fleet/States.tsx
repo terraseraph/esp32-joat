@@ -17,7 +17,7 @@ export function FleetSkeleton() {
   );
 }
 
-export function EmptyFleet({ onScan, onAdd, networkScan = true }: { onScan: () => void; onAdd: () => void; networkScan?: boolean }) {
+export function EmptyFleet({ onScan, onAdd }: { onScan: () => void; onAdd: () => void }) {
   return (
     <EmptyState
       icon={LayoutGrid}
@@ -27,7 +27,7 @@ export function EmptyFleet({ onScan, onAdd, networkScan = true }: { onScan: () =
           <div className="actions fleet-empty-actions">
             <Button variant="primary" onClick={onScan}>
               <Radar className="i" aria-hidden="true" />
-              {networkScan ? "Scan network" : "Check addresses"}
+              Scan network
             </Button>
             <Button onClick={onAdd}>
               <Plus className="i" aria-hidden="true" />
@@ -40,7 +40,7 @@ export function EmptyFleet({ onScan, onAdd, networkScan = true }: { onScan: () =
         </>
       }
     >
-      {networkScan ? "Scan your network to find boards running de-esp32, or add one by its IP address." : "Network scanning is turned off. Add a board by its IP address, or check addresses you already know."}
+      Scan your network to find boards running de-esp32, or add one by its IP address.
     </EmptyState>
   );
 }
@@ -53,7 +53,7 @@ export function NoMatches({ onClear }: { onClear: () => void }) {
   );
 }
 
-export function AllOfflineBanner({ onRetry, retrying, networkScan = true }: { onRetry: () => void; retrying: boolean; networkScan?: boolean }) {
+export function AllOfflineBanner({ onRetry, retrying }: { onRetry: () => void; retrying: boolean }) {
   return (
     <Banner
       tone="warn"
@@ -65,7 +65,7 @@ export function AllOfflineBanner({ onRetry, retrying, networkScan = true }: { on
             Retry all
           </Button>
           <ButtonLink to="/discover" size="sm">
-            {networkScan ? "Scan network" : "Check addresses"}
+            Scan network
           </ButtonLink>
         </>
       }

@@ -4,8 +4,6 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router";
 import { apiFetch } from "../api/client";
 import { setDevices, useDevices } from "../api/devices";
-import { healthStore } from "../api/serverStatus";
-import { useStore } from "../api/store";
 import { Banner, InlineError, PageHeader } from "../components/ui";
 import { BulkBar, HeaderActions, SummaryStrip, Toolbar } from "./fleet/Controls";
 import { DeviceCard } from "./fleet/DeviceCard";
@@ -31,7 +29,6 @@ export function FleetPage() {
   const actions = useFleetActions();
   const now = useNow();
   // Unknown (health not loaded yet) counts as on; only an explicit false changes the wording.
-  const networkScan = useStore(healthStore).health?.networkScan !== false;
 
   const [prefs, setPrefs] = useState<FleetPrefs>(loadPrefs);
   const [query, setQuery] = useState("");
@@ -117,12 +114,12 @@ export function FleetPage() {
   } else if (!loaded) {
     body = <FleetSkeleton />;
   } else if (!hasDevices) {
-    body = <EmptyFleet onScan={goDiscover} onAdd={goDiscover} networkScan={networkScan} />;
+    body = <EmptyFleet onScan={goDiscover} onAdd={goDiscover} />;
   } else {
     body = (
       <>
         <SummaryStrip summary={summary} filter={activeFilter} onFilter={setFilter} />
-        {allOffline && <AllOfflineBanner networkScan={networkScan} onRetry={() => void refreshAll(list)} retrying={refreshing} />}
+        {allOffline && <AllOfflineBanner onRetry={() => void refreshAll(list)} retrying={refreshing} />}
         <Toolbar
           query={query}
           onQuery={setQuery}
@@ -179,7 +176,7 @@ export function FleetPage() {
       <PageHeader
         title="Fleet"
         description={description}
-        actions={<HeaderActions networkScan={networkScan} onScan={goDiscover} onAdd={goDiscover} onRefreshAll={() => void refreshAll(list)} refreshing={refreshing} hasDevices={loaded && hasDevices} />}
+        actions={<HeaderActions onScan={goDiscover} onAdd={goDiscover} onRefreshAll={() => void refreshAll(list)} refreshing={refreshing} hasDevices={loaded && hasDevices} />}
       />
       {body}
     </>

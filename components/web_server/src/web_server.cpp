@@ -15,6 +15,8 @@
 #include "event_bus.hpp"
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
+#include "io_adc.hpp"
+#include "io_touch.hpp"
 #include "json_util.hpp"
 #include "logging_service.hpp"
 #include "mqtt_manager.hpp"
@@ -26,11 +28,13 @@
 #include "security.hpp"
 #include "state_registry.hpp"
 #include "telemetry.hpp"
+#include "udp_sink.hpp"
 
 static const char* TAG = "web";
 
-extern const uint8_t index_html_start[] asm("_binary_index_html_start");
-extern const uint8_t index_html_end[] asm("_binary_index_html_end");
+// web/dist/index.html.gz, built by tools/build_web.js and embedded by CMake EMBED_FILES.
+extern const uint8_t index_html_start[] asm("_binary_index_html_gz_start");
+extern const uint8_t index_html_end[] asm("_binary_index_html_gz_end");
 
 namespace runtime {
 namespace {
@@ -58,9 +62,27 @@ esp_err_t send_json(httpd_req_t* req, cJSON* obj, bool take_ownership = true) {
     return err;
 }
 
+// The page is a pre-gzipped static blob in flash. The ETag is a hash of those bytes (computed
+// once), so a reload costs one small 304 and a new build is always picked up.
 esp_err_t send_html(httpd_req_t* req) {
+    static char etag[16];
+    if (!etag[0]) {
+        uint32_t h = 2166136261u;
+        for (const uint8_t* p = index_html_start; p < index_html_end; ++p) {
+            h = (h ^ *p) * 16777619u;
+        }
+        snprintf(etag, sizeof(etag), "\"%08x\"", static_cast<unsigned>(h));
+    }
+    httpd_resp_set_hdr(req, "ETag", etag);
+    httpd_resp_set_hdr(req, "Cache-Control", "no-cache");
+    char inm[24];
+    if (httpd_req_get_hdr_value_str(req, "If-None-Match", inm, sizeof(inm)) == ESP_OK &&
+        strcmp(inm, etag) == 0) {
+        httpd_resp_set_status(req, "304 Not Modified");
+        return httpd_resp_send(req, nullptr, 0);
+    }
     httpd_resp_set_type(req, "text/html");
-    httpd_resp_set_hdr(req, "Cache-Control", "no-store");
+    httpd_resp_set_hdr(req, "Content-Encoding", "gzip");
     return httpd_resp_send(req, reinterpret_cast<const char*>(index_html_start),
                            index_html_end - index_html_start);
 }
@@ -114,6 +136,13 @@ cJSON* status_json() {
     cJSON_AddNumberToObject(o, "schema", config_schema_version());
     cJSON_AddNumberToObject(o, "generation", static_cast<double>(config_generation()));
     cJSON_AddStringToObject(o, "safe_reason", RuntimeStatus::instance().safe_mode_reason());
+    // Where live I/O events are going right now (the UI's Connections row).
+    cJSON* sinks = cJSON_AddObjectToObject(o, "sinks");
+    cJSON_AddNumberToObject(sinks, "ws", RuntimeStatus::instance().live_viewers());
+    cJSON_AddBoolToObject(sinks, "mqtt", RuntimeStatus::instance().live_mqtt());
+    cJSON_AddBoolToObject(sinks, "serial", RuntimeStatus::instance().live_serial());
+    cJSON_AddBoolToObject(sinks, "rules", RuntimeStatus::instance().live_rules());
+    cJSON_AddBoolToObject(sinks, "udp", RuntimeStatus::instance().live_udp());
     return o;
 }
 
@@ -151,6 +180,8 @@ esp_err_t api_pins(httpd_req_t* req) {
         cJSON_Delete(body);
         return send_json(req, res);
     }
+    io_adc_refresh();  // live ADC ticks only store state when the value moves past hysteresis
+    io_touch_refresh();
     return send_json(req, state_snapshot());
 }
 
@@ -191,6 +222,20 @@ esp_err_t api_mqtt(httpd_req_t* req) {
         return send_json(req, res);
     }
     return send_json(req, mqtt_status_json());
+}
+
+esp_err_t api_udp(httpd_req_t* req) {
+    if (req->method == HTTP_POST) {
+        cJSON* body = read_body(req);
+        if (!body) {
+            return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "json");
+        }
+        cJSON_AddStringToObject(body, "cmd", "udp.configure");
+        cJSON* res = command_dispatch(body);
+        cJSON_Delete(body);
+        return send_json(req, res);
+    }
+    return send_json(req, udp_status_json());
 }
 
 esp_err_t api_logs(httpd_req_t* req) {
@@ -392,17 +437,11 @@ void on_bus(const char* topic, cJSON* payload, void*) {
     if (RuntimeStatus::instance().live_viewers() <= 0) {
         return;
     }
-    cJSON* wrap = cJSON_CreateObject();
-    cJSON_AddStringToObject(wrap, "topic", topic);
-    if (payload) {
-        cJSON_AddItemToObject(wrap, "data", cJSON_Duplicate(payload, 1));
+    // Printed once per event and shared with the MQTT and serial sinks.
+    const char* frame = event_bus_frame(topic, payload);
+    if (frame) {
+        ws_broadcast(frame);
     }
-    char* printed = cJSON_PrintUnformatted(wrap);
-    if (printed) {
-        ws_broadcast(printed);
-        cJSON_free(printed);
-    }
-    cJSON_Delete(wrap);
 }
 
 struct ApiRoute {
@@ -425,6 +464,8 @@ const ApiRoute kRoutes[] = {
     {"/api/v1/network/wifi", HTTP_POST, api_wifi, "network.wifi.set", false, false},
     {"/api/v1/mqtt", HTTP_GET, api_mqtt, "Broker status and topic suffixes", false, false},
     {"/api/v1/mqtt", HTTP_POST, api_mqtt, "mqtt.configure", false, false},
+    {"/api/v1/udp", HTTP_GET, api_udp, "UDP sink targets and counters", false, false},
+    {"/api/v1/udp", HTTP_POST, api_udp, "udp.configure", false, false},
     {"/api/v1/logs", HTTP_GET, api_logs, "RAM log ring", false, false},
     {"/api/v1/telemetry", HTTP_GET, api_telemetry, "Diagnostics snapshot", false, false},
     {"/api/v1/ota", HTTP_GET, api_ota, "OTA slot status", false, false},

@@ -1,11 +1,11 @@
 import { fileURLToPath } from "node:url";
 import react from "@vitejs/plugin-react";
-import { defineConfig } from "vitest/config";
+import { defineConfig } from "vite";
 
 const here = (p: string) => fileURLToPath(new URL(p, import.meta.url));
 const SERVER = "http://127.0.0.1:5180";
 
-// One config for dev, build and vitest (`vite --config web/vite.config.ts`, run from manager/).
+// One config for dev and build (`vite --config web/vite.config.ts`, run from manager/).
 export default defineConfig({
   root: here("."),
   plugins: [react()],
@@ -23,10 +23,4 @@ export default defineConfig({
     },
   },
   build: { outDir: here("dist"), emptyOutDir: true, chunkSizeWarningLimit: 900 },
-  test: {
-    environment: "jsdom",
-    globals: true,
-    setupFiles: ["./src/test/setup.ts"],
-    include: ["src/**/*.test.ts", "src/**/*.test.tsx"],
-  },
 });

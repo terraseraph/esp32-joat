@@ -676,6 +676,7 @@ const ModuleTypeOps kOps = {
     nullptr,
     0,
     nullptr,
+    true,  // a card read happens once
 };
 
 }  // namespace

@@ -32,7 +32,6 @@ export const serverRoutes = [
         dataDir: app.dataDir,
         uptime: Math.round((Date.now() - app.startedAt) / 1000),
         startedAt: app.startedAt,
-        networkScan: app.networkScan,
         wifiAdapter: app.wifiAdapterKind,
       },
     }),

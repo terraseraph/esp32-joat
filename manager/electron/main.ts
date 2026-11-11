@@ -4,7 +4,6 @@
 // Test/dev environment overrides (all optional):
 //   DE_ESP32_MANAGER_DATA_DIR=<dir>        data dir; also becomes Electron's userData, so Chromium's own profile stays out of the real one
 //   DE_ESP32_MANAGER_WIFI_ADAPTER=fake|system|none   default system
-//   DE_ESP32_MANAGER_NO_NETWORK_SCAN=1     never browse mDNS / sweep subnets
 //   DE_ESP32_MANAGER_READY_FILE=<path>     once listening, write {url, port, pid} JSON there (scripts find the random port)
 import { app, BrowserWindow, dialog, shell } from "electron";
 import { writeFileSync } from "node:fs";
@@ -85,7 +84,6 @@ async function boot(): Promise<void> {
     dataDir,
     publicDir: path.join(__dirname, "public"),
     wifiAdapter: parseAdapter(env.DE_ESP32_MANAGER_WIFI_ADAPTER),
-    networkScan: !(env.DE_ESP32_MANAGER_NO_NETWORK_SCAN === "1" || env.DE_ESP32_MANAGER_NO_NETWORK_SCAN === "true"),
     log: (msg) => console.log(`[manager] ${msg}`),
   };
   server = await start(options);

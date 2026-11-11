@@ -30,6 +30,11 @@ function RowMeta({ r }: { r: DiscoveryResult }) {
   const fw = r.app_version || r.fw;
   return (
     <div className="res-meta">
+      {r.setupApOpen && !r.setup && (
+        <Chip tone="warn" title={`Connected to this network, but its own setup Wi-Fi${r.hostname ? ` (${r.hostname})` : ""} is still on. Restart the board to close it.`}>
+          Setup Wi-Fi on
+        </Chip>
+      )}
       {fw && (
         <Chip mono title={r.app_version ? "Firmware build" : "Firmware version"}>
           {fw}

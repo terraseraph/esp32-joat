@@ -1,11 +1,13 @@
-import { Lock, LockOpen, Radio, RefreshCw, WifiOff } from "lucide-react";
+import { CheckCircle2, Lock, LockOpen, Radio, RefreshCw, WifiOff } from "lucide-react";
 import { useState } from "react";
+import type { SetupAp } from "@shared/api";
+import { useDevices } from "../../../api/devices";
 import { useJobs } from "../../../api/jobs";
 import { useSetupAps } from "../../../api/setup";
-import { Banner, Button, Card, CardHead, Chip, Skeleton, Spinner } from "../../../components/ui";
+import { Banner, Button, ButtonLink, Card, CardHead, Chip, Skeleton, Spinner } from "../../../components/ui";
 import { RecoveryBanner } from "./RecoveryBanner";
 import { SetupFlow } from "./SetupFlow";
-import { signalBars, type SetupTarget } from "./logic";
+import { signalBars, splitSetupAps, type SetupTarget } from "./logic";
 import "./setup.css";
 
 interface FlowState {
@@ -19,6 +21,7 @@ export function SetupSection() {
   const { jobs: running } = useJobs({ kind: "setup", active: true });
   const [flow, setFlow] = useState<FlowState | null>(null);
   const active = running[0];
+  const { list: devices } = useDevices();
 
   const { data } = aps;
   let body;
@@ -39,47 +42,56 @@ export function SetupSection() {
         <span>{data.reason ?? "This PC cannot join a device's setup Wi-Fi."} Join the device's Wi-Fi yourself and open 192.168.4.1 to set it up.</span>
       </p>
     );
-  } else if (data.aps.length === 0) {
-    body = (
-      <div className="su-empty">
-        <p>No device in setup mode nearby.</p>
-        <p className="mut su-p">A new board raises its own Wi-Fi called <span className="mono">esp32-xxxxxx</span> until it has a network. Power it on close to this PC and press Refresh.</p>
-      </div>
-    );
   } else {
+    const { needSetup, alreadySetUp } = splitSetupAps(data.aps, devices);
     body = (
-      <ul className="su-aps" aria-label="Devices in setup mode">
-        {data.aps.map((ap) => {
-          const bars = signalBars(ap.signal);
-          return (
-            <li key={ap.ssid} className="su-ap">
-              <div className="su-ap-main">
-                <div className="su-ap-name mono">{ap.ssid}</div>
-                <div className="su-ap-meta mut">
-                  <span className="su-sig" data-l={bars} role="img" aria-label={ap.signal === null ? "Signal unknown" : `Signal ${ap.signal} percent`}>
-                    <i />
-                    <i />
-                    <i />
-                    <i />
-                  </span>
-                  {ap.secured ? <Lock className="i sm" aria-hidden="true" /> : <LockOpen className="i sm" aria-hidden="true" />}
-                  <span>{ap.secured ? "Password protected" : "Open"}</span>
-                </div>
-              </div>
-              {ap.knownDeviceId && <Chip tone="acc">In your fleet</Chip>}
-              <Button
-                size="sm"
-                variant="primary"
-                disabled={Boolean(active)}
-                onClick={() => setFlow({ target: { ssid: ap.ssid, secured: ap.secured, deviceId: ap.knownDeviceId ?? undefined } })}
-                aria-label={`${ap.knownDeviceId ? "Recover" : "Set up"} ${ap.ssid}`}
-              >
-                {ap.knownDeviceId ? "Recover" : "Set up"}
-              </Button>
-            </li>
-          );
-        })}
-      </ul>
+      <>
+        {needSetup.length === 0 ? (
+          <div className="su-empty">
+            <p>{alreadySetUp.length ? "No device needs setting up." : "No device in setup mode nearby."}</p>
+            <p className="mut su-p">A new board raises its own Wi-Fi called <span className="mono">esp32-xxxxxx</span> until it has a network. Power it on close to this PC and press Refresh.</p>
+          </div>
+        ) : (
+          <ul className="su-aps" aria-label="Devices in setup mode">
+            {needSetup.map((ap) => (
+              <li key={ap.ssid} className="su-ap">
+                <ApMain ap={ap} />
+                {ap.knownDeviceId && <Chip tone="acc">In your fleet, offline</Chip>}
+                <Button
+                  size="sm"
+                  variant="primary"
+                  disabled={Boolean(active)}
+                  onClick={() => setFlow({ target: { ssid: ap.ssid, secured: ap.secured, deviceId: ap.knownDeviceId ?? undefined } })}
+                  aria-label={`${ap.knownDeviceId ? "Recover" : "Set up"} ${ap.ssid}`}
+                >
+                  {ap.knownDeviceId ? "Recover" : "Set up"}
+                </Button>
+              </li>
+            ))}
+          </ul>
+        )}
+        {alreadySetUp.length > 0 && (
+          <div className="su-done">
+            <p className="mut su-p">
+              Already set up and online. Their setup Wi-Fi is still on; the board closes it when it restarts.
+            </p>
+            <ul className="su-aps" aria-label="Already set up">
+              {alreadySetUp.map(({ ap, device }) => (
+                <li key={ap.ssid} className="su-ap done">
+                  <ApMain ap={ap} />
+                  <Chip tone="ok" icon={CheckCircle2}>
+                    {device?.name || "In your fleet"}
+                    {device?.host ? ` · ${device.host}` : ""}
+                  </Chip>
+                  <ButtonLink to={`/devices/${ap.knownDeviceId}/live`} size="sm" variant="ghost" aria-label={`Open ${device?.name || ap.ssid}`}>
+                    Open
+                  </ButtonLink>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </>
     );
   }
 
@@ -124,6 +136,25 @@ export function SetupSection() {
         )}
       </Card>
       {flow && <SetupFlow {...flow} onClose={() => setFlow(null)} />}
+    </div>
+  );
+}
+
+function ApMain({ ap }: { ap: SetupAp }) {
+  const bars = signalBars(ap.signal);
+  return (
+    <div className="su-ap-main">
+      <div className="su-ap-name mono">{ap.ssid}</div>
+      <div className="su-ap-meta mut">
+        <span className="su-sig" data-l={bars} role="img" aria-label={ap.signal === null ? "Signal unknown" : `Signal ${ap.signal} percent`}>
+          <i />
+          <i />
+          <i />
+          <i />
+        </span>
+        {ap.secured ? <Lock className="i sm" aria-hidden="true" /> : <LockOpen className="i sm" aria-hidden="true" />}
+        <span>{ap.secured ? "Password protected" : "Open"}</span>
+      </div>
     </div>
   );
 }

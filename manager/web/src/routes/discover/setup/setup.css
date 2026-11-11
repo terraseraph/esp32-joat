@@ -34,3 +34,8 @@
 .su-net-name { flex: 1; min-width: 0; overflow-wrap: anywhere; font-weight: 550; }
 .su-net-meta { display: inline-flex; align-items: center; gap: var(--s2); font-size: var(--fs-sm); flex: none; }
 .dev-banner-acts { display: inline-flex; flex-wrap: wrap; gap: var(--s2); }
+
+/* Boards in the fleet and online whose setup Wi-Fi is still on: listed quietly, never offered for setup. */
+.su-done { margin-top: var(--s3); padding-top: var(--s3); border-top: 1px solid var(--line); }
+.su-done > .su-p { margin: 0; }
+.su-ap.done .su-ap-name { color: var(--mut, inherit); }

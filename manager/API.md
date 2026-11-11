@@ -2,7 +2,7 @@
 
 REST + WebSocket API served by the Manager for its web app (and for scripts). Machine-readable version:
 `GET /api/openapi.json` (OpenAPI 3.1, generated from the same route table the server uses).
-This file is checked by a test: every route needs a `### METHOD /path` heading below, with a curl example.
+Every route has a `### METHOD /path` heading below, with a curl example.
 
 ## Basics
 
@@ -69,13 +69,12 @@ Read this before turning LAN mode on.
 
 Server version, mode and uptime, plus how this Manager was started:
 
-- `networkScan`: `false` when started with `--no-network-scan` (no mDNS, no subnet sweeps anywhere; see Discovery).
 - `wifiAdapter`: `fake` (simulated Wi-Fi, for development), `system` (this PC's Wi-Fi adapter, the default) or `none` (SoftAP setup disabled); the `--wifi-adapter` flag.
 - `lan`: LAN mode is on **right now** (it follows `PUT /api/access`). `dataDir`: the data folder (only callers that passed the security check see it). `startedAt`: when the server started, epoch milliseconds (`uptime` is in seconds).
 
 ```bash
 curl -s http://localhost:5180/api/health
-# {"version":"0.1.0","lan":false,"dataDir":"C:\\Users\\me\\AppData\\Roaming\\de-esp32-manager","uptime":42,"startedAt":1760000000000,"networkScan":true,"wifiAdapter":"system"}
+# {"version":"0.1.0","lan":false,"dataDir":"C:\\Users\\me\\AppData\\Roaming\\de-esp32-manager","uptime":42,"startedAt":1760000000000,"wifiAdapter":"system"}
 ```
 
 ### GET /api/access
@@ -273,7 +272,7 @@ curl -s -X POST http://localhost:5180/api/devices/fe5e1fa50000/refresh
 
 ### POST /api/devices/:id/command
 
-Send a device command: body `{ "cmd": "<name>", ...args }` (catalog: `docs/manager-app.md` section 2.5). It is forwarded to the
+Send a device command: body `{ "cmd": "<name>", ...args }` (catalog: the per-feature docs in `docs/features/`). It is forwarded to the
 device's `POST /api/v1/command` and the device's envelope comes back unchanged, with HTTP 200 whether `ok` is true or false:
 `{ "v": 1, "ok": true, "result": {...} }` or `{ "v": 1, "ok": false, "error": "..." }`. The device validates the arguments.
 
@@ -362,14 +361,6 @@ other web servers are never reported. Results are one entry per device id; `via`
 `setup: true` marks a device whose `network.state` is `ap_only` or `apsta_recovery` (in setup / recovery).
 Scans can only see a board's own setup network when this PC is on it.
 
-**`--no-network-scan`.** The server flag (`node dist/server.cjs --no-network-scan`; `npm run dev` uses it by default) hard-disables mDNS
-browsing and subnet sweeps everywhere, whatever a request or the settings ask: UI scans, the background scan (it never runs) and
-`waitForDevice` used by setup jobs. Explicit `targets`, the settings' `discoveryTargets` and the addresses of registered devices
-are still probed. `GET /api/health` and the discovery state carry `networkScan: false`. A scan that asked for `mdns` or `sweep`
-(they default to true) runs without them and adds this warning: "Network scanning is turned off on this Manager (started with
---no-network-scan). Only the addresses you entered and known devices were checked." The settings `extraSubnets` are not swept
-either, and `subnets` stays empty.
-
 Error codes: `409 scan_running` (a scan is already running), `400 invalid_body` (a bad `targets[i]` or `subnets[i]`, with `details`),
 `400 invalid_id` (ignore/un-ignore with something that is not 12 hex characters).
 
@@ -393,7 +384,7 @@ curl -s -X POST http://localhost:5180/api/discovery/scan      # no body: mDNS + 
 The current or last scan. `phase` is `idle` before the first scan since the server started. `probed`/`total` count hosts
 (`total` grows when mDNS finds more); `subnets` lists the ranges the sweep covers; `warnings` explains partial failures
 (mDNS socket error because UDP 5353 is in use or firewalled, no local network found, a target that did not resolve);
-`results` are sorted by name; `ignored` is the registry's ignore list; `networkScan` is `false` when the Manager runs with `--no-network-scan`.
+`results` are sorted by name; `ignored` is the registry's ignore list.
 
 ```bash
 curl -s http://localhost:5180/api/discovery
@@ -681,7 +672,7 @@ LAN mode) loses the Manager during that time; reload it afterwards and the job r
 
 ```bash
 npm run fake -- --count 1 --base-port 8211 --ap-mode
-node dist/server.cjs --port 5281 --no-open --no-network-scan --wifi-adapter fake \
+node dist/server.cjs --port 5281 --no-open --wifi-adapter fake \
   --fake-ap "esp32-130000=127.0.0.1:8211,secured=apsecret1,lan=127.0.0.1:8211" --data-dir .data/setup
 ```
 
@@ -771,8 +762,8 @@ the device keeps its saved network until the new one has joined **and** got an a
 
 How a move works: the Manager sends `network.wifi.set` (the device tests the network for up to 20 s and may answer, or may stop
 answering when it changes network; both are normal). The job then compares the device's own `wifi_change.seq` with the value it read
-before and looks for the device **by its id**: at the old address and at every discovery target, plus mDNS and a sweep when network
-scanning is on (`--no-network-scan` turns those two off; typed `discoveryTargets` in the settings are always probed). It ends:
+before and looks for the device **by its id**: at the old address and at every discovery target, plus mDNS and a sweep of the local
+networks (typed `discoveryTargets` in the settings are always probed too). It ends:
 
 - `succeeded`: the device is on the new network. The stored address is updated, health is polled. `job.result.addressChanged` says
   whether the address is a new one. A static address is reset to DHCP by the device (`ip_change.result` `reset`): `result.staticIpReset`.
@@ -852,8 +843,8 @@ Recipe (ports 8221-8223 and 5281 are examples; the id of the device started with
 # 1. a fake device that can move to 8222 (workshop-wifi) or 8223 (neighbour-5g)
 npm run fake -- --base-port 8221 --pending-firmware --seed demo \
   --wifi-move workshop-wifi=127.0.0.1:8222 --wifi-move neighbour-5g=127.0.0.1:8223
-# 2. the Manager: no mDNS, no sweep, fake PC Wi-Fi adapter, a scratch data dir
-node dist/server.cjs --port 5281 --no-open --no-network-scan --wifi-adapter fake --data-dir /tmp/wifimove-demo
+# 2. the Manager: fake PC Wi-Fi adapter, a scratch data dir
+node dist/server.cjs --port 5281 --no-open --wifi-adapter fake --data-dir /tmp/wifimove-demo
 curl -s -X POST localhost:5281/api/devices -H 'Content-Type: application/json' -d '{"host":"127.0.0.1:8221"}'
 # 3. failed, previous network restored: the job fails with code "auth", the stored address stays 127.0.0.1:8221
 curl -s -X POST localhost:5281/api/devices/fe5e203d0000/wifi -H 'Content-Type: application/json' \

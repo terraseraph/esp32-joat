@@ -30,7 +30,7 @@ Keys (MVP):
 
 ## Used by
 
-identity (device name), network, mqtt, command_router, boot, [module_manager_README.md](../module_manager/module_manager_README.md).
+identity (device name), network, mqtt, command_router, boot, [modules.md](../../docs/features/modules.md).
 
 ## How to update and maintain
 

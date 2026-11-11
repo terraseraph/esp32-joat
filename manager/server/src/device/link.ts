@@ -123,6 +123,8 @@ export function topicForState(st: unknown): string | null {
       return "io/gpio";
     case "adc":
       return "io/adc";
+    case "touch":
+      return "io/touch";
     case "pwm":
       return "io/pwm";
     case "servo":

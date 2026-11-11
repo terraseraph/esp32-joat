@@ -18,7 +18,7 @@ Find the device, configure pins from the Hardware pinout, provision, view logs, 
 - `POST /api/v1/command|pins|network/wifi|mqtt|ota|system/reboot|system/factory_reset`
 - `GET /api/v1/ws` — WebSocket; JSON commands in, event bus frames out. No frames when `live_viewers()==0`. ADC live-sample runs while `live_sinks()>0` (WS, MQTT, serial session, or an ADC-watching on-device rule). Browser closes the socket on hidden tabs.
 
-Assets: `web/dist/index.html` via CMake `EMBED_FILES`.
+Assets: `web/dist/index.html.gz` via CMake `EMBED_FILES`, sent with `Content-Encoding: gzip` and an ETag (304 on reload).
 
 ## Depends on
 
@@ -26,13 +26,13 @@ command_router, identity, network, mqtt, logging, telemetry, ota, capability, bo
 
 ## Used by
 
-Humans (browser). Boot starts the server. Node-RED palette (`docs/features/nodered_README.md`) is an HTTP/WS/MQTT client of this API — it does not live in the binary.
+Humans (browser). Boot starts the server. Node-RED palette (`nodered/node-red-contrib-de-esp32/`) is an HTTP/WS/MQTT client of this API — it does not live in the binary.
 
 ## How to update and maintain
 
 1. New HTTP path: add a row to `kRoutes` in `web_server.cpp` (handler + one-line summary). Do not list the path in the HTML.
 2. New JSON command: add it in `command_router` (`dispatch` **and** `kCmds`). OpenAPI picks it up.
-3. Edit `web/source/index.html`, run `python tools/sync_web.py`, rebuild firmware. Keep the file small — no npm/React/Swagger UI.
+3. Edit `web/source/index.html` (open it in a browser, it has a mock device), run `node tools/build_web.js`, commit `web/dist/*`, rebuild firmware. Keep the file small — no npm/React/Swagger UI.
 4. Status polling must not rebuild forms (phones lose focus/text). Gzip later if the binary grows; partitions are 1792 KB per OTA slot.
 
 ## How to test

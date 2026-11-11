@@ -53,7 +53,8 @@ RuntimeStatus::RuntimeStatus()
       live_viewers_(0),
       live_mqtt_(false),
       live_serial_(false),
-      live_rules_(false) {
+      live_rules_(false),
+      live_udp_(false) {
     reason_[0] = '\0';
 }
 
@@ -180,9 +181,25 @@ bool RuntimeStatus::live_rules() const {
     return v;
 }
 
+void RuntimeStatus::set_live_udp(bool on) {
+    xSemaphoreTake(mu_, portMAX_DELAY);
+    live_udp_ = on;
+    xSemaphoreGive(mu_);
+}
+
+bool RuntimeStatus::live_udp() const {
+    xSemaphoreTake(mu_, portMAX_DELAY);
+    bool v = live_udp_;
+    xSemaphoreGive(mu_);
+    return v;
+}
+
 int RuntimeStatus::live_sinks() const {
     xSemaphoreTake(mu_, portMAX_DELAY);
     int n = live_viewers_;
+    if (live_udp_) {
+        n++;
+    }
     if (live_mqtt_) {
         n++;
     }

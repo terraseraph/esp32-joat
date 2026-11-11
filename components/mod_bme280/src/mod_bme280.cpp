@@ -546,6 +546,7 @@ const ModuleTypeOps kOps = {
     kSettings,
     static_cast<int>(sizeof(kSettings) / sizeof(kSettings[0])),
     nullptr,
+    false,  // the next reading supersedes this one
 };
 
 }  // namespace

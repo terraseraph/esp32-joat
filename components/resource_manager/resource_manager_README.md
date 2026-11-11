@@ -24,7 +24,7 @@ GPIO owner strings stay ≤23 characters: `gpio_N`, `pwm_N`, `adc_N`, `servo_N`,
 
 ## Used by
 
-io_gpio, io_pwm, io_adc, io_servo, [mod_mfrc522_README.md](../mod_mfrc522/mod_mfrc522_README.md), [mod_bme280_README.md](../mod_bme280/mod_bme280_README.md).
+io_gpio, io_pwm, io_adc, io_servo, [rfid.md](../../docs/features/rfid.md), [bme280.md](../../docs/features/bme280.md).
 
 ## How to update and maintain
 

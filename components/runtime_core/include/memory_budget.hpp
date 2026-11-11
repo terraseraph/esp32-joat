@@ -17,6 +17,10 @@ esp_err_t memory_admit(size_t internal_bytes, size_t dma_bytes, char* err, size_
 /** Caller deletes. Includes pressure, pools, boot marks, and cached task stacks. */
 cJSON* memory_status_json();
 
+/** Caller deletes. {"load":[core0 %, core1 %], "window_s":n}. A load is null until two task
+ *  samples at least 5 s apart exist, or when run-time stats are compiled out. */
+cJSON* cpu_status_json();
+
 void memory_hooks_init();
 
 }  // namespace runtime

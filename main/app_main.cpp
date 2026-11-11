@@ -16,6 +16,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "io_adc.hpp"
+#include "io_touch.hpp"
 #include "io_gpio.hpp"
 #include "io_pwm.hpp"
 #include "io_rules.hpp"
@@ -37,6 +38,7 @@
 #include "serial_session.hpp"
 #include "state_registry.hpp"
 #include "telemetry.hpp"
+#include "udp_sink.hpp"
 #include "web_server.hpp"
 
 #include <cstdio>
@@ -284,6 +286,7 @@ extern "C" void app_main(void) {
     ESP_ERROR_CHECK(runtime::io_pwm_init());
     ESP_ERROR_CHECK(runtime::io_servo_init());
     ESP_ERROR_CHECK(runtime::io_adc_init());
+    ESP_ERROR_CHECK(runtime::io_touch_init());
     ESP_ERROR_CHECK(runtime::io_rules_init());
     runtime::io_gpio_safe_defaults();
 
@@ -294,6 +297,7 @@ extern "C" void app_main(void) {
     ESP_ERROR_CHECK(runtime::ota_init());
     ESP_ERROR_CHECK(runtime::telemetry_init());
     ESP_ERROR_CHECK(runtime::mqtt_init());
+    ESP_ERROR_CHECK(runtime::udp_init());
     ESP_ERROR_CHECK(runtime::provisioning_init());
 
     rt.set_boot_state(runtime::BootState::kNetwork);
@@ -313,6 +317,7 @@ extern "C" void app_main(void) {
     rt.set_boot_state(runtime::BootState::kMqtt);
     ESP_ERROR_CHECK(runtime::mqtt_start());
     runtime::memory_boot_mark("mqtt");
+    ESP_ERROR_CHECK(runtime::udp_start());
 
     rt.set_boot_state(runtime::BootState::kComponents);
     runtime::command_apply_saved_io(true);

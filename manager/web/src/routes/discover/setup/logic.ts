@@ -1,4 +1,4 @@
-import type { Job } from "@shared/api";
+import type { DeviceSummary, Job, SetupAp } from "@shared/api";
 import type { SetupChooseResult, SetupJobResult } from "../../../api/setup";
 
 /** What the flow was opened for. `deviceId` set = recover mode (the device must report that id). */
@@ -72,4 +72,26 @@ export function failureHint(code: string | undefined): string | null {
     default:
       return null;
   }
+}
+
+/**
+ * Split the visible setup Wi-Fi networks into boards that need setting up (new, or in the fleet but not answering) and
+ * boards that are already set up: in the fleet and online, with their setup Wi-Fi merely still on. The setup Wi-Fi name
+ * is esp32-<last 6 hex of the device id>, which is how the server links it (`knownDeviceId`). The live device list wins
+ * over the server's `knownDeviceOnline`, so a board added or coming online moves without another Wi-Fi scan.
+ */
+export function splitSetupAps(
+  aps: SetupAp[],
+  devices: Pick<DeviceSummary, "id" | "name" | "host" | "health">[],
+): { needSetup: SetupAp[]; alreadySetUp: { ap: SetupAp; device: Pick<DeviceSummary, "id" | "name" | "host" | "health"> | null }[] } {
+  const needSetup: SetupAp[] = [];
+  const alreadySetUp: { ap: SetupAp; device: Pick<DeviceSummary, "id" | "name" | "host" | "health"> | null }[] = [];
+  for (const ap of aps) {
+    const suffix = ap.idSuffix.toLowerCase();
+    const device = devices.find((d) => (ap.knownDeviceId ? d.id === ap.knownDeviceId : d.id.toLowerCase().endsWith(suffix))) ?? null;
+    const online = device ? device.health === "online" : ap.knownDeviceOnline;
+    if (online && (device || ap.knownDeviceId)) alreadySetUp.push({ ap: device && !ap.knownDeviceId ? { ...ap, knownDeviceId: device.id } : ap, device });
+    else needSetup.push(device && !ap.knownDeviceId ? { ...ap, knownDeviceId: device.id } : ap);
+  }
+  return { needSetup, alreadySetUp };
 }

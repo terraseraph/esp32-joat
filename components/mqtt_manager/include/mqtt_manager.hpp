@@ -16,5 +16,6 @@ const char* mqtt_topic_root();
 cJSON* mqtt_topics_json();
 void mqtt_publish_status();
 void mqtt_publish_telemetry(cJSON* payload);
+void mqtt_publish_telemetry_raw(const char* json, int len);  // already-printed telemetry JSON
 
 }  // namespace runtime

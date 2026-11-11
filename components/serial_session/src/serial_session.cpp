@@ -55,24 +55,16 @@ void on_io(const char* bus_topic, cJSON* payload, void*) {
     if (!bus_topic || !RuntimeStatus::instance().live_serial()) {
         return;
     }
-    cJSON* wrap = cJSON_CreateObject();
-    cJSON_AddStringToObject(wrap, "topic", bus_topic);
-    if (payload) {
-        cJSON_AddItemToObject(wrap, "data", cJSON_Duplicate(payload, 1));
-    }
-    char* printed = cJSON_PrintUnformatted(wrap);
-    cJSON_Delete(wrap);
-    if (!printed) {
+    size_t len = 0;
+    const char* frame = event_bus_frame(bus_topic, payload, &len);  // shared, freed by the bus
+    if (!frame) {
         return;
     }
-    size_t n = strlen(printed) + 1;
-    char* copy = static_cast<char*>(malloc(n));
+    char* copy = static_cast<char*>(malloc(len + 1));
     if (!copy) {
-        cJSON_free(printed);
         return;
     }
-    memcpy(copy, printed, n);
-    cJSON_free(printed);
+    memcpy(copy, frame, len + 1);
     enqueue_line(copy);
 }
 

@@ -9,6 +9,7 @@
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
+#include "io_delivery.hpp"
 #include "json_util.hpp"
 #include "memory_budget.hpp"
 #include "state_registry.hpp"
@@ -271,6 +272,11 @@ bool validate_spec(cJSON* spec, cJSON* existing, bool is_add, char* err, size_t 
     cJSON_DeleteItemFromObjectCaseSensitive(spec, "bus");
     cJSON_AddStringToObject(spec, "bus", busbuf);
 
+    bool reliable = false;
+    if (!io_delivery_parse(json_str(spec, "delivery", ""), ops->reliable_default, &reliable)) {
+        return fail(err, err_len, "delivery must be reliable or latest");
+    }
+
     cJSON* pins = cJSON_GetObjectItemCaseSensitive(spec, "pins");
     if (!cJSON_IsObject(pins)) {
         return fail(err, err_len, "pins object required");
@@ -378,6 +384,9 @@ cJSON* normalize_copy(cJSON* spec, const ModuleTypeOps* ops) {
     cJSON_AddStringToObject(copy, "type", ops->type);
     cJSON_AddStringToObject(copy, "bus", json_str(spec, "bus", ops->default_bus));
     cJSON_AddBoolToObject(copy, "enabled", json_bool(spec, "enabled", true));
+    bool reliable = ops->reliable_default;
+    io_delivery_parse(json_str(spec, "delivery", ""), ops->reliable_default, &reliable);
+    cJSON_AddStringToObject(copy, "delivery", io_delivery_name(reliable));
     cJSON* pins_in = cJSON_GetObjectItemCaseSensitive(spec, "pins");
     cJSON* pins = cJSON_AddObjectToObject(copy, "pins");
     for (int i = 0; i < ops->pin_count; ++i) {
@@ -413,15 +422,21 @@ esp_err_t apply_one(cJSON* inst, char* err, size_t err_len) {
         return ESP_ERR_NOT_FOUND;
     }
     if (!json_bool(inst, "enabled", true)) {
+        io_delivery_clear_module(json_str(inst, "id", ""));
         if (ops->teardown) {
             ops->teardown(json_str(inst, "id", ""));
         }
         return ESP_OK;
     }
+    // Instances saved before "delivery" existed fall back to the type default.
+    bool reliable = ops->reliable_default;
+    io_delivery_parse(json_str(inst, "delivery", ""), ops->reliable_default, &reliable);
+    io_delivery_set_module(json_str(inst, "id", ""), reliable);  // apply publishes the first state
     return ops->apply(inst, err, err_len);
 }
 
 esp_err_t teardown_one(cJSON* inst) {
+    io_delivery_clear_module(json_str(inst, "id", ""));
     const ModuleTypeOps* ops = find_type(json_str(inst, "type", ""));
     if (ops && ops->teardown) {
         return ops->teardown(json_str(inst, "id", ""));
@@ -484,6 +499,7 @@ cJSON* module_catalog_json() {
         cJSON_AddStringToObject(o, "default_bus", ops->default_bus ? ops->default_bus : "");
         cJSON_AddStringToObject(o, "id_prefix", ops->id_prefix ? ops->id_prefix : "mod");
         cJSON_AddNumberToObject(o, "max_instances", ops->max_instances);
+        cJSON_AddStringToObject(o, "delivery", io_delivery_name(ops->reliable_default));
         cJSON* pins = cJSON_AddArrayToObject(o, "pins");
         for (int p = 0; p < ops->pin_count; ++p) {
             cJSON* pr = cJSON_CreateObject();
@@ -608,6 +624,9 @@ esp_err_t module_configure(cJSON* spec, char* err, size_t err_len) {
     }
     if (!cJSON_GetObjectItemCaseSensitive(spec, "bus")) {
         cJSON_AddStringToObject(spec, "bus", json_str(existing, "bus", ""));
+    }
+    if (!cJSON_GetObjectItemCaseSensitive(spec, "delivery") && json_str(existing, "delivery", "")[0]) {
+        cJSON_AddStringToObject(spec, "delivery", json_str(existing, "delivery", ""));
     }
     if (!cJSON_GetObjectItemCaseSensitive(spec, "pins")) {
         cJSON* pins = cJSON_GetObjectItemCaseSensitive(existing, "pins");

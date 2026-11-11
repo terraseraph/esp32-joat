@@ -17,7 +17,6 @@ const EMPTY: DiscoveryState = {
   subnets: [],
   results: [],
   ignored: [],
-  networkScan: true,
 };
 
 function asApiError(e: unknown): ApiError {

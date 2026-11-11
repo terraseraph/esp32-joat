@@ -32,7 +32,16 @@ struct BootMark {
 struct TaskMark {
     char name[16];
     uint32_t stack_min;
+    int cpu_x10;  // share of one core over the last window, in tenths of a percent; -1 = unknown
 };
+
+// Run-time counters from the previous refresh, matched by task number, for CPU deltas.
+struct TaskRun {
+    UBaseType_t number;
+    uint32_t counter;
+};
+
+constexpr int kQuery = 40;
 
 BootMark s_boot[kMaxBoot];
 int s_boot_n;
@@ -41,6 +50,12 @@ TaskMark s_tasks[kMaxTasks];
 int s_task_n;
 bool s_tasks_truncated;
 int64_t s_tasks_us;
+
+TaskRun s_prev_run[kQuery];
+int s_prev_n;
+uint32_t s_prev_total;
+int s_core_load_x10[portNUM_PROCESSORS];  // -1 until two samples exist
+int64_t s_cpu_window_us;
 
 volatile bool s_alloc_failed;
 volatile size_t s_alloc_failed_size;
@@ -101,15 +116,53 @@ void refresh_tasks() {
     if (s_tasks_us != 0 && (now - s_tasks_us) < 5000000) {
         return;
     }
+    const int64_t window_us = s_tasks_us != 0 ? now - s_tasks_us : 0;
     s_tasks_us = now;
     // uxTaskGetSystemState fills the array only when it is large enough for every task.
-    constexpr int kQuery = 40;
     static TaskStatus_t status[kQuery];
-    UBaseType_t n = uxTaskGetSystemState(status, kQuery, nullptr);
+    configRUN_TIME_COUNTER_TYPE total_raw = 0;
+    UBaseType_t n = uxTaskGetSystemState(status, kQuery, &total_raw);
     if (n == 0) {
         s_tasks_truncated = true;
         s_task_n = 0;
         return;
+    }
+    // CPU share needs two samples. The 32-bit counter wraps after ~71 min, so a longer gap
+    // between reads gives no figure for that window rather than a wrong one.
+#if configGENERATE_RUN_TIME_STATS
+    const uint32_t total = static_cast<uint32_t>(total_raw);
+    const uint32_t dt = total - s_prev_total;
+    const bool have_cpu = s_prev_n > 0 && dt > 0 && window_us < 3600LL * 1000000LL;
+    s_cpu_window_us = have_cpu ? window_us : 0;
+#else
+    const uint32_t dt = 1;
+    const bool have_cpu = false;
+    (void)total_raw;
+    (void)window_us;
+#endif
+    auto cpu_x10 = [&](const TaskStatus_t& t) -> int {
+        if (!have_cpu) {
+            return -1;
+        }
+        for (int j = 0; j < s_prev_n; j++) {
+            if (s_prev_run[j].number == t.xTaskNumber) {
+                const uint32_t ran = static_cast<uint32_t>(t.ulRunTimeCounter) - s_prev_run[j].counter;
+                const uint64_t x10 = static_cast<uint64_t>(ran) * 1000U / dt;
+                return x10 > 1000 ? 1000 : static_cast<int>(x10);
+            }
+        }
+        return -1;  // task started inside this window
+    };
+    for (int c = 0; c < portNUM_PROCESSORS; c++) {
+        s_core_load_x10[c] = -1;
+        const TaskHandle_t idle = xTaskGetIdleTaskHandleForCore(c);
+        for (UBaseType_t i = 0; i < n; i++) {
+            if (status[i].xHandle == idle) {
+                const int idle_x10 = cpu_x10(status[i]);
+                s_core_load_x10[c] = idle_x10 < 0 ? -1 : 1000 - idle_x10;
+                break;
+            }
+        }
     }
     s_tasks_truncated = n > kMaxTasks;
     if (n > kMaxTasks) {
@@ -120,6 +173,23 @@ void refresh_tasks() {
         snprintf(s_tasks[i].name, sizeof(s_tasks[i].name), "%s",
                  status[i].pcTaskName ? status[i].pcTaskName : "?");
         s_tasks[i].stack_min = status[i].usStackHighWaterMark;
+        s_tasks[i].cpu_x10 = cpu_x10(status[i]);
+    }
+#if configGENERATE_RUN_TIME_STATS
+    s_prev_n = static_cast<int>(n < static_cast<UBaseType_t>(kQuery) ? n : kQuery);
+    for (int i = 0; i < s_prev_n; i++) {
+        s_prev_run[i].number = status[i].xTaskNumber;
+        s_prev_run[i].counter = static_cast<uint32_t>(status[i].ulRunTimeCounter);
+    }
+    s_prev_total = total;
+#endif
+}
+
+void add_pct(cJSON* o, const char* key, int x10) {
+    if (x10 < 0) {
+        cJSON_AddNullToObject(o, key);
+    } else {
+        cJSON_AddNumberToObject(o, key, x10 / 10.0);
     }
 }
 
@@ -204,13 +274,32 @@ cJSON* memory_status_json() {
         cJSON* row = cJSON_CreateObject();
         cJSON_AddStringToObject(row, "name", s_tasks[i].name);
         cJSON_AddNumberToObject(row, "stack_min", static_cast<double>(s_tasks[i].stack_min));
+        add_pct(row, "cpu", s_tasks[i].cpu_x10);
         cJSON_AddItemToArray(tasks, row);
     }
     cJSON_AddBoolToObject(o, "tasks_truncated", s_tasks_truncated);
     return o;
 }
 
+cJSON* cpu_status_json() {
+    refresh_tasks();
+    cJSON* o = cJSON_CreateObject();
+    cJSON* load = cJSON_AddArrayToObject(o, "load");
+    for (int c = 0; c < portNUM_PROCESSORS; c++) {
+        if (s_core_load_x10[c] < 0) {
+            cJSON_AddItemToArray(load, cJSON_CreateNull());
+        } else {
+            cJSON_AddItemToArray(load, cJSON_CreateNumber(s_core_load_x10[c] / 10.0));
+        }
+    }
+    cJSON_AddNumberToObject(o, "window_s", static_cast<double>(s_cpu_window_us / 1000000));
+    return o;
+}
+
 void memory_hooks_init() {
+    for (int c = 0; c < portNUM_PROCESSORS; c++) {
+        s_core_load_x10[c] = -1;
+    }
     heap_caps_register_failed_alloc_callback(alloc_failed_cb);
 }
 

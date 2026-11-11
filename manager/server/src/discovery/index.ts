@@ -118,12 +118,7 @@ export interface DiscoveryDeps {
   hub: BrowserHub;
   log?: (msg: string) => void;
   config?: DiscoveryConfig;
-  /** false = --no-network-scan: mDNS and subnet sweeps never run, whatever a scan or `waitForDevice` asks (default true). */
-  networkScan?: boolean;
 }
-
-export const NETWORK_SCAN_OFF_WARNING =
-  "Network scanning is turned off on this Manager (started with --no-network-scan). Only the addresses you entered and known devices were checked.";
 
 // ---- background timer -----------------------------------------------------------------------------------------
 
@@ -248,7 +243,6 @@ export function createDiscoveryService(deps: DiscoveryDeps): DiscoveryService {
   const { registry, health, settings, hub } = deps;
   const log = deps.log ?? (() => {});
   const cfg = deps.config ?? {};
-  const networkScan = deps.networkScan !== false;
   const mdnsFactory: MdnsFactory | null = cfg.mdns === false ? null : (cfg.mdns ?? realMdnsFactory);
   const interfaces = cfg.interfaces ?? localInterfaces;
   const sweepPort = cfg.sweepPort ?? 80;
@@ -309,7 +303,10 @@ export function createDiscoveryService(deps: DiscoveryDeps): DiscoveryService {
       ...(board ? { board } : {}),
       via: viaOf(ex),
       classification: classify(ex.id),
-      setup: SETUP_STATES.has(netState),
+      // apsta_recovery with a working STA link is a set-up board whose setup Wi-Fi is merely still on (the firmware
+      // never closes it until a restart); only ap_only, or recovery without a STA link, needs setting up.
+      setup: netState === "ap_only" || (netState === "apsta_recovery" && ex.status.network?.sta_connected !== true),
+      setupApOpen: SETUP_STATES.has(netState),
       netState,
       ...(ipChanged ? { ipChanged } : {}),
       ...(txt ? { txt } : {}),
@@ -321,7 +318,7 @@ export function createDiscoveryService(deps: DiscoveryDeps): DiscoveryService {
     [...extras.values()].map(toResult).sort((a, b) => (a.name || a.id).localeCompare(b.name || b.id) || a.id.localeCompare(b.id));
 
   function getState(): DiscoveryState {
-    return { running: job !== null, phase, probed, total, startedAt, finishedAt, warnings: [...warnings], subnets: [...subnets], results: snapshot(), ignored: registry.ignoredIds(), networkScan };
+    return { running: job !== null, phase, probed, total, startedAt, finishedAt, warnings: [...warnings], subnets: [...subnets], results: snapshot(), ignored: registry.ignoredIds() };
   }
 
   // ---- WebSocket progress (<= 4/s) --------------------------------------------------------------------------------
@@ -550,12 +547,8 @@ export function createDiscoveryService(deps: DiscoveryDeps): DiscoveryService {
     merged = new Map();
     warnings = [];
     probed = 0;
-    const askedMdns = opts.mdns ?? true;
-    const askedSweep = opts.sweep ?? true;
-    // --no-network-scan wins over the request: typed targets, settings targets and registry hosts are still probed.
-    const useMdns = networkScan && askedMdns;
-    const useSweep = networkScan && askedSweep;
-    if (!networkScan && (askedMdns || askedSweep)) warnings.push(NETWORK_SCAN_OFF_WARNING);
+    const useMdns = opts.mdns ?? true;
+    const useSweep = opts.sweep ?? true;
     // The sweep plan is known right away (the state returned by POST /api/discovery/scan already lists the subnets).
     let plan: Plan = { subnets: [], hosts: [] };
     if (useSweep) {
@@ -574,8 +567,7 @@ export function createDiscoveryService(deps: DiscoveryDeps): DiscoveryService {
     const ctrl = new AbortController();
     const j: Job = { ctrl, broadcast: !background, done: Promise.resolve() };
     job = j;
-    // With network scanning off there is no mDNS step: go straight to probing the known and typed addresses (the web treats "sweep" as that second, address-probing phase).
-    setPhase(networkScan ? "mdns" : "sweep", j);
+    setPhase("mdns", j);
     j.done = execute(j, { mdns: useMdns, sweep: useSweep }, targets, plan);
     return getState();
   }
@@ -609,7 +601,7 @@ export function createDiscoveryService(deps: DiscoveryDeps): DiscoveryService {
       await probeAll(quick, round.signal, check);
       if (found || round.signal.aborted) return found;
 
-      if (networkScan && o.mdns !== false && mdnsFactory) {
+      if (o.mdns !== false && mdnsFactory) {
         const m = await browseMdns(mdnsFactory, { windowMs: mdnsWindowMs, signal: round.signal, log });
         const fresh: Entry[] = [];
         for (const c of m.candidates.slice(0, 128)) {
@@ -620,7 +612,7 @@ export function createDiscoveryService(deps: DiscoveryDeps): DiscoveryService {
         if (found || round.signal.aborted) return found;
       }
 
-      if (networkScan && o.sweep !== false) {
+      if (o.sweep !== false) {
         let plan = { subnets: [] as string[], hosts: [] as string[] };
         try {
           plan = buildSweepPlan(interfaces(), settings.get().extraSubnets.filter((x) => { try { parseSubnet(x); return true; } catch { return false; } }));
@@ -664,12 +656,11 @@ export function createDiscoveryService(deps: DiscoveryDeps): DiscoveryService {
 
   const bgConfig = (): { enabled: boolean; periodMs: number } => {
     const b = settings.get().backgroundScan;
-    return { enabled: b.enabled && networkScan, periodMs: cfg.backgroundPeriodMs ?? b.periodMin * 60_000 };
+    return { enabled: b.enabled, periodMs: cfg.backgroundPeriodMs ?? b.periodMin * 60_000 };
   };
   const timer = createBackgroundTimer({
     getConfig: bgConfig,
     tick: () => {
-      if (!networkScan) return;
       const d = backgroundDecision({ enabled: bgConfig().enabled, running: job !== null, deviceCount: registry.list().length });
       if (d === "skip_many") log(`background scan skipped: more than ${BACKGROUND_MAX_DEVICES} devices are registered`);
       if (d !== "scan") return;

@@ -4,6 +4,8 @@ import { CircuitRunner } from "@tscircuit/eval/eval"
 
 const toIssue = (e: any) => ({ type: e.type, message: e.message ?? e.type, ...(e.stack ? { stack: e.stack } : {}) })
 
+process.on("disconnect", () => process.exit(1)) // parent died or restarted (tsx watch): stop routing
+
 process.once("message", async (msg: { name: string; fsMap: Record<string, string>; quick?: boolean }) => {
   const send = (m: unknown) => process.send?.(m)
   const start = Date.now()
@@ -34,6 +36,6 @@ process.once("message", async (msg: { name: string; fsMap: Record<string, string
       errors: [{ type: "execution_error", message: String(e?.message ?? e), stack: e?.stack }],
     }
   }
-  send({ type: "done", result })
-  setTimeout(() => process.exit(0), 50)
+  // exit only once the (possibly multi-MB) result has been flushed to the pipe
+  process.send?.({ type: "done", result }, () => process.exit(0))
 })

@@ -83,8 +83,12 @@ const WORKER = path.join(path.dirname(fileURLToPath(import.meta.url)), "build-wo
 
 const mem = new Map<string, { hash: string; mode: BuildMode; result: BuildResult }>() // last good per design
 const queues = new Map<string, Promise<unknown>>()
-type Job = { id: number; mode: BuildMode; phase: string; progress?: number; startedAt: number; child?: ChildProcess; cancelled: boolean; supersedable: boolean }
+type Job = { id: number; mode: BuildMode; phase: string; progress?: number; startedAt: number; child?: ChildProcess; cancelled: boolean; supersedable: boolean; editor?: boolean }
 const running = new Map<string, Job>()
+const children = new Set<ChildProcess>()
+const killChildren = () => { for (const c of children) c.kill() }
+process.on("exit", killChildren)
+for (const sig of ["SIGINT", "SIGTERM", "SIGBREAK"] as const) process.on(sig, () => { killChildren(); process.exit(0) })
 let jobSeq = 0
 
 /** Quick mode: placement + ratsnest only. `<board routeRemaining={false}>` skips the autorouter for unassigned connections. */
@@ -129,6 +133,8 @@ function runInWorker(name: string, fsMap: Record<string, string>, job: Job, quic
   return new Promise((resolve) => {
     const child = fork(WORKER, [], { execArgv: ["--import", "tsx"], stdio: ["ignore", "ignore", "inherit", "ipc"] })
     job.child = child
+    children.add(child)
+    child.on("exit", () => children.delete(child))
     let done = false
     const finish = (r: BuildResult | null) => { if (!done) { done = true; resolve(r) } }
     child.on("message", (m: any) => {
@@ -146,33 +152,50 @@ function runInWorker(name: string, fsMap: Record<string, string>, job: Job, quic
 }
 
 /**
- * Build a design in a child process (serialized per design). `overrides` are unsaved editor files; such builds are
- * "supersedable": a newer editor build cancels them instead of queueing behind them. Reuses the last build when the
- * inputs hash is unchanged (a full build also satisfies a quick request).
+ * Build a design in a child process (serialized per design). `overrides` are unsaved editor files. A quick editor
+ * build is superseded (killed, or skipped if still queued) by any newer editor build; a full editor build is only
+ * replaced by a newer full editor build. Reuses the last build when the inputs hash is unchanged (a full result
+ * also satisfies a quick request).
  */
+const pending = new Map<string, Set<Job>>()
 export function buildDesign(name: string, overrides?: Record<string, string>, mode: BuildMode = "full"): Promise<BuildOutcome> {
-  const supersedable = !!overrides
-  const cur = running.get(name)
-  if (cur && cur.supersedable && supersedable) cancelBuild(name)
+  const editor = !!overrides
+  const job: Job = { id: ++jobSeq, mode, phase: "queued", startedAt: Date.now(), cancelled: false, supersedable: editor && mode === "quick" }
+  const set = pending.get(name) ?? new Set<Job>()
+  pending.set(name, set)
+  if (editor) {
+    for (const old of set) {
+      if (old.cancelled) continue
+      if (old.supersedable || (old.mode === "full" && old.editor && mode === "full")) {
+        old.cancelled = true
+        old.child?.kill()
+      }
+    }
+  }
+  job.editor = editor
+  set.add(job)
+  const cancelledOutcome = (): BuildOutcome => ({ ok: false, circuitJson: [], errors: [], warnings: [], durationMs: Date.now() - job.startedAt, mode, cancelled: true })
   const prev = queues.get(name) ?? Promise.resolve()
   const next = prev.then(async (): Promise<BuildOutcome> => {
-    const fsMap = buildFsMap(name, overrides)
-    const hash = hashOf(fsMap)
-    const hit = mem.get(name) ?? readDiskBuild(name)
-    if (hit && hit.hash === hash && (hit.mode === "full" || mode === "quick")) return { ...hit.result, mode: hit.mode, cached: true }
-    const job: Job = { id: ++jobSeq, mode, phase: "starting", startedAt: Date.now(), cancelled: false, supersedable }
-    running.set(name, job)
     try {
+      if (job.cancelled) return cancelledOutcome()
+      const fsMap = buildFsMap(name, overrides)
+      const hash = hashOf(fsMap)
+      const hit = mem.get(name) ?? readDiskBuild(name)
+      if (hit && hit.hash === hash && (hit.mode === "full" || mode === "quick")) return { ...hit.result, mode: hit.mode, cached: true }
+      job.startedAt = Date.now()
+      job.phase = "starting"
+      running.set(name, job)
       const result = await runInWorker(name, mode === "quick" ? quickify(fsMap) : fsMap, job, mode === "quick")
-      if (result && mode === "quick") {
+      if (!result) return cancelledOutcome()
+      if (mode === "quick") {
         // Unrouted nets are expected without the autorouter: report them as warnings, not errors.
         const unrouted = (e: Issue) => e.type === "pcb_port_not_connected_error" || e.type === "pcb_trace_missing_error"
         result.warnings = [...result.warnings, ...result.errors.filter(unrouted)]
         result.errors = result.errors.filter((e) => !unrouted(e))
         result.ok = result.errors.length === 0
       }
-      if (!result) return { ok: false, circuitJson: [], errors: [], warnings: [], durationMs: Date.now() - job.startedAt, mode, cancelled: true }
-      if (result.circuitJson.length && result.ok) {
+      if (result.circuitJson.length) {
         const entry = { hash, mode, result }
         mem.set(name, entry)
         writeDiskBuild(name, entry)
@@ -180,6 +203,7 @@ export function buildDesign(name: string, overrides?: Record<string, string>, mo
       return { ...result, mode }
     } finally {
       if (running.get(name) === job) running.delete(name)
+      set.delete(job)
     }
   })
   queues.set(name, next.catch(() => {}))

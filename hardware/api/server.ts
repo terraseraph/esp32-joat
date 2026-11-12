@@ -79,7 +79,7 @@ app.get<{ Params: { name: string }; Querystring: { qty?: string; refresh?: strin
   const { name } = req.params
   if (!designExists(name)) return notFound(reply)
   const qty = Math.max(1, parseInt(req.query.qty ?? "10", 10) || 10)
-  const build = await buildDesign(name)
+  const build = await buildDesign(name, undefined, "quick") // placement is enough for the BOM
   if (!build.circuitJson.length) return reply.code(422).send({ error: build.errors[0]?.message ?? "build failed" })
   return computeBom(build.circuitJson, qty, req.query.refresh === "1")
 })

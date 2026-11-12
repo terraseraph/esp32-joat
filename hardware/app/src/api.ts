@@ -47,7 +47,7 @@ export const api = {
   bom: (n: string, qty: number, refresh = false) =>
     req<Bom>(`/api/designs/${enc(n)}/bom?qty=${qty}${refresh ? "&refresh=1" : ""}`),
   checks: (n: string) => req<ChecksResult & { checklist: ChecklistItem[] }>(`/api/designs/${enc(n)}/checks`),
-  patchMeta: (n: string, patch: { checklist?: ChecklistItem[]; rules?: Partial<Rules>; notes?: string; splitNotes?: boolean }) =>
+  patchMeta: (n: string, patch: { checklist?: ChecklistItem[]; rules?: Partial<Rules>; notes?: string; splitNotes?: boolean; base?: string }) =>
     req<{ text: string; meta: NonNullable<Meta> }>(`/api/designs/${enc(n)}/meta`, { method: "PATCH", body: JSON.stringify(patch) }),
   exportUrl: (n: string) => `/api/designs/${enc(n)}/export`,
   gitStatus: () => req<GitStatus>("/api/git/status"),

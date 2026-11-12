@@ -210,7 +210,7 @@ export default function Workspace({ name, onSaved }: { name: string; onSaved: ()
                 {panel === "problems" ? (
                   <Problems result={result} fatal={build.fatal} onLocate={locate} />
                 ) : panel === "review" ? (
-                  <Review name={name} checklist={boardMeta?.checklist ?? []} notes={boardMeta?.notes ?? ""} rules={boardMeta?.rules} onMetaSaved={onMetaSaved} />
+                  <Review name={name} checklist={boardMeta?.checklist ?? []} notes={boardMeta?.notes ?? ""} rules={boardMeta?.rules} baseText={files["board.json"]} onMetaSaved={onMetaSaved} />
                 ) : (
                   <Bom name={name} version={bomVersion} dirty={dirty} />
                 )}

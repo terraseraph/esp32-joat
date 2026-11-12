@@ -82,13 +82,13 @@ app.get<{ Params: { name: string } }>("/api/designs/:name/checks", async (req, r
 })
 
 // Patch board.json: { checklist?, rules?, notes?, splitNotes? } (other keys are preserved).
-app.patch<{ Params: { name: string }; Body: { checklist?: unknown; rules?: unknown; notes?: string; splitNotes?: boolean } }>(
+app.patch<{ Params: { name: string }; Body: { checklist?: unknown; rules?: unknown; notes?: string; splitNotes?: boolean; base?: string } }>(
   "/api/designs/:name/meta",
   async (req, reply) => {
     const { name } = req.params
     if (!designExists(name)) return notFound(reply)
     const b = req.body ?? {}
-    return patchBoardJson(name, { checklist: b.checklist, rules: b.rules, notes: b.notes, splitNotes: b.splitNotes })
+    return patchBoardJson(name, { checklist: b.checklist, rules: b.rules, notes: b.notes, splitNotes: b.splitNotes, base: b.base })
   },
 )
 

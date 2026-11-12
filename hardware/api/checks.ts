@@ -238,8 +238,9 @@ function fromElement(e: any, source: CheckIssue["source"], ctx: Ctx, severity: "
 // ---- custom rules -----------------------------------------------------------------
 
 /** IPC-2221 external-layer minimum trace width (mm) for `amps` at a 10 C rise. */
-export function widthForCurrent(amps: number, oz: number, riseC = 10): number {
-  const areaMil2 = Math.pow(amps / (0.048 * Math.pow(riseC, 0.44)), 1 / 0.725)
+export function widthForCurrent(amps: number, oz: number, layer = "top", riseC = 10): number {
+  const k = /^(top|bottom)$/.test(layer) ? 0.048 : 0.024 // IPC-2221: inner layers dissipate heat worse
+  const areaMil2 = Math.pow(amps / (k * Math.pow(riseC, 0.44)), 1 / 0.725)
   const thicknessMil = 1.378 * oz
   return (areaMil2 / thicknessMil) * 0.0254
 }
@@ -260,52 +261,65 @@ function checkTraceCurrent(cj: any[], ctx: Ctx, rules: Rules): CheckIssue[] {
   const { portKey, keyToNet } = netKeyIndex(cj)
   const nameToKey = new Map<string, string>()
   for (const [k, n] of keyToNet) nameToKey.set(n.name, k)
-  const perNet = new Map<string, { min: number; at: any; length: number; count: number }>()
-  for (const t of cj) {
-    if (t.type !== "pcb_trace") continue
-    let key: string | undefined
+  const netById = new Map<string, any>()
+  for (const n of cj) if (n.type === "source_net") netById.set(n.source_net_id, n)
+
+  /** Net of a pcb_trace: autorouter ports, hand-drawn traces via source_trace, or connection_name. */
+  const netOf = (t: any): any => {
     for (const pid of t.connectsTo ?? []) {
       const sp = ctx.pcbPortToSource.get(pid)
-      key = sp ? portKey.get(sp) : undefined
-      if (key) break
+      const key = sp ? portKey.get(sp) : undefined
+      if (key && keyToNet.has(key)) return keyToNet.get(key)
     }
-    if (!key && keyToNet.has(t.connection_name)) key = t.connection_name
-    const net = key && keyToNet.get(key)
-    if (!net) continue
+    const st = ctx.byId.get(t.source_trace_id) ?? ctx.byId.get(t.connection_name)
+    if (st?.type === "source_trace") {
+      for (const id of st.connected_source_net_ids ?? []) if (netById.has(id)) return netById.get(id)
+      for (const id of st.connected_source_port_ids ?? []) {
+        const key = portKey.get(id)
+        if (key && keyToNet.has(key)) return keyToNet.get(key)
+      }
+    }
+    return keyToNet.get(t.connection_name) ?? netById.get(t.connection_name)
+  }
+
+  type Worst = { ratio: number; width: number; need: number; at: any; i: number }
+  const perNet = new Map<string, Worst>()
+  for (const t of cj) {
+    if (t.type !== "pcb_trace") continue
+    const net = netOf(t)
+    const amps = net && rules.netCurrents[net.name]
+    if (!amps) continue
     for (const [i, p] of (t.route ?? []).entries()) {
       if (p.route_type !== "wire" || typeof p.width !== "number") continue
-      const cur = perNet.get(net.name) ?? { min: Infinity, at: null, length: 0, count: 0 }
-      cur.count++
-      if (p.width < cur.min) { cur.min = p.width; cur.at = { route: t.route, i } }
-      perNet.set(net.name, cur)
+      const need = widthForCurrent(amps, rules.copperOz, p.layer)
+      const cur = perNet.get(net.name)
+      if (!cur || p.width / need < cur.ratio) perNet.set(net.name, { ratio: p.width / need, width: p.width, need, at: t.route, i })
     }
   }
-  const poured = new Set(cj.filter((e) => e.type === "pcb_copper_pour").map((p) => ctx.byId.get(p.source_net_id)?.name).filter(Boolean))
+  const pouredNets = new Set(cj.filter((e) => e.type === "pcb_copper_pour").map((p) => ctx.byId.get(p.source_net_id)?.name).filter(Boolean))
   for (const [net, amps] of entries) {
-    const need = widthForCurrent(amps, rules.copperOz)
     const seen = perNet.get(net)
     const key = nameToKey.get(net)
     if (!seen) {
       out.push({
-        id: `custom-current-${net}-none`, severity: "info", source: "custom", rule: "trace-current",
+        id: `custom-current-${net}-none`, severity: "warning", source: "custom", rule: "trace-current",
         title: `Net ${net}: no traces found to check`,
-        message: `Net "${net}" is tagged ${amps} A but has no routed traces in this build${key ? " (it may be a copper pour or fully unrouted)" : " (no net with that name exists)"}.`,
-        why: "A current tag on a net that does not exist or carries no traces cannot be verified, so a typo here silently skips the check.",
-        fix: key ? "Confirm the net is carried by a pour or wide polygon." : "Check the net name in Design rules matches the schematic exactly.",
+        message: `Net "${net}" is tagged ${amps} A but no trace on it was found in this build${key ? (pouredNets.has(net) ? " (it has a copper pour, which this check does not size)" : " (it may be fully unrouted or carried by pours)") : " (no net with that name exists)"}.`,
+        why: "A current requirement that cannot be matched to copper is not being verified, so a typo or an unrouted high-current net passes silently.",
+        fix: key ? "Route the net with wide traces or check the pour carries the current." : "Check the net name in Design rules matches the schematic exactly.",
         refs: [net],
       })
       continue
     }
-    if (seen.min + 1e-6 >= need) continue
-    const a = seen.at
-    const p = a.route[a.i]
-    const near = routeBox(a.route.slice(Math.max(0, a.i - 1), a.i + 2))
+    if (seen.ratio >= 1 - 1e-6) continue
+    const p = seen.at[seen.i]
+    const near = routeBox(seen.at.slice(Math.max(0, seen.i - 1), seen.i + 2))
     out.push({
-      id: `custom-current-${net}`, severity: seen.min < need * 0.5 ? "error" : "warning", source: "custom", rule: "trace-current",
+      id: `custom-current-${net}`, severity: seen.ratio < 0.5 ? "error" : "warning", source: "custom", rule: "trace-current",
       title: `Net ${net}: trace too thin for ${amps} A`,
-      message: `Narrowest trace on "${net}" is ${seen.min.toFixed(2)} mm; ${amps} A on ${rules.copperOz} oz copper needs about ${need.toFixed(2)} mm (IPC-2221, 10 °C rise${poured.has(net) ? "; this net also has a copper pour, so check the pour carries the current" : ""}).`,
+      message: `Narrowest trace on "${net}" is ${seen.width.toFixed(2)} mm on ${p.layer}; ${amps} A on ${rules.copperOz} oz copper needs about ${seen.need.toFixed(2)} mm there (IPC-2221, 10 °C rise${pouredNets.has(net) ? "; this net also has a copper pour, so check the pour carries the current" : ""}).`,
       why: "A trace carrying more current than its width allows heats up, drops voltage, and in the worst case burns open or lifts off the board.",
-      fix: `Widen the traces on ${net} to at least ${need.toFixed(1)} mm (traceWidth prop on <trace>), use a copper pour, or add parallel traces on the other layer.`,
+      fix: `Widen the traces on ${net} to at least ${seen.need.toFixed(1)} mm (traceWidth prop on <trace>), use a copper pour, or add parallel traces on another layer.`,
       refs: [net],
       where: { view: "pcb", ...(near ?? box(p.x, p.y, 2, 2)), layer: p.layer },
     })
@@ -320,7 +334,11 @@ function checkMinTrace(cj: any[], ctx: Ctx, rules: Rules): CheckIssue[] {
     if (t.type !== "pcb_trace") continue
     const thin = (t.route ?? []).find((p: any) => p.route_type === "wire" && typeof p.width === "number" && p.width + 1e-6 < rules.minTrace)
     if (!thin) continue
-    if (n++ >= 20) break
+    if (n++ >= 20) {
+      const total = cj.filter((e) => e.type === "pcb_trace" && (e.route ?? []).some((q: any) => q.route_type === "wire" && typeof q.width === "number" && q.width + 1e-6 < rules.minTrace)).length
+      out.push({ id: "custom-mintrace-more", severity: "info", source: "custom", rule: "min-trace", title: "More thin traces not listed", message: `${total} traces are thinner than ${rules.minTrace} mm; only the first 20 are listed.`, why: "The list is capped so it stays readable.", fix: "Fix these, rebuild, and the rest will show." })
+      break
+    }
     out.push({
       id: `custom-mintrace-${t.pcb_trace_id}`, severity: "warning", source: "custom", rule: "min-trace",
       title: "Trace thinner than your minimum",
@@ -333,7 +351,8 @@ function checkMinTrace(cj: any[], ctx: Ctx, rules: Rules): CheckIssue[] {
   return out
 }
 
-const isEsp32 = (sc: any) => sc && /esp32/i.test(`${sc.name ?? ""} ${sc.manufacturer_part_number ?? ""} ${sc.display_value ?? ""}`)
+// only modules with an on-board antenna (WROOM/WROVER/MINI), not bare ESP32 chips
+const isEsp32 = (sc: any) => sc && /esp32.*(wroom|wrover|mini)/i.test(`${sc.manufacturer_part_number ?? ""} ${sc.name ?? ""} ${sc.display_value ?? ""}`)
 
 function pointInRing(x: number, y: number, ring: { x: number; y: number }[]) {
   let inside = false
@@ -361,22 +380,26 @@ function checkAntennaKeepout(cj: any[], ctx: Ctx): CheckIssue[] {
     if (!pc) continue
     const pads = cj.filter((e) => (e.type === "pcb_smtpad" || e.type === "pcb_plated_hole") && e.pcb_component_id === pc.pcb_component_id)
     if (!pads.length) continue
-    const hw = pc.width / 2, hh = pc.height / 2
-    const cx = pc.center.x, cy = pc.center.y
-    // the antenna end is the body edge with no pads near it
-    const gap = {
-      left: Math.min(...pads.map((p) => p.x - (cx - hw))),
-      right: Math.min(...pads.map((p) => cx + hw - p.x)),
-      bottom: Math.min(...pads.map((p) => p.y - (cy - hh))),
-      top: Math.min(...pads.map((p) => cy + hh - p.y)),
+    // pcb_component width/height cover pads only, so work from the pad extents: the antenna end of a
+    // WROOM-style module is the edge of the pad field with (almost) no pads along it, since the pin rows run
+    // down the other three sides. Coordinates are already rotated, so this holds at any pcbRotation.
+    const x0p = Math.min(...pads.map((p) => p.x)), x1p = Math.max(...pads.map((p) => p.x))
+    const y0p = Math.min(...pads.map((p) => p.y)), y1p = Math.max(...pads.map((p) => p.y))
+    const BAND = 1.0
+    const count = {
+      left: pads.filter((p) => p.x - x0p < BAND).length,
+      right: pads.filter((p) => x1p - p.x < BAND).length,
+      bottom: pads.filter((p) => p.y - y0p < BAND).length,
+      top: pads.filter((p) => y1p - p.y < BAND).length,
     }
-    const side = (Object.entries(gap).sort((a, b) => b[1] - a[1])[0][0]) as keyof typeof gap
-    const DEPTH_OUT = 15, DEPTH_IN = 6
-    const zone = { x0: cx - hw, x1: cx + hw, y0: cy - hh, y1: cy + hh }
-    if (side === "left") { zone.x0 -= DEPTH_OUT; zone.x1 = cx - hw + DEPTH_IN }
-    if (side === "right") { zone.x1 += DEPTH_OUT; zone.x0 = cx + hw - DEPTH_IN }
-    if (side === "bottom") { zone.y0 -= DEPTH_OUT; zone.y1 = cy - hh + DEPTH_IN }
-    if (side === "top") { zone.y1 += DEPTH_OUT; zone.y0 = cy + hh - DEPTH_IN }
+    const side = (Object.entries(count).sort((a, b) => a[1] - b[1])[0][0]) as keyof typeof count
+    // the module body continues ~8 mm past the last pad on that side (antenna ~6.5 mm + margin), then keep-out beyond
+    const DEPTH_OUT = 18
+    const zone = { x0: x0p, x1: x1p, y0: y0p, y1: y1p }
+    if (side === "left") zone.x0 -= DEPTH_OUT
+    if (side === "right") zone.x1 += DEPTH_OUT
+    if (side === "bottom") zone.y0 -= DEPTH_OUT
+    if (side === "top") zone.y1 += DEPTH_OUT
     const b = ctx.board
     const clipped = b ? {
       x0: Math.max(zone.x0, b.center.x - b.width / 2), x1: Math.min(zone.x1, b.center.x + b.width / 2),
@@ -388,13 +411,14 @@ function checkAntennaKeepout(cj: any[], ctx: Ctx): CheckIssue[] {
     const inZone = (x: number, y: number, m = 0) => x >= clipped.x0 - m && x <= clipped.x1 + m && y >= clipped.y0 - m && y <= clipped.y1 + m
 
     const pours = cj.filter((e) => e.type === "pcb_copper_pour")
+    const pourLayers = [...new Set(pours.map((p) => p.layer as string))] // every copper layer, inner ones included
     const covered: Record<string, number> = {}
     let samples = 0
     const N = 24
     for (let i = 0; i < N; i++) for (let j = 0; j < N; j++) {
       const x = clipped.x0 + ((i + 0.5) / N) * zw, y = clipped.y0 + ((j + 0.5) / N) * zh
       samples++
-      for (const l of ["top", "bottom"]) if (pours.some((p) => p.layer === l && pourCovers(p, x, y))) covered[l] = (covered[l] ?? 0) + 1
+      for (const l of pourLayers) if (pours.some((p) => p.layer === l && pourCovers(p, x, y))) covered[l] = (covered[l] ?? 0) + 1
     }
     for (const [layer, c] of Object.entries(covered)) {
       if (c / samples < 0.03) continue
@@ -439,7 +463,7 @@ function checkDecoupling(cj: any[], ctx: Ctx, rules: Rules): CheckIssue[] {
     const supply = keys.find((k) => !isGround(k))
     if (supply) (capsByKey.get(supply) ?? capsByKey.set(supply, []).get(supply)!).push(c)
   }
-  const SUPPLY = /^(vcc|vdd|vdda|vddio|vcca|vin|v\+|3v3|vdd3p3|vdd_?spi|avdd|dvdd|vbat|vbus|v3[_.]?3|v5|5v)\w*$/i
+  const SUPPLY = /^(vcc|vdd|vdda|vddio|vcca|vin|v\+|3v3|vdd3p3|vdd_?spi|avdd|dvdd|vbat|v3[_.]?3|v5|5v)\w*$/i
   const padOfPort = new Map<string, any>()
   for (const p of cj) if ((p.type === "pcb_smtpad" || p.type === "pcb_plated_hole") && p.pcb_port_id) padOfPort.set(p.pcb_port_id, p)
   const srcPortToPcb = new Map<string, string>()
@@ -447,7 +471,7 @@ function checkDecoupling(cj: any[], ctx: Ctx, rules: Rules): CheckIssue[] {
 
   for (const ic of cj.filter((e) => e.type === "source_component" && e.ftype === "simple_chip")) {
     const pc = ctx.pcbComponentOf.get(ic.source_component_id)
-    if (!pc) continue
+    if (!pc || /^(j|cn|p|tb|usb|x)[_\d]|conn|header|terminal/i.test(`${ic.name ?? ""}`)) continue // ICs only, not connectors
     const seenKeys = new Set<string>()
     for (const sp of portsOf.get(ic.source_component_id) ?? []) {
       const names: string[] = [sp.name, ...(sp.port_hints ?? [])].filter((s) => typeof s === "string")
@@ -498,8 +522,23 @@ const withRules = (cj: any[], rules: Rules) =>
       : e,
   )
 
+// keyed by circuit-json identity (the build cache returns the same array for unchanged inputs) + rules
+const checkCache = new WeakMap<object, Map<string, ChecksResult>>()
+
 export async function runChecks(cj: any[], metaRules: any): Promise<ChecksResult> {
   const rules = normalizeRules(metaRules)
+  const rk = JSON.stringify(rules)
+  const hit = checkCache.get(cj)?.get(rk)
+  if (hit) return hit
+  const res = await runChecksUncached(cj, rules)
+  const m = checkCache.get(cj) ?? new Map<string, ChecksResult>()
+  m.clear() // only the latest rules per build
+  m.set(rk, res)
+  checkCache.set(cj, m)
+  return res
+}
+
+async function runChecksUncached(cj: any[], rules: Rules): Promise<ChecksResult> {
   const ctx = buildCtx(cj)
   const issues: CheckIssue[] = []
   const seen = new Set<string>()
@@ -570,11 +609,21 @@ export function splitNotes(notes: string, existing: ChecklistItem[] = []): Check
   return out
 }
 
-/** Merge a patch into designs/<name>/board.json, preserving other keys. Returns the new file text. */
-export function patchBoardJson(name: string, patch: { checklist?: any; rules?: any; notes?: string; splitNotes?: boolean }): { text: string; meta: any } {
+/** Merge a patch into designs/<name>/board.json, preserving other keys. `base` is the caller's current board.json
+ *  text (e.g. the editor's unsaved copy); it is used instead of the disk text. Invalid JSON throws a 422 and nothing is written. */
+export function patchBoardJson(name: string, patch: { checklist?: any; rules?: any; notes?: string; splitNotes?: boolean; base?: string }): { text: string; meta: any } {
   const file = path.join(ROOT, "designs", name, "board.json")
   let meta: any = {}
-  try { meta = JSON.parse(fs.readFileSync(file, "utf8")) } catch {}
+  let raw: string | null = typeof patch.base === "string" ? patch.base : null
+  if (raw === null && fs.existsSync(file)) raw = fs.readFileSync(file, "utf8")
+  if (raw !== null && raw.trim()) {
+    try {
+      meta = JSON.parse(raw)
+    } catch (e: any) {
+      throw Object.assign(new Error(`board.json is not valid JSON (${e.message}); fix it before editing the checklist or rules`), { statusCode: 422 })
+    }
+    if (!meta || typeof meta !== "object" || Array.isArray(meta)) throw Object.assign(new Error("board.json must be a JSON object"), { statusCode: 422 })
+  }
   if (patch.checklist !== undefined) meta.checklist = normalizeChecklist(patch.checklist)
   if (patch.rules !== undefined) {
     const r = normalizeRules(patch.rules)

@@ -40,7 +40,7 @@ function save() {
 }
 
 // jlcsearch rate-limits bursts (429 / Cloudflare 1101), so retry with backoff.
-async function getJson(url: string, tries = 4): Promise<any> {
+export async function getJson(url: string, tries = 4): Promise<any> {
   for (let attempt = 1; ; attempt++) {
     try {
       const res = await fetch(url, { signal: AbortSignal.timeout(TIMEOUT_MS) })

@@ -6,6 +6,8 @@ import Editor from "./Editor"
 import Preview from "./Preview"
 import Problems from "./Problems"
 import Bom from "./Bom"
+import CostChip from "./CostChip"
+import ExportPanel from "./ExportPanel"
 
 function useSplit(initial: number, min: number, max: number, axis: "x" | "y", invert = false) {
   const [size, setSize] = useState(initial)
@@ -44,6 +46,8 @@ export default function Workspace({ name, onSaved }: { name: string; onSaved: ()
   const [panel, setPanel] = useState<"problems" | "bom">("problems")
   const [panelOpen, setPanelOpen] = useState(true)
   const [bomVersion, setBomVersion] = useState(0)
+  const [qty, setQty] = useState(10)
+  const [exportOpen, setExportOpen] = useState(false)
   const buildSeq = useRef(0)
   const filesRef = useRef(files)
   filesRef.current = files
@@ -121,13 +125,13 @@ export default function Workspace({ name, onSaved }: { name: string; onSaved: ()
   const warnCount = result?.warnings.length ?? 0
   const hasErrors = build.status === "error"
 
-  const doExport = () => {
-    if (dirty) toast("info", "Export uses saved files; you have unsaved edits")
-    if (hasErrors) toast("err", "Last build had errors; export may be incomplete")
-    const a = document.createElement("a")
-    a.href = api.exportUrl(name)
-    a.download = `${name}.zip`
-    a.click()
+  const doExport = () => setExportOpen(true)
+  // a swap rewrote files on disk: adopt them as both the saved and the edited text
+  const onFilesChanged = (changed: Record<string, string>) => {
+    setSaved((s) => ({ ...s, ...changed }))
+    setFiles((f) => ({ ...f, ...changed }))
+    setBomVersion((v) => v + 1)
+    onSaved()
   }
 
   return (
@@ -154,6 +158,7 @@ export default function Workspace({ name, onSaved }: { name: string; onSaved: ()
         </div>
         <div className="grow" />
         {dirty && <span className="muted small">Unsaved changes</span>}
+        <CostChip name={name} qty={qty} version={bomVersion} onOpen={() => { setPanel("bom"); setPanelOpen(true) }} />
         <button className="btn" onClick={runBuild} disabled={build.status === "building"}>Build</button>
         <button className="btn" onClick={save} disabled={!dirty}>Save</button>
         <button className="btn primary" onClick={doExport} title={hasErrors ? "Last build had errors" : "Download JLCPCB zip"}>
@@ -199,13 +204,14 @@ export default function Workspace({ name, onSaved }: { name: string; onSaved: ()
                 {panel === "problems" ? (
                   <Problems result={result} fatal={build.fatal} />
                 ) : (
-                  <Bom name={name} version={bomVersion} dirty={dirty} />
+                  <Bom name={name} version={bomVersion} dirty={dirty} qty={qty} setQty={setQty} onFilesChanged={onFilesChanged} />
                 )}
               </div>
             )}
           </section>
         </div>
       </div>
+      {exportOpen && <ExportPanel name={name} qty={qty} dirty={dirty} onClose={() => setExportOpen(false)} />}
     </div>
   )
 }

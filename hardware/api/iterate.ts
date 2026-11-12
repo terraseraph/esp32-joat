@@ -230,12 +230,14 @@ export function registerIterateRoutes(app: FastifyInstance, designExists: (n: st
     if (req.body?.files) for (const [k, v] of Object.entries(req.body.files)) if (!safeDesignPath(name, k) || typeof v !== "string") return bad(reply, `invalid file: ${k}`)
     const fa = pick(req.body?.a), fb = pick(req.body?.b)
     if (!fa || !fb) return bad(reply, "snapshot not found", 404)
-    const ra = await buildDesign(name, fa)
-    const rb = await buildDesign(name, fb)
+    // placement is all a diff needs; background builds do not cancel the editor's build or replace its cache
+    const ra = await buildDesign(name, fa, "quick", { background: true })
+    const rb = await buildDesign(name, fb, "quick", { background: true })
     if (!ra.circuitJson.length || !rb.circuitJson.length) {
       const failed = ra.circuitJson.length ? rb : ra
       return bad(reply, `build failed for ${ra.circuitJson.length ? "b" : "a"}: ${failed.errors[0]?.message ?? "no output"}`, 422)
     }
-    return diffCircuits(ra.circuitJson, rb.circuitJson)
+    // use the builds' own error lists: quick builds report unrouted nets as warnings, not errors
+    return { ...diffCircuits(ra.circuitJson, rb.circuitJson), errors: { from: ra.errors.length, to: rb.errors.length } }
   })
 }

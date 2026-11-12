@@ -155,11 +155,12 @@ function runInWorker(name: string, fsMap: Record<string, string>, job: Job, quic
  * Build a design in a child process (serialized per design). `overrides` are unsaved editor files. A quick editor
  * build is superseded (killed, or skipped if still queued) by any newer editor build; a full editor build is only
  * replaced by a newer full editor build. Reuses the last build when the inputs hash is unchanged (a full result
- * also satisfies a quick request).
+ * also satisfies a quick request). `background` builds (revision diffs) neither supersede editor builds nor
+ * replace the design's cached last build.
  */
 const pending = new Map<string, Set<Job>>()
-export function buildDesign(name: string, overrides?: Record<string, string>, mode: BuildMode = "full"): Promise<BuildOutcome> {
-  const editor = !!overrides
+export function buildDesign(name: string, overrides?: Record<string, string>, mode: BuildMode = "full", opts: { background?: boolean } = {}): Promise<BuildOutcome> {
+  const editor = !!overrides && !opts.background
   const job: Job = { id: ++jobSeq, mode, phase: "queued", startedAt: Date.now(), cancelled: false, supersedable: editor && mode === "quick" }
   const set = pending.get(name) ?? new Set<Job>()
   pending.set(name, set)
@@ -195,7 +196,7 @@ export function buildDesign(name: string, overrides?: Record<string, string>, mo
         result.errors = result.errors.filter((e) => !unrouted(e))
         result.ok = result.errors.length === 0
       }
-      if (result.circuitJson.length) {
+      if (result.circuitJson.length && !opts.background) {
         const entry = { hash, mode, result }
         mem.set(name, entry)
         writeDiskBuild(name, entry)

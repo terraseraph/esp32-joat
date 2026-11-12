@@ -33,6 +33,7 @@ export default function PcbEdit({ model, fitKey, selected, netKey, editable, sna
   const [hover, setHover] = useState<string | null>(null)
   const drag = useRef<null | { kind: "comp" | "net" | "pan"; comp?: string; key?: string; port?: string; sx: number; sy: number; vx: number; vy: number; moved: boolean; ox?: number; oy?: number }>(null)
   const fitted = useRef("")
+  const userView = useRef(false) // set once the user pans or zooms; until then the view keeps fitting the board
   const viewRef = useRef(view)
   viewRef.current = view
 
@@ -51,8 +52,10 @@ export default function PcbEdit({ model, fitKey, selected, netKey, editable, sna
     setView({ cx: b.cx, cy: b.cy, s: Math.max(0.5, s) })
   }
   useEffect(() => {
-    if (size.w && size.h && fitted.current !== fitKey) { fitted.current = fitKey; fit() }
-  }, [size.w, size.h, fitKey]) // eslint-disable-line react-hooks/exhaustive-deps
+    if (!size.w || !size.h) return
+    if (fitted.current !== fitKey) { fitted.current = fitKey; userView.current = false }
+    if (!userView.current) fit() // the first size can be a transient one while the layout settles
+  }, [size.w, size.h, fitKey, model.board.w, model.board.h]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // a fresh build replaces the temporary "moved" preview
   useEffect(() => setPending({}), [model])
@@ -72,6 +75,7 @@ export default function PcbEdit({ model, fitKey, selected, netKey, editable, sna
       const before = toWorld(e.clientX, e.clientY)
       const s = Math.min(400, Math.max(0.5, v.s * Math.exp(-e.deltaY * 0.0015)))
       const r = el.getBoundingClientRect()
+      userView.current = true
       setView({ s, cx: before.x - (e.clientX - r.left - r.width / 2) / s, cy: before.y + (e.clientY - r.top - r.height / 2) / s })
     }
     el.addEventListener("wheel", wheel, { passive: false })
@@ -123,6 +127,7 @@ export default function PcbEdit({ model, fitKey, selected, netKey, editable, sna
     if (!d.moved) return
     if (d.kind === "pan" || d.kind === "net") {
       const s = viewRef.current.s
+      userView.current = true
       setView((v) => ({ ...v, cx: d.vx - (e.clientX - d.sx) / s, cy: d.vy + (e.clientY - d.sy) / s }))
     } else if (d.kind === "comp" && d.comp && editable(d.comp)) {
       const c = model.compByName.get(d.comp)!
@@ -228,7 +233,7 @@ export default function PcbEdit({ model, fitKey, selected, netKey, editable, sna
             {SNAPS.map((s) => <option key={s} value={s}>{s ? `${s} mm` : "off"}</option>)}
           </select>
         </label>
-        <button className="btn" onClick={fit}>Fit</button>
+        <button className="btn" onClick={() => { userView.current = false; fit() }}>Fit</button>
       </div>
       <div className="pcbedit-hint small muted">Click part to select · drag to move · arrows nudge · R rotates · click pad/trace for net · Esc clears</div>
     </div>

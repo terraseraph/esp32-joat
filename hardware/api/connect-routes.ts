@@ -24,7 +24,7 @@ export function registerConnectRoutes(app: FastifyInstance, { designExists, notF
 
   const nets = async (name: string, circuitJson: any[] | undefined, reply: any) => {
     if (!designExists(name)) return notFound(reply)
-    const circuit = circuitJson?.length ? circuitJson : (await buildDesign(name)).circuitJson
+    const circuit = circuitJson?.length ? circuitJson : (await buildDesign(name, undefined, "quick")).circuitJson
     const idx = indexCircuit(circuit)
     return { nets: idx.nets.map((n) => ({ name: n.name, pinCount: n.pins.length, pins: n.pins.map((p) => `${p.ref}.${p.pin}`), isGround: n.isGround, isPower: n.isPower })) }
   }

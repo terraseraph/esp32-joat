@@ -337,7 +337,7 @@ export default function Workspace({ name, onSaved }: { name: string; onSaved: ()
               <span className={`dot ${build.status === "building" ? "pulse" : build.status === "ok" ? "good" : build.status === "error" ? "bad" : ""}`} />
               {build.status === "building" && <BuildProgress name={name} mode={build.mode ?? "quick"} onCancel={cancel} />}
               {build.status === "ok" && `${build.mode === "full" ? "Routed" : "Quick preview"} in ${((build.durationMs ?? 0) / 1000).toFixed(1)}s${build.cached ? " (cached)" : ""}`}
-              {build.status === "error" && (build.fatal ? `Build failed` : `${errCount} error${errCount === 1 ? "" : "s"}`)}
+              {build.status === "error" && (build.fatal ? `Build failed` : `${probErr} error${probErr === 1 ? "" : "s"}`)}
               {build.status === "idle" && "Idle"}
               {build.status === "error" && circuit && !result?.circuitJson?.length && <span className="muted"> · showing last good</span>}
             </motion.span>

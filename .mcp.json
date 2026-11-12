@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "hardware-designer": {
+      "command": "node",
+      "args": ["hardware/node_modules/tsx/dist/cli.mjs", "hardware/mcp/server.ts"],
+      "env": { "HW_API_PORT": "3101" }
+    }
+  }
+}

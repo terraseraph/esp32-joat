@@ -37,7 +37,7 @@ function useSize() {
   return { ref, ...size }
 }
 
-export default function Preview({ circuitJson, building }: { circuitJson: any[] | null; building: boolean }) {
+export default function Preview({ circuitJson, building, highlight }: { circuitJson: any[] | null; building: boolean; highlight?: { rects: any[] } | null }) {
   const [tab, setTab] = useState<Tab>(() => {
     try { return (localStorage.getItem("previewTab") as Tab) || "pcb" } catch { return "pcb" }
   })
@@ -75,7 +75,7 @@ export default function Preview({ circuitJson, building }: { circuitJson: any[] 
             >
               <ViewerBoundary resetKey={circuitJson}>
                 {w > 0 && h > 0 && tab === "schematic" && <SchematicViewer circuitJson={circuitJson as any} containerStyle={{ width: w, height: h }} />}
-                {w > 0 && h > 0 && tab === "pcb" && <PcbViewer circuitJson={circuitJson as any} height={h} />}
+                {w > 0 && h > 0 && tab === "pcb" && <PcbViewer circuitJson={circuitJson as any} height={h} debugGraphics={(highlight ?? undefined) as any} />}
                 {w > 0 && h > 0 && tab === "3d" && (
                   <div style={{ width: w, height: h }}>
                     <CadViewer circuitJson={circuitJson as any} />

@@ -6,6 +6,8 @@ import Editor from "./Editor"
 import Preview from "./Preview"
 import Problems from "./Problems"
 import Bom from "./Bom"
+import Explain, { type Highlight } from "./Explain"
+import Changes from "./Changes"
 
 function useSplit(initial: number, min: number, max: number, axis: "x" | "y", invert = false) {
   const [size, setSize] = useState(initial)
@@ -41,9 +43,10 @@ export default function Workspace({ name, onSaved }: { name: string; onSaved: ()
   const [build, setBuild] = useState<BuildState>({ status: "idle" })
   const [result, setResult] = useState<BuildResult | null>(null)
   const [circuit, setCircuit] = useState<any[] | null>(null) // last good
-  const [panel, setPanel] = useState<"problems" | "bom">("problems")
+  const [panel, setPanel] = useState<"problems" | "bom" | "explain" | "changes">("problems")
   const [panelOpen, setPanelOpen] = useState(true)
   const [bomVersion, setBomVersion] = useState(0)
+  const [highlight, setHighlight] = useState<Highlight | null>(null)
   const buildSeq = useRef(0)
   const filesRef = useRef(files)
   filesRef.current = files
@@ -168,16 +171,16 @@ export default function Workspace({ name, onSaved }: { name: string; onSaved: ()
         <div className="gutter x" onPointerDown={left.onPointerDown} />
         <div className="right">
           <section className="pane preview-pane">
-            <Preview circuitJson={circuit} building={build.status === "building"} />
+            <Preview circuitJson={circuit} building={build.status === "building"} highlight={highlight} />
           </section>
           <div className="gutter y" onPointerDown={panelOpen ? bottom.onPointerDown : undefined} />
           <section className="pane bottom" style={{ height: panelOpen ? bottom.size : 38 }}>
             <div className="tabs small">
-              {(["problems", "bom"] as const).map((t) => (
+              {(["problems", "bom", "explain", "changes"] as const).map((t) => (
                 <button key={t} className={`tab ${panel === t ? "on" : ""}`} onClick={() => { setPanel(t); setPanelOpen(true) }}>
                   {panel === t && <motion.span layoutId="bottab" className="tab-bg" transition={{ type: "spring", visualDuration: 0.2, bounce: 0 }} />}
                   <span className="tab-label">
-                    {t === "problems" ? "Problems" : "BOM & cost"}
+                    {({ problems: "Problems", bom: "BOM & cost", explain: "Explain", changes: "Describe a change" } as const)[t]}
                     {t === "problems" && (errCount > 0 || warnCount > 0) && (
                       <span className="counts">
                         {errCount > 0 && <span className="cnt bad">{errCount}</span>}
@@ -198,8 +201,12 @@ export default function Workspace({ name, onSaved }: { name: string; onSaved: ()
               <div className="panel-body">
                 {panel === "problems" ? (
                   <Problems result={result} fatal={build.fatal} />
-                ) : (
+                ) : panel === "bom" ? (
                   <Bom name={name} version={bomVersion} dirty={dirty} />
+                ) : panel === "explain" ? (
+                  <Explain name={name} version={bomVersion} onHighlight={setHighlight} />
+                ) : (
+                  <Changes name={name} onAccepted={() => location.reload()} />
                 )}
               </div>
             )}

@@ -17,3 +17,6 @@ A local Vite app plus a Fastify API (127.0.0.1:3101) that renders tscircuit boar
 3. If the board needs firmware support that does not exist (a module type, an EEPROM record format, a board profile), say so under **Gaps** in the hardware doc and in the firmware doc; if it is a real mismatch, add a line to [docs/lockstep-issues.md](../../docs/lockstep-issues.md).
 4. Keep planned-but-undesigned things under **Gaps**, marked as planned. Do not describe them as provided.
 5. Run `node tools/precheck.mjs`; it fails if a feature has no hardware doc.
+
+## Explain and Describe a change
+The bottom panel has an **Explain** tab (a generated, grouped walkthrough of the saved build; click a sentence to highlight its parts on the PCB) and a **Describe a change** tab (type a request, it is stored as pending; Claude answers through the API with a proposal, you review the diff and Accept or Reject). The same data is available to Claude through a stdio MCP server (`hardware/mcp/server.ts`, registered in the root `.mcp.json`). Endpoints and tools: [api.md](api.md). `HW_API_PORT` / `HW_APP_PORT` change the ports when several copies run.

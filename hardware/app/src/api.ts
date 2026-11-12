@@ -15,6 +15,12 @@ export type BomSummary = {
 export type Bom = { qty: number; rows: BomRow[]; summary: BomSummary }
 export type GitStatus = { branch: string; dirty: boolean; files: { status: string; path: string }[]; ahead: number }
 
+export type PartInfo = { ref: string; type: string; value: string | null; mpn: string | null; footprint: string | null; lcsc: string | null; x: number | null; y: number | null; rotation: number | null; width: number | null; height: number | null; source: { file: string; line: number } | null }
+export type Explain = { title: string; summary: string; groups: { id: string; title: string; sentences: { text: string; refs: string[] }[] }[] }
+export type DesignRequest = { id: string; text: string; createdAt: string; status: "open" | "resolved" | "dismissed"; proposalIds: string[] }
+export type ProposalDiff = { file: string; status: "add" | "modify" | "delete"; added: number; removed: number; lines: { t: " " | "+" | "-"; s: string }[] }
+export type Proposal = { id: string; summary: string; requestId: string | null; createdAt: string; status: "pending" | "accepted" | "rejected"; diffs: ProposalDiff[]; stale: string[] }
+
 async function req<T>(url: string, init?: RequestInit): Promise<T> {
   const res = await fetch(url, {
     ...init,
@@ -38,6 +44,14 @@ export const api = {
   build: (n: string, files?: Record<string, string>) => post(`/api/designs/${enc(n)}/build`, { files }) as Promise<BuildResult>,
   bom: (n: string, qty: number, refresh = false) =>
     req<Bom>(`/api/designs/${enc(n)}/bom?qty=${qty}${refresh ? "&refresh=1" : ""}`),
+  explain: (n: string) => req<Explain>(`/api/designs/${enc(n)}/explain`),
+  components: (n: string) => req<PartInfo[]>(`/api/designs/${enc(n)}/components`),
+  requests: (n: string) => req<DesignRequest[]>(`/api/designs/${enc(n)}/requests`),
+  addRequest: (n: string, text: string) => post(`/api/designs/${enc(n)}/requests`, { text }) as Promise<DesignRequest>,
+  resolveRequest: (n: string, id: string, status: "resolved" | "dismissed") => post(`/api/designs/${enc(n)}/requests/${id}/resolve`, { status }),
+  proposals: (n: string) => req<Proposal[]>(`/api/designs/${enc(n)}/proposals?status=pending`),
+  acceptProposal: (n: string, id: string, force = false) => post(`/api/designs/${enc(n)}/proposals/${id}/accept`, { force }),
+  rejectProposal: (n: string, id: string) => post(`/api/designs/${enc(n)}/proposals/${id}/reject`),
   exportUrl: (n: string) => `/api/designs/${enc(n)}/export`,
   gitStatus: () => req<GitStatus>("/api/git/status"),
   commit: (message: string) => post("/api/git/commit", { message }) as Promise<{ ok: boolean; output: string }>,

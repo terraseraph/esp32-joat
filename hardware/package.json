@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "concurrently -k -n api,app -c blue,magenta \"npm:dev:api\" \"npm:dev:app\"",
     "dev:api": "tsx watch --clear-screen=false api/server.ts",
+    "mcp": "tsx mcp/server.ts",
     "dev:app": "vite --config app/vite.config.ts"
   },
   "dependencies": {
@@ -34,7 +35,9 @@
     "@tscircuit/runframe": "^0.0.3208",
     "@tscircuit/schematic-viewer": "^2.0.110",
     "@uiw/react-codemirror": "^4.25.12",
+    "@resvg/resvg-js": "^2.6.2",
     "bpc-graph": "^0.0.67",
+    "circuit-to-svg": "^0.0.457",
     "circuit-json-to-bom-csv": "^0.0.28",
     "circuit-json-to-bpc": "^0.0.14",
     "circuit-json-to-connectivity-map": "^0.0.36",

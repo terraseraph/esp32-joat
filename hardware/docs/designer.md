@@ -52,7 +52,7 @@ Bottom panel tabs **Nets & connect** and **GPIO map**. Source: `api/connect.ts` 
 - **How an edit is written**: for a pin the tool prefers, in order, the entry in the component's `connections={{…}}`, an existing `<trace from=".REF > .PIN" to=… />` (its `to` is retargeted, so no second net is created; if it was a pin-to-pin trace the old partner pin is put on the new net with an extra trace so it stays connected), then adds `connections` (lowercase primitives) or a new `<trace>` before `</board>` (lib blocks, which may not accept `connections`).
 - **API (for Claude)**, all under `/api/designs/:name/`, JSON bodies. Edit endpoints return `{ ok, changed, how, source, written }`; without `source` in the body they edit `index.tsx` on disk, with `source` they only return the edited text (the app does this to keep unsaved edits).
   - `POST connect` `{ a:{ref,pin}, b?:{ref,pin}, net? }` puts `a` (and `b`) on `net` (`"SDA"` or `"net.SDA"`; omitted = suggested name). `ref` is the part's `name`, `pin` its port label as in the circuit JSON.
-  - `GET|POST nets` lists nets with `pinCount` and `pins` (GET builds the design; POST accepts `{ circuitJson }`).
+  - `POST nets` `{ circuitJson? }` lists nets with `pinCount` and `pins` (`GET nets` is the inspect endpoint: nets with kind and ports).
   - `POST rename-net` `{ from, to, merge? }` (response also carries `files`, every changed design file).
   - `GET|POST gpio` returns the map (`rows`, `clashes`, `nets`); `POST gpio/assign` `{ pin, net|null }` sets or clears an IO.
 ## Iterate safely (undo, autosave, snapshots, variants, diff)

@@ -29,7 +29,7 @@ export function registerConnectRoutes(app: FastifyInstance, { designExists, notF
     return { nets: idx.nets.map((n) => ({ name: n.name, pinCount: n.pins.length, pins: n.pins.map((p) => `${p.ref}.${p.pin}`), isGround: n.isGround, isPower: n.isPower })) }
   }
   // GET builds the design; POST lets the app send the circuit it already has.
-  app.get<{ Params: { name: string } }>("/api/designs/:name/nets", (req, reply) => nets(req.params.name, undefined, reply))
+  // GET /nets is served by inspect-routes (nets with kind); POST here lists nets for a circuit JSON the caller already has
   app.post<{ Params: { name: string }; Body: { circuitJson?: any[] } }>("/api/designs/:name/nets", (req, reply) => nets(req.params.name, req.body?.circuitJson, reply))
 
   type Pin = { ref?: string; pin?: string }

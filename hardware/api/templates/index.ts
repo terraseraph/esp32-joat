@@ -1,6 +1,3 @@
-import fs from "node:fs"
-import path from "node:path"
-
 export type Template = "blank" | "expansion" | "base"
 export type NewDesignOptions = {
   name: string
@@ -12,10 +9,24 @@ export type NewDesignOptions = {
   description?: string
 }
 
-export const TEMPLATES: { id: Template; label: string; blurb: string; defaultSize: [number, number]; defaultLayers: 2 | 4 }[] = [
-  { id: "blank", label: "Blank", blurb: "Empty board with one resistor to start from.", defaultSize: [50, 40], defaultLayers: 2 },
-  { id: "expansion", label: "Expansion card", blurb: "1x6 expansion header + ID EEPROM, like relay-8.", defaultSize: [60, 40], defaultLayers: 2 },
-  { id: "base", label: "Base controller", blurb: "ESP32-S3 module + 5 V to 3.3 V power.", defaultSize: [80, 60], defaultLayers: 4 },
+type Size = [number, number]
+/*
+ * Minimum board sizes, from the extents of the parts each template places plus a ~2 mm edge margin.
+ * Corner holes (M3, 4 mm inset) also need clearance from the parts nearest the corners, hence the
+ * second size.
+ *  - blank: one 0402.
+ *  - expansion: header column (6 pins, 15.2 mm tall) at x = -W/2+4, EEPROM/caps/pull-up out to
+ *    x = -W/2+23; holes at y = +-(H/2-4) must clear the header ends (H >= 28).
+ *  - base: power header + Buck3v3 block spans 24 mm from the left edge, WROOM module is 18 x 25.5 mm
+ *    on the right; the module courtyard is 19.5 x 26.5 mm, placed 3.5 mm below its origin (module y -3.5), and holes must clear its ends (H >= 40).
+ */
+export const TEMPLATES: {
+  id: Template; label: string; blurb: string; defaultSize: Size; defaultLayers: 2 | 4
+  minSize: { none: Size; "m3-corners": Size }
+}[] = [
+  { id: "blank", label: "Blank", blurb: "Empty board with one resistor to start from.", defaultSize: [50, 40], defaultLayers: 2, minSize: { none: [10, 10], "m3-corners": [14, 14] } },
+  { id: "expansion", label: "Expansion card", blurb: "1x6 expansion header + ID EEPROM, like relay-8.", defaultSize: [60, 40], defaultLayers: 2, minSize: { none: [30, 22], "m3-corners": [30, 28] } },
+  { id: "base", label: "Base controller", blurb: "ESP32-S3 module + Buck3v3 power, EN reset network.", defaultSize: [80, 60], defaultLayers: 4, minSize: { none: [50, 32], "m3-corners": [50, 40] } },
 ]
 
 export const SIZE_PRESETS = [
@@ -30,7 +41,7 @@ const HOLE_INSET = 4
 
 const num = (n: number) => String(Math.round(n * 100) / 100)
 
-function body(t: Template, lib: (n: string) => boolean): { imports: string; pre: string; inner: string } {
+function body(t: Template): { imports: string; pre: string; inner: string } {
   if (t === "expansion")
     return {
       imports: `import { ExpansionHeader } from "../../lib/expansion-header"\nimport { IdEeprom } from "../../lib/id-eeprom"\n`,
@@ -72,41 +83,24 @@ function body(t: Template, lib: (n: string) => boolean): { imports: string; pre:
 `,
     }
   if (t === "base") {
-    const hasLib = lib("esp32-s3-module")
     return {
-      imports: hasLib ? `import { Esp32S3Module } from "../../lib/esp32-s3-module"\n` : "",
-      pre: hasLib
-        ? ""
-        : `
-// lib/esp32-s3-module.tsx is not in this checkout, so a bare module symbol is used.
-// Replace with Esp32S3Module from lib once available.
-const Esp32S3Module = ({ connections, ...props }: any) => (
-  <chip
-    {...props}
-    footprint="jlcpcb:C2913202"
-    manufacturerPartNumber="ESP32-S3-WROOM-1-N16R8"
-    supplierPartNumbers={{ jlcpcb: ["C2913202"] }}
-    pinLabels={{ pin1: "GND", pin2: "3V3", pin3: "EN", pin40: "GND2", pin41: "EPAD" }}
-    pinAttributes={{ "3V3": { requiresPower: true }, GND: { requiresGround: true } }}
-    connections={{ GND: "net.GND", GND2: "net.GND", EPAD: "net.GND", "3V3": "net.V3_3", ...connections }}
-  />
-)
+      imports: `import { Esp32S3Module } from "../../lib/esp32-s3-module"
+import { Buck3v3 } from "../../lib/buck-3v3"
 `,
+      pre: "",
       inner: `      <copperpour layer="bottom" connectsTo={GND} />
 
-      {/* 5 V in, AMS1117-3.3 linear regulator (SOT-223, C6186) */}
+      {/* 5 V in -> Buck3v3 -> 3.3 V */}
       <pinheader name="J_PWR" pinCount={2} pitch="2.54mm" gender="male" pinLabels={["V5", "GND"]}
-        pcbX={-W / 2 + 5} pcbY={0} pcbRotation={90} supplierPartNumbers={{ jlcpcb: ["C2337"] }}
+        pcbX={-W / 2 + 3} pcbY={0} pcbRotation={90} supplierPartNumbers={{ jlcpcb: ["C2337"] }}
         connections={{ V5: "net.V5", GND }} />
-      <chip name="U_REG" footprint="sot223" manufacturerPartNumber="AMS1117-3.3" supplierPartNumbers={{ jlcpcb: ["C6186"] }}
-        pinLabels={{ pin1: "GND", pin2: "VOUT", pin3: "VIN" }}
-        pinAttributes={{ GND: { requiresGround: true } }}
-        pcbX={-W / 2 + 15} pcbY={0}
-        connections={{ GND, VOUT: "net.V3_3", VIN: "net.V5" }} />
-      <capacitor name="C_IN" capacitance="10uF" footprint="0805" supplierPartNumbers={{ jlcpcb: ["C15850"] }} pcbX={-W / 2 + 15} pcbY={7} connections={{ pin1: "net.V5", pin2: GND }} />
-      <capacitor name="C_OUT" capacitance="10uF" footprint="0805" supplierPartNumbers={{ jlcpcb: ["C15850"] }} pcbX={-W / 2 + 15} pcbY={-7} connections={{ pin1: "net.V3_3", pin2: GND }} />
+      <Buck3v3 vin="net.V5" vout="net.V3_3" pcbX={-W / 2 + 13} pcbY={-4} />
 
-      <Esp32S3Module name="U1" pcbX={W / 4} pcbY={0} connections={{}} />
+      <Esp32S3Module name="U_MCU" pcbX={W / 2 - 11} pcbY={-3.5} connections={{ EN: "net.EN" }} />
+
+      {/* EN: RC power-on reset */}
+      <resistor name="R_EN" resistance="10k" footprint="0603" supplierPartNumbers={{ jlcpcb: ["C25804"] }} pcbX={W / 2 - 24} pcbY={5} connections={{ pin1: "net.V3_3", pin2: "net.EN" }} />
+      <capacitor name="C_EN" capacitance="1uF" footprint="0603" supplierPartNumbers={{ jlcpcb: ["C15849"] }} pcbX={W / 2 - 24} pcbY={8} connections={{ pin1: "net.EN", pin2: GND }} />
 
       {/* add your circuit here */}
 `,
@@ -120,19 +114,22 @@ const Esp32S3Module = ({ connections, ...props }: any) => (
 }
 
 /** Generate index.tsx and board.json for a new design. Throws on bad options. */
-export function renderTemplate(o: NewDesignOptions, rootDir: string) {
+export function renderTemplate(o: NewDesignOptions) {
   const t: Template = o.template ?? "blank"
   const def = TEMPLATES.find((x) => x.id === t)
   if (!def) throw new Error(`unknown template: ${t}`)
   const w = o.width ?? def.defaultSize[0]
   const h = o.height ?? def.defaultSize[1]
-  if (!(w >= 10 && w <= 400 && h >= 10 && h <= 400)) throw new Error("width and height must be 10-400 mm")
+  const holesKey = o.holes === "m3-corners" ? "m3-corners" : "none"
+  const [minW, minH] = def.minSize[holesKey]
+  if (typeof w !== "number" || typeof h !== "number" || !(w <= 400 && h <= 400)) throw new Error("width and height must be numbers up to 400 mm")
+  if (w < minW || h < minH) throw new Error(`${def.label} needs at least ${minW}x${minH} mm${holesKey === "none" ? "" : " with mounting holes"}`)
   const layers = o.layers ?? def.defaultLayers
   if (layers !== 2 && layers !== 4) throw new Error("layers must be 2 or 4")
   const holes = o.holes ?? "none"
   if (holes !== "none" && holes !== "m3-corners") throw new Error("holes must be none or m3-corners")
 
-  const b = body(t, (n) => fs.existsSync(path.join(rootDir, "lib", `${n}.tsx`)))
+  const b = body(t)
   const hx = num(w / 2 - HOLE_INSET)
   const hy = num(h / 2 - HOLE_INSET)
   const usesGnd = b.inner.includes("GND")

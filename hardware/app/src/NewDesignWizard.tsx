@@ -1,21 +1,24 @@
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import * as Dialog from "@radix-ui/react-dialog"
 import { api, type NewDesignOptions } from "./api"
 import { useToast } from "./toast"
 
-const TEMPLATES = [
-  { id: "blank", label: "Blank", blurb: "Empty board, one resistor.", size: [50, 40], layers: 2 },
-  { id: "expansion", label: "Expansion card", blurb: "1×6 header + ID EEPROM (like relay-8).", size: [60, 40], layers: 2 },
-  { id: "base", label: "Base controller", blurb: "ESP32-S3 module + 3.3 V power.", size: [80, 60], layers: 4 },
-] as const
-const SIZES = [[50, 40], [60, 40], [80, 60], [100, 84], [120, 90]] as const
+type Size = [number, number]
+type Tpl = { id: "blank" | "expansion" | "base"; label: string; blurb: string; defaultSize: Size; defaultLayers: 2 | 4; minSize: { none: Size; "m3-corners": Size } }
+type Info = { templates: Tpl[]; sizes: { label: string; w: number; h: number }[] }
 
 export const slugify = (s: string) => s.trim().toLowerCase().replace(/[^a-z0-9_-]+/g, "-").replace(/^[-_]+|-+$/g, "")
 
 export default function NewDesignWizard({ open, onOpenChange, existing }: { open: boolean; onOpenChange: (o: boolean) => void; existing: string[] }) {
   const toast = useToast()
+  const [info, setInfo] = useState<Info | null>(null)
+  useEffect(() => {
+    fetch("/api/templates").then((r) => r.json()).then(setInfo).catch((e) => toast("err", `Could not load templates: ${e.message}`))
+  }, [toast])
+  const TEMPLATES = info?.templates ?? []
+  const SIZES = info?.sizes ?? []
   const [name, setName] = useState("")
-  const [template, setTemplate] = useState<(typeof TEMPLATES)[number]["id"]>("blank")
+  const [template, setTemplate] = useState<Tpl["id"]>("blank")
   const [size, setSize] = useState<[number, number]>([50, 40])
   const [custom, setCustom] = useState(false)
   const [layers, setLayers] = useState<2 | 4>(2)
@@ -24,13 +27,15 @@ export default function NewDesignWizard({ open, onOpenChange, existing }: { open
   const [busy, setBusy] = useState(false)
   const slug = slugify(name)
   const clash = !!slug && existing.includes(slug)
-  const sizeOk = size[0] >= 10 && size[0] <= 400 && size[1] >= 10 && size[1] <= 400
+  const min: Size = TEMPLATES.find((t) => t.id === template)?.minSize[holes] ?? [10, 10]
+  const sizeOk = size[0] >= min[0] && size[0] <= 400 && size[1] >= min[1] && size[1] <= 400
+  const tooSmall = !sizeOk && size[0] <= 400 && size[1] <= 400
 
-  const pickTemplate = (t: (typeof TEMPLATES)[number]) => {
+  const pickTemplate = (t: Tpl) => {
     setTemplate(t.id)
-    setSize([t.size[0], t.size[1]])
+    setSize([t.defaultSize[0], t.defaultSize[1]])
     setCustom(false)
-    setLayers(t.layers)
+    setLayers(t.defaultLayers)
   }
 
   const create = async () => {
@@ -71,19 +76,22 @@ export default function NewDesignWizard({ open, onOpenChange, existing }: { open
 
             <label className="field-label">Board size (mm)</label>
             <div className="seg">
-              {SIZES.map(([w, h]) => (
-                <button type="button" key={w + "x" + h} className={!custom && size[0] === w && size[1] === h ? "on" : ""} onClick={() => { setSize([w, h]); setCustom(false) }}>{w}×{h}</button>
+              {SIZES.map(({ w, h }) => (
+                <button type="button" key={w + "x" + h} disabled={w < min[0] || h < min[1]} className={!custom && size[0] === w && size[1] === h ? "on" : ""} onClick={() => { setSize([w, h]); setCustom(false) }}>{w}×{h}</button>
               ))}
               <button type="button" className={custom ? "on" : ""} onClick={() => setCustom(true)}>Custom</button>
             </div>
             {custom && (
               <div className="row" style={{ marginTop: 8 }}>
-                <input className="input" type="number" min={10} max={400} style={{ width: 80 }} value={size[0]} onChange={(e) => setSize([+e.target.value, size[1]])} aria-label="Width mm" />
+                <input className="input" type="number" min={min[0]} max={400} style={{ width: 80 }} value={size[0]} onChange={(e) => setSize([+e.target.value, size[1]])} aria-label="Width mm" />
                 <span className="muted">×</span>
-                <input className="input" type="number" min={10} max={400} style={{ width: 80 }} value={size[1]} onChange={(e) => setSize([size[0], +e.target.value])} aria-label="Height mm" />
+                <input className="input" type="number" min={min[1]} max={400} style={{ width: 80 }} value={size[1]} onChange={(e) => setSize([size[0], +e.target.value])} aria-label="Height mm" />
                 <span className="muted small">mm</span>
               </div>
             )}
+
+            <div className="small muted" style={{ marginTop: 6 }}>Minimum for this template{holes === "none" ? "" : " with holes"}: {min[0]}×{min[1]} mm</div>
+            {tooSmall && <div className="small bad-text">Too small for this template.</div>}
 
             <div className="two-col">
               <div>

@@ -115,8 +115,12 @@ export default function Workspace({ name, onSaved }: { name: string; onSaved: ()
       const mod = e.ctrlKey || e.metaKey
       const k = e.key.toLowerCase()
       if (mod && k === "s") { e.preventDefault(); save(); return }
-      if (mod && e.key === "Enter") { e.preventDefault(); runBuildRef.current(); return }
       const t = e.target as HTMLElement
+      if (mod && e.key === "Enter") {
+        // inside CodeMirror, Ctrl+Enter inserts a line; build via the toolbar/Esc then shortcut instead
+        if (t.closest(".cm-editor")) return
+        e.preventDefault(); runBuildRef.current(); return
+      }
       const typing = t.closest("input, textarea, select, .cm-editor, [contenteditable=true]")
       if (e.key === "Escape" && typing && t.closest(".cm-editor")) { (t as HTMLElement).blur(); return }
       if (typing || mod || e.altKey) return

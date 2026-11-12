@@ -2,7 +2,7 @@ import * as Dialog from "@radix-ui/react-dialog"
 
 export const SHORTCUTS: [string, string][] = [
   ["Ctrl/⌘ + S", "Save"],
-  ["Ctrl/⌘ + Enter", "Build"],
+  ["Ctrl/⌘ + Enter", "Build (outside the editor)"],
   ["1 / 2 / 3", "Schematic / PCB / 3D"],
   ["J", "Toggle bottom panel"],
   ["E", "Focus code editor"],

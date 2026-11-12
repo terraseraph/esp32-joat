@@ -38,12 +38,13 @@ app.get("/api/templates", async () => ({ templates: TEMPLATES, sizes: SIZE_PRESE
 // Create a design from a template: { name, template?, width?, height?, layers?, holes?, description? }
 app.post<{ Body: NewDesignOptions }>("/api/designs", async (req, reply) => {
   const opts = req.body ?? ({} as NewDesignOptions)
-  const name = slug(String(opts.name ?? ""))
+  if (typeof opts.name !== "string") return reply.code(400).send({ error: "name required" })
+  const name = slug(opts.name)
   if (!name || !NAME_RE.test(name)) return reply.code(400).send({ error: "invalid design name" })
   if (fs.existsSync(path.join(ROOT, "designs", name))) return reply.code(409).send({ error: `"${name}" already exists` })
   let files: Record<string, string>
   try {
-    files = renderTemplate({ ...opts, name }, ROOT)
+    files = renderTemplate({ ...opts, name })
   } catch (e: any) {
     return reply.code(400).send({ error: e.message })
   }
@@ -55,6 +56,7 @@ app.post<{ Body: NewDesignOptions }>("/api/designs", async (req, reply) => {
 app.post<{ Params: { name: string }; Body: { to?: string } }>("/api/designs/:name/duplicate", async (req, reply) => {
   const { name } = req.params
   if (!designExists(name)) return notFound(reply)
+  if (req.body?.to !== undefined && typeof req.body.to !== "string") return reply.code(400).send({ error: "to must be a string" })
   let to = slug(req.body?.to ?? "")
   if (!to) {
     to = `${name}-copy`
@@ -112,7 +114,9 @@ app.post<{ Params: { name: string }; Body: { files?: Record<string, string> } }>
   if (!designExists(name) && !files?.["index.tsx"]) return notFound(reply)
   if (files) for (const rel of Object.keys(files)) if (!safeDesignPath(name, rel)) return reply.code(400).send({ error: `invalid file: ${rel}` })
   const { ok, circuitJson, errors, warnings, durationMs } = await buildDesign(name, files)
-  if (ok && circuitJson.length) void saveThumb(name, circuitJson)
+  // thumbnails only reflect saved designs: skip builds of unsaved edits or non-existent folders
+  const onDisk = designExists(name) ? readDesignFiles(name) : null
+  if (ok && onDisk && circuitJson.length && (!files || Object.entries(files).every(([k, v]) => onDisk[k] === v))) void saveThumb(name, circuitJson)
   return { ok, circuitJson, errors, warnings, durationMs }
 })
 

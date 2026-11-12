@@ -12,6 +12,11 @@ export type BomSummary = {
   partsCostPerBoard: number; extendedTypes: number; setupFeePerType: number; setupFees: number
   setupFeesPerBoard: number; costPerBoard: number; totalAtQty: number; missingCount: number
 }
+export type SrcComponent = {
+  file: string; name: string; tag: string; props: Record<string, string | number | boolean>
+  dynamic: string[]; inLoop: boolean; line: number
+}
+export type PropValue = string | number | boolean | null
 export type Bom = { qty: number; rows: BomRow[]; summary: BomSummary }
 export type GitStatus = { branch: string; dirty: boolean; files: { status: string; path: string }[]; ahead: number }
 
@@ -38,6 +43,11 @@ export const api = {
   build: (n: string, files?: Record<string, string>) => post(`/api/designs/${enc(n)}/build`, { files }) as Promise<BuildResult>,
   bom: (n: string, qty: number, refresh = false) =>
     req<Bom>(`/api/designs/${enc(n)}/bom?qty=${qty}${refresh ? "&refresh=1" : ""}`),
+  /** Components named in the source (unsaved `files` overlay optional). */
+  components: (n: string, files?: Record<string, string>) => post(`/api/designs/${enc(n)}/components`, { files }) as Promise<SrcComponent[]>,
+  /** Rewrite props of one component in the in-memory `files`; returns the new file text (not written). */
+  patchComponent: (n: string, component: string, props: Record<string, PropValue>, files: Record<string, string>) =>
+    req<{ file: string; content: string }>(`/api/designs/${enc(n)}/components/${enc(component)}`, { method: "PATCH", body: JSON.stringify({ props, files }) }),
   exportUrl: (n: string) => `/api/designs/${enc(n)}/export`,
   gitStatus: () => req<GitStatus>("/api/git/status"),
   commit: (message: string) => post("/api/git/commit", { message }) as Promise<{ ok: boolean; output: string }>,

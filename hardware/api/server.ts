@@ -5,6 +5,7 @@ import fs from "node:fs"
 import path from "node:path"
 import { bomCsv, computeBom, cplCsv } from "./bom.js"
 import { buildDesign, NAME_RE, readDesignFiles, readMeta, ROOT, safeDesignPath } from "./build.js"
+import { EditError, listComponents, patchComponent, type PropValue } from "./source-edit.js"
 import { gitCommit, gitPush, gitStatus } from "./git.js"
 
 const app = Fastify({ logger: { level: "warn" }, bodyLimit: 20 * 1024 * 1024 })
@@ -101,6 +102,58 @@ app.get<{ Params: { name: string } }>("/api/designs/:name/export", async (req, r
   if (build.errors.length) reply.header("X-Build-Errors", String(build.errors.length))
   return reply.send(buf)
 })
+
+
+// --- source-level component editing (see source-edit.ts) ---
+/** Disk files with optional in-memory overlay (what the UI has open). */
+const withOverlay = (name: string, overlay?: Record<string, string>) => ({ ...readDesignFiles(name), ...(overlay ?? {}) })
+const tsxFiles = (files: Record<string, string>) => Object.entries(files).filter(([f]) => f.endsWith(".tsx"))
+const listAll = (files: Record<string, string>) => tsxFiles(files).flatMap(([file, src]) => listComponents(src).map((c) => ({ file, ...c })))
+
+/** Components that have a literal name="..." in the design source, with their literal props. POST takes { files? } to overlay unsaved edits. */
+app.get<{ Params: { name: string } }>("/api/designs/:name/components", async (req, reply) => {
+  if (!designExists(req.params.name)) return notFound(reply)
+  return listAll(withOverlay(req.params.name))
+})
+app.post<{ Params: { name: string }; Body: { files?: Record<string, string> } }>("/api/designs/:name/components", async (req, reply) => {
+  if (!designExists(req.params.name)) return notFound(reply)
+  return listAll(withOverlay(req.params.name, req.body?.files))
+})
+
+/**
+ * Update props of one element by name.
+ * Body: { props: {pcbX: 1.5, footprint: "0603", lcsc: "C123", resistance: null},   // null removes a prop
+ *         files?: unsaved in-memory files to patch instead of disk (nothing is written then),
+ *         file?: which file (default: the one containing it), write?: persist (default: only when no files given) }
+ * Returns { file, content, written }.
+ */
+app.patch<{ Params: { name: string; component: string }; Body: { props?: Record<string, PropValue>; files?: Record<string, string>; file?: string; write?: boolean } }>(
+  "/api/designs/:name/components/:component",
+  async (req, reply) => {
+    const { name, component } = req.params
+    const { props, files: overlay, file: wantFile, write } = req.body ?? {}
+    if (!designExists(name)) return notFound(reply)
+    if (!props || typeof props !== "object") return reply.code(400).send({ error: "props required" })
+    const files = withOverlay(name, overlay)
+    const candidates = tsxFiles(files).filter(([f, src]) => (wantFile ? f === wantFile : listComponents(src).some((c) => c.name === component)))
+    if (!candidates.length) return reply.code(404).send({ error: `no design file contains name="${component}"` })
+    if (candidates.length > 1) return reply.code(409).send({ error: `name="${component}" appears in several files: ${candidates.map((c) => c[0]).join(", ")}; pass "file"` })
+    const [file, src] = candidates[0]
+    try {
+      const content = patchComponent(src, component, props)
+      const doWrite = write ?? !overlay
+      if (doWrite) {
+        const full = safeDesignPath(name, file)
+        if (!full) return reply.code(400).send({ error: "invalid file" })
+        fs.writeFileSync(full, content)
+      }
+      return { file, content, written: doWrite }
+    } catch (e) {
+      if (e instanceof EditError) return reply.code(e.status).send({ error: e.message })
+      throw e
+    }
+  },
+)
 
 app.get("/api/git/status", async () => gitStatus())
 

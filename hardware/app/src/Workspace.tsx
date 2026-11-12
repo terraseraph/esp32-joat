@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { AnimatePresence, motion } from "motion/react"
-import { api, type BuildResult, type Design } from "./api"
+import { api, type BuildResult, type Design, type PropValue, type SrcComponent } from "./api"
+import { buildModel } from "./pcbModel"
+import Properties from "./Properties"
+import type { PcbPick } from "./PcbEdit"
 import { useToast } from "./toast"
 import Editor from "./Editor"
 import Preview from "./Preview"
@@ -52,6 +55,73 @@ export default function Workspace({ name, onSaved }: { name: string; onSaved: ()
   const bottom = useSplit(280, 120, 640, "y", true)
 
   const dirty = useMemo(() => Object.keys(files).some((k) => files[k] !== saved[k]), [files, saved])
+
+  // --- click-on-board editing: selection, source components, code toggle ---
+  const [codeOpen, setCodeOpen] = useState(() => { try { return localStorage.getItem("hw.codeOpen") === "1" } catch { return false } })
+  const toggleCode = (open: boolean) => { setCodeOpen(open); try { localStorage.setItem("hw.codeOpen", open ? "1" : "0") } catch {} }
+  const [snap, setSnapState] = useState(() => { try { return Number(localStorage.getItem("hw.snap") ?? 0.5) } catch { return 0.5 } })
+  const setSnap = (s: number) => { setSnapState(s); try { localStorage.setItem("hw.snap", String(s)) } catch {} }
+  const [selected, setSelected] = useState<string | null>(null)
+  const [netKey, setNetKey] = useState<string | null>(null)
+  const [srcComps, setSrcComps] = useState<SrcComponent[]>([])
+  const model = useMemo(() => (circuit ? buildModel(circuit) : null), [circuit])
+  const editChain = useRef<Promise<unknown>>(Promise.resolve())
+
+  useEffect(() => {
+    if (!design) return
+    const t = setTimeout(() => api.components(name, filesRef.current).then(setSrcComps).catch(() => {}), 300)
+    return () => clearTimeout(t)
+  }, [files, design, name])
+
+  const srcOf = (n: string) => srcComps.find((c) => c.name === n)
+  const isEditable = useCallback((n: string) => {
+    const s = srcComps.find((c) => c.name === n)
+    return !!s && !s.inLoop
+  }, [srcComps])
+
+  /** Rewrite the source for one component (serialised so quick edits never overwrite each other). */
+  const applyProps = useCallback((comp: string, props: Record<string, PropValue>) => {
+    editChain.current = editChain.current.then(async () => {
+      try {
+        const r = await api.patchComponent(name, comp, props, filesRef.current)
+        filesRef.current = { ...filesRef.current, [r.file]: r.content }
+        setFiles(filesRef.current)
+        if (typeof props.name === "string") setSelected(props.name)
+      } catch (e: any) {
+        toast("err", e.message)
+      }
+    })
+  }, [name, toast])
+
+  const guard = (n: string) => {
+    if (isEditable(n)) return true
+    const s = srcOf(n)
+    toast("info", s?.inLoop ? `${n} is made by a loop in the code; edit it there` : `${n} comes from a shared lib/ block, so it can't be moved from here`)
+    return false
+  }
+  const onMove = useCallback((n: string, dx: number, dy: number) => {
+    if (!guard(n)) return
+    const s = srcOf(n)!
+    const c = model?.compByName.get(n)
+    const px = typeof s.props.pcbX === "number" ? s.props.pcbX : c?.x ?? 0
+    const py = typeof s.props.pcbY === "number" ? s.props.pcbY : c?.y ?? 0
+    if (s.dynamic.includes("pcbX") || s.dynamic.includes("pcbY")) { toast("info", `${n} has a computed position; edit it in the code`); return }
+    applyProps(n, { pcbX: px + dx, pcbY: py + dy })
+  }, [srcComps, model, applyProps]) // eslint-disable-line react-hooks/exhaustive-deps
+  const onRotate = useCallback((n: string, d: number) => {
+    if (!guard(n)) return
+    const s = srcOf(n)!
+    const r = s.props.pcbRotation
+    const cur = typeof r === "number" ? r : typeof r === "string" ? parseFloat(r) || 0 : 0
+    applyProps(n, { pcbRotation: (((cur + d) % 360) + 360) % 360 })
+  }, [srcComps, applyProps]) // eslint-disable-line react-hooks/exhaustive-deps
+  const onPick = useCallback((p: PcbPick) => {
+    if (p.clear) { setSelected(null); setNetKey(null); return }
+    if (p.comp !== undefined) setSelected(p.comp)
+    if (p.key !== undefined) setNetKey(p.key)
+    else if (p.comp) setNetKey(null)
+  }, [])
+  useEffect(() => { setSelected(null); setNetKey(null) }, [name])
 
   const runBuild = useCallback(async () => {
     const id = ++buildSeq.current
@@ -154,6 +224,7 @@ export default function Workspace({ name, onSaved }: { name: string; onSaved: ()
         </div>
         <div className="grow" />
         {dirty && <span className="muted small">Unsaved changes</span>}
+        <button className={`btn ${codeOpen ? "on" : ""}`} onClick={() => toggleCode(!codeOpen)} aria-pressed={codeOpen} title="Show or hide the source code">{"</>"} Code</button>
         <button className="btn" onClick={runBuild} disabled={build.status === "building"}>Build</button>
         <button className="btn" onClick={save} disabled={!dirty}>Save</button>
         <button className="btn primary" onClick={doExport} title={hasErrors ? "Last build had errors" : "Download JLCPCB zip"}>
@@ -162,13 +233,27 @@ export default function Workspace({ name, onSaved }: { name: string; onSaved: ()
       </div>
 
       <div className="panes">
-        <section className="pane editor-pane" style={{ width: left.size }}>
-          <Editor files={files} saved={saved} active={active} setActive={setActive} onChange={(k, v) => setFiles((f) => ({ ...f, [k]: v }))} />
-        </section>
-        <div className="gutter x" onPointerDown={left.onPointerDown} />
+        {codeOpen && (
+          <>
+            <section className="pane editor-pane" style={{ width: left.size }}>
+              <Editor files={files} saved={saved} active={active} setActive={setActive} onChange={(k, v) => setFiles((f) => ({ ...f, [k]: v }))} />
+            </section>
+            <div className="gutter x" onPointerDown={left.onPointerDown} />
+          </>
+        )}
         <div className="right">
           <section className="pane preview-pane">
-            <Preview circuitJson={circuit} building={build.status === "building"} />
+            <Preview circuitJson={circuit} building={build.status === "building"}
+              canvas={model ? { model, fitKey: name, selected, netKey, editable: isEditable, snap, setSnap, onPick, onMove, onRotate } : undefined}
+              overlay={model && selected && model.compByName.get(selected) ? (
+                <Properties comp={model.compByName.get(selected)!} src={srcOf(selected)} model={model} netKey={netKey}
+                  onChange={(p) => applyProps(selected, p)} onClose={() => { setSelected(null); setNetKey(null) }}
+                  onClearNet={() => setNetKey(null)} onOpenCode={() => toggleCode(true)} />
+              ) : model && netKey ? (
+                <aside className="props"><div className="row between"><strong>Net {model.netName(netKey) ?? ""}</strong><button className="link small" onClick={() => setNetKey(null)}>clear</button></div>
+                  <div className="small muted">{model.members(netKey).length} pins</div>
+                  <div className="chips">{model.members(netKey).slice(0, 40).map((m) => <span key={m} className="chip mono">{m}</span>)}</div></aside>
+              ) : null} />
           </section>
           <div className="gutter y" onPointerDown={panelOpen ? bottom.onPointerDown : undefined} />
           <section className="pane bottom" style={{ height: panelOpen ? bottom.size : 38 }}>

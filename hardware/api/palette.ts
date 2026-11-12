@@ -294,7 +294,7 @@ export async function searchParts(q: string, limit = 20): Promise<PartHit[]> {
   const res = await fetch(url, { signal: AbortSignal.timeout(10000) })
   if (!res.ok) throw new Error(`jlcsearch ${res.status}`)
   const j: any = await res.json()
-  return (j.components ?? []).map((c: any): PartHit => {
+  const hits = (j.components ?? []).map((c: any): PartHit => {
     const breaks = parseBreaks(c.price)
     return {
       lcsc: `C${c.lcsc}`, mfr: c.mfr ?? "", package: c.package ?? "", description: c.description ?? "",
@@ -304,6 +304,12 @@ export async function searchParts(q: string, limit = 20): Promise<PartHit[]> {
       footprint: guessFootprint(c.package ?? ""),
     }
   })
+  // Parts whose package is named exactly in the query come first (so "10k 0603" doesn't lead with a 0603x4
+  // array), then Basic and Preferred parts, which carry no JLC setup fee. Stable within each group.
+  const words = new Set(q.toLowerCase().split(/\s+/).filter(Boolean))
+  const pkgMiss = (h: PartHit) => (words.size && !words.has(h.package.toLowerCase()) ? 1 : 0)
+  const rank = { basic: 0, preferred: 1, extended: 2 } as const
+  return hits.sort((a: PartHit, b: PartHit) => pkgMiss(a) - pkgMiss(b) || rank[a.tier] - rank[b.tier])
 }
 
 // ---------- routes ----------

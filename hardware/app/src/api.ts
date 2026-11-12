@@ -28,6 +28,25 @@ export type SrcComponent = {
 }
 export type PropValue = string | number | boolean | null
 export type Bom = { qty: number; rows: BomRow[]; summary: BomSummary }
+export type Cost = {
+  qty: number; partsCostPerBoard: number; extendedFeesPerBoard: number; extendedTypes: number; missingCount: number
+  partsPerBoard: number; partsTotal: number; estimatedPerBoard: number; estimatedTotal: number
+  fab: { layers: number; widthMm: number; heightMm: number; placements: number; fabTotal: number; assemblyTotal: number; fabPerBoard: number; assemblyPerBoard: number; note: string }
+}
+export type Swap = {
+  from: string; to: string; refs: string[]; kind: string; package: string
+  current: { mfr: string; unitPrice: number }; alternative: { mfr: string; unitPrice: number; basic: boolean; preferred: boolean; stock: number | null }
+  designRefs: string[]; libRefs: string[]
+  savingPerBoard: number; savingTotal: number; canApply: boolean; hint: string
+}
+export type Swaps = { qty: number; swaps: Swap[]; skipped: { lcsc: string; refs: string[]; reason: string }[] }
+export type CplPart = { ref: string; x: number; y: number; w: number; h: number; rotation: number; layer: "top" | "bottom"; pads: { x: number; y: number; w: number; h: number; round: boolean; pin1: boolean }[] }
+export type Preflight = {
+  layers: number; widthMm: number; heightMm: number; partCount: number; bomLines: number; missingLcsc: string[]; errors: number; warnings: number
+  checks: { level: "ok" | "warn" | "bad"; text: string }[]
+  board: { center: { x: number; y: number }; width: number; height: number; outline: { x: number; y: number }[] | null }
+  cpl: CplPart[]
+}
 export type GitStatus = { branch: string; dirty: boolean; files: { status: string; path: string }[]; ahead: number }
 
 export type EditResp = { ok: boolean; changed: boolean; how?: string; source: string; written: boolean; net?: string; count?: number; files?: Record<string, string>; map?: GpioMap | null }
@@ -88,6 +107,11 @@ export const api = {
   checks: (n: string) => req<ChecksResult & { checklist: ChecklistItem[] }>(`/api/designs/${enc(n)}/checks`),
   patchMeta: (n: string, patch: { checklist?: ChecklistItem[]; rules?: Partial<Rules>; notes?: string; splitNotes?: boolean; base?: string }) =>
     req<{ text: string; meta: NonNullable<Meta> }>(`/api/designs/${enc(n)}/meta`, { method: "PATCH", body: JSON.stringify(patch) }),
+  cost: (n: string, qty: number) => req<Cost>(`/api/designs/${enc(n)}/cost?qty=${qty}`),
+  swaps: (n: string, qty: number) => req<Swaps>(`/api/designs/${enc(n)}/swaps?qty=${qty}`),
+  applySwap: (n: string, from: string, to: string) =>
+    post(`/api/designs/${enc(n)}/swaps/apply`, { from, to }) as Promise<{ ok: boolean; changed: Record<string, string>; libFiles: string[] }>,
+  preflight: (n: string) => req<Preflight>(`/api/designs/${enc(n)}/preflight`),
   exportUrl: (n: string) => `/api/designs/${enc(n)}/export`,
   gitStatus: () => req<GitStatus>("/api/git/status"),
   commit: (message: string) => post("/api/git/commit", { message }) as Promise<{ ok: boolean; output: string }>,

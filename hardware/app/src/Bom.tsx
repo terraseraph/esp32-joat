@@ -2,6 +2,7 @@ import { useEffect, useState } from "react"
 import { AnimatePresence, motion } from "motion/react"
 import { api, type Bom as BomT, type BomRow } from "./api"
 import { useToast } from "./toast"
+import Swaps from "./Swaps"
 
 const QTYS = [5, 10, 30, 100]
 const usd = (n: number, d = 2) => `$${(n ?? 0).toFixed(d)}`
@@ -14,8 +15,7 @@ function Badge({ r }: { r: BomRow }) {
   return <span className="badge">-</span>
 }
 
-export default function Bom({ name, version, dirty }: { name: string; version: number; dirty: boolean }) {
-  const [qty, setQty] = useState(10)
+export default function Bom({ name, version, dirty, qty, setQty, onFilesChanged }: { name: string; version: number; dirty: boolean; qty: number; setQty: (q: number) => void; onFilesChanged: (changed: Record<string, string>) => void }) {
   const [custom, setCustom] = useState("")
   const [bom, setBom] = useState<BomT | null>(null)
   const [loading, setLoading] = useState(false)
@@ -72,6 +72,7 @@ export default function Bom({ name, version, dirty }: { name: string; version: n
               <Stat label={`Total @ ${bom.qty}`} value={usd(s.totalAtQty)} strong />
               {s.missingCount > 0 && <Stat label="Missing parts" value={String(s.missingCount)} bad />}
             </div>
+            <Swaps name={name} qty={qty} version={version} dirty={dirty} onChanged={onFilesChanged} />
             <div className="table-wrap">
               <table className="bom-table">
                 <thead>

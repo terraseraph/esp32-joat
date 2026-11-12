@@ -18,6 +18,8 @@ import Snapshots, { type ActiveDiff } from "./Snapshots"
 import DiffView from "./DiffView"
 import { useHistory } from "./useHistory"
 import Review from "./Review"
+import CostChip from "./CostChip"
+import ExportPanel from "./ExportPanel"
 
 function useSplit(initial: number, min: number, max: number, axis: "x" | "y", invert = false) {
   // clamp: innerWidth is 0 when the tab first renders in the background
@@ -70,6 +72,8 @@ export default function Workspace({ name, onSaved }: { name: string; onSaved: ()
   const connectRef = useRef<{ on: boolean; onPort: (portId: string) => void }>({ on: false, onPort: () => {} })
   const circuitIndex = useMemo(() => (circuit ? indexCircuit(circuit) : null), [circuit])
   const [focus, setFocus] = useState<{ where: NonNullable<CheckIssue["where"]>; nonce: number } | null>(null)
+  const [qty, setQty] = useState(10)
+  const [exportOpen, setExportOpen] = useState(false)
   const buildSeq = useRef(0)
   const filesRef = useRef(files)
   filesRef.current = files
@@ -312,13 +316,13 @@ export default function Workspace({ name, onSaved }: { name: string; onSaved: ()
     api.cancelBuild(name).catch(() => {})
   }
 
-  const doExport = () => {
-    if (dirty) toast("info", "Export uses saved files; you have unsaved edits")
-    if (hasErrors) toast("err", "Last build had errors; export may be incomplete")
-    const a = document.createElement("a")
-    a.href = api.exportUrl(name)
-    a.download = `${name}.zip`
-    a.click()
+  const doExport = () => setExportOpen(true)
+  // a swap rewrote files on disk: adopt them as both the saved and the edited text
+  const onFilesChanged = (changed: Record<string, string>) => {
+    setSaved((s) => ({ ...s, ...changed }))
+    setFiles((f) => ({ ...f, ...changed }))
+    setBomVersion((v) => v + 1)
+    onSaved()
   }
 
   return (
@@ -354,6 +358,7 @@ export default function Workspace({ name, onSaved }: { name: string; onSaved: ()
           <input type="checkbox" checked={autosave} onChange={toggleAutosave} /> Autosave
         </label>
         <span className="muted small" aria-live="polite">{saving ? "Saving…" : dirty ? "Unsaved changes" : "Saved"}</span>
+        <CostChip name={name} qty={qty} version={bomVersion} onOpen={() => { setPanel("bom"); setPanelOpen(true) }} />
         <button className={`btn ${codeOpen ? "on" : ""}`} onClick={() => toggleCode(!codeOpen)} aria-pressed={codeOpen} title="Show or hide the source code">{"</>"} Code</button>
         <button className="btn" onClick={() => { setPanel("history"); setPanelOpen(true) }} title="Open snapshots">Snapshots</button>
         <button className="btn" onClick={newVariant} title="Copy this design to a new revision folder">New variant</button>
@@ -429,13 +434,14 @@ export default function Workspace({ name, onSaved }: { name: string; onSaved: ()
                 ) : panel === "history" ? (
                   <Snapshots name={name} files={files} version={snapVersion} diff={diff} focus={diffFocus} onFocus={setDiffFocus} onDiff={setDiff} onRestore={onRestore} />
                 ) : (
-                  <Bom name={name} version={bomVersion} dirty={dirty} />
+                  <Bom name={name} version={bomVersion} dirty={dirty} qty={qty} setQty={setQty} onFilesChanged={onFilesChanged} />
                 )}
               </div>
             )}
           </section>
         </div>
       </div>
+      {exportOpen && <ExportPanel name={name} qty={qty} dirty={dirty} onClose={() => setExportOpen(false)} />}
     </div>
   )
 }

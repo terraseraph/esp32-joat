@@ -9,6 +9,7 @@ import { countNameRefs, EditError, listComponents, patchComponent, type PropValu
 import { registerConnectRoutes } from "./connect-routes.js"
 import { registerIterateRoutes } from "./iterate.js"
 import { patchBoardJson, runChecks } from "./checks.js"
+import { applySwap, costSummary, preflight, swapSuggestions } from "./cost.js"
 import { gitCommit, gitPush, gitStatus } from "./git.js"
 import { registerPalette } from "./palette.js"
 
@@ -115,6 +116,46 @@ app.get<{ Params: { name: string }; Querystring: { qty?: string; refresh?: strin
   const build = await buildDesign(name, undefined, "quick") // placement is enough for the BOM
   if (!build.circuitJson.length) return reply.code(422).send({ error: build.errors[0]?.message ?? "build failed" })
   return computeBom(build.circuitJson, qty, req.query.refresh === "1")
+})
+
+const qtyOf = (q?: string) => Math.max(1, parseInt(q ?? "10", 10) || 10)
+
+// Cost at a quantity: parts + extended fees (from jlcsearch) plus a rough fab/assembly estimate.
+app.get<{ Params: { name: string }; Querystring: { qty?: string } }>("/api/designs/:name/cost", async (req, reply) => {
+  const { name } = req.params
+  if (!designExists(name)) return notFound(reply)
+  const build = await buildDesign(name, undefined, "quick") // placement is enough for parts and prices
+  if (!build.circuitJson.length) return reply.code(422).send({ error: build.errors[0]?.message ?? "build failed" })
+  return costSummary(build.circuitJson, qtyOf(req.query.qty))
+})
+
+// Basic/Preferred replacements for Extended parts, with savings.
+app.get<{ Params: { name: string }; Querystring: { qty?: string } }>("/api/designs/:name/swaps", async (req, reply) => {
+  const { name } = req.params
+  if (!designExists(name)) return notFound(reply)
+  const build = await buildDesign(name, undefined, "quick") // placement is enough for parts and prices
+  if (!build.circuitJson.length) return reply.code(422).send({ error: build.errors[0]?.message ?? "build failed" })
+  return swapSuggestions(name, build.circuitJson, qtyOf(req.query.qty))
+})
+
+// Apply one swap: rewrites the LCSC number in the design's own files; lib/ files are only reported.
+app.post<{ Params: { name: string }; Body: { from?: string; to?: string } }>("/api/designs/:name/swaps/apply", async (req, reply) => {
+  const { name } = req.params
+  if (!designExists(name)) return notFound(reply)
+  const { from, to } = req.body ?? {}
+  if (!from || !to) return reply.code(400).send({ error: "from and to required" })
+  const r = applySwap(name, from, to)
+  if (!Object.keys(r.changed).length) return reply.code(409).send({ error: "LCSC number not found in the design's own files", libFiles: r.libFiles })
+  return { ok: true, ...r }
+})
+
+// Pre-export summary plus the pick-and-place data used by the rotation preview.
+app.get<{ Params: { name: string } }>("/api/designs/:name/preflight", async (req, reply) => {
+  const { name } = req.params
+  if (!designExists(name)) return notFound(reply)
+  const build = await buildDesign(name)
+  if (!build.circuitJson.length) return reply.code(422).send({ error: build.errors[0]?.message ?? "build failed" })
+  return preflight(build.circuitJson, build)
 })
 
 // Protel-style extensions, which the JLCPCB uploader recognises reliably.

@@ -88,3 +88,5 @@ After every build the API runs design-rule checks and returns them in the build 
   - `GET /api/designs/:name/swaps?qty=` – `{swaps:[{from,to,refs,savingTotal,canApply,hint,…}], skipped:[…]}`.
   - `POST /api/designs/:name/swaps/apply` body `{from,to}` – rewrites the LCSC number; returns changed files and any `libFiles` still holding it.
   - `GET /api/designs/:name/preflight` – checks plus the `cpl` array (ref, x, y, rotation, layer, pads).
+## Explain and Describe a change
+The bottom panel has an **Explain** tab (a generated, grouped walkthrough of the saved build; click a sentence to highlight its parts on the PCB) and a **Describe a change** tab (type a request, it is stored as pending; Claude answers through the API with a proposal, you review the diff and Accept or Reject). The same data is available to Claude through a stdio MCP server (`hardware/mcp/server.ts`, registered in the root `.mcp.json`). Endpoints and tools: [api.md](api.md). `HW_API_PORT` / `HW_APP_PORT` change the ports when several copies run.

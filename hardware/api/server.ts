@@ -10,6 +10,8 @@ import { registerConnectRoutes } from "./connect-routes.js"
 import { registerIterateRoutes } from "./iterate.js"
 import { patchBoardJson, runChecks } from "./checks.js"
 import { applySwap, costSummary, preflight, swapSuggestions } from "./cost.js"
+import { registerInspectRoutes } from "./inspect-routes.js"
+import { registerProposalRoutes } from "./proposals.js"
 import { gitCommit, gitPush, gitStatus } from "./git.js"
 import { registerPalette } from "./palette.js"
 
@@ -242,6 +244,8 @@ app.patch<{ Params: { name: string; component: string }; Body: { props?: Record<
   },
 )
 registerConnectRoutes(app, { designExists, notFound })
+registerInspectRoutes(app, designExists)
+registerProposalRoutes(app, designExists)
 
 app.get("/api/git/status", async () => gitStatus())
 

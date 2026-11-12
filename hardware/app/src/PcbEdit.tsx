@@ -12,7 +12,7 @@ const BOT = "#4b7fd6"
  * Interactive PCB view drawn straight from circuit JSON (the stock tscircuit PcbViewer cannot report clicks or
  * drag parts). Click a part to select it, drag to move, R rotates, click a pad or trace to highlight its net.
  */
-export default function PcbEdit({ model, fitKey, selected, netKey, editable, snap, setSnap, onPick, onMove, onRotate, stale, focus }: {
+export default function PcbEdit({ model, fitKey, selected, netKey, editable, snap, setSnap, onPick, onMove, onRotate, stale, focus, marks }: {
   model: Model
   fitKey: string
   selected: string | null
@@ -27,6 +27,8 @@ export default function PcbEdit({ model, fitKey, selected, netKey, editable, sna
   stale: boolean
   /** pan/zoom to this spot (mm) and mark it, e.g. from a Problems click; a new nonce re-triggers */
   focus?: { x: number; y: number; w: number; h: number; nonce: number } | null
+  /** boxes to outline, e.g. the parts an Explain sentence mentions */
+  marks?: { x: number; y: number; w: number; h: number }[] | null
 }) {
   const box = useRef<HTMLDivElement>(null)
   const [size, setSize] = useState({ w: 0, h: 0 })
@@ -237,6 +239,7 @@ export default function PcbEdit({ model, fitKey, selected, netKey, editable, sna
             ))}
           </g>
           {model.comps.map(compGroup)}
+          {marks?.map((m, i) => <rect key={`m${i}`} x={m.x - m.w / 2 - 0.6} y={m.y - m.h / 2 - 0.6} width={m.w + 1.2} height={m.h + 1.2} fill="rgba(255,180,0,.12)" stroke="#ffb400" strokeWidth={2} vectorEffect="non-scaling-stroke" pointerEvents="none" />)}
           {mark && <rect x={mark.x - mark.w / 2} y={mark.y - mark.h / 2} width={mark.w} height={mark.h} fill="none" stroke="#ff4d6d" strokeWidth={2.5} vectorEffect="non-scaling-stroke" strokeDasharray="6 4" pointerEvents="none" />}
         </g>
       </svg>

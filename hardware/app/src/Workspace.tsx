@@ -20,6 +20,8 @@ import { useHistory } from "./useHistory"
 import Review from "./Review"
 import CostChip from "./CostChip"
 import ExportPanel from "./ExportPanel"
+import Explain, { type Highlight } from "./Explain"
+import Changes from "./Changes"
 
 function useSplit(initial: number, min: number, max: number, axis: "x" | "y", invert = false) {
   // clamp: innerWidth is 0 when the tab first renders in the background
@@ -62,7 +64,7 @@ export default function Workspace({ name, onSaved }: { name: string; onSaved: ()
   const [build, setBuild] = useState<BuildState>({ status: "idle" })
   const [result, setResult] = useState<BuildResult | null>(null)
   const [circuit, setCircuit] = useState<any[] | null>(null) // last good
-  const [panel, setPanel] = useState<"problems" | "review" | "bom" | "nets" | "gpio" | "history">("problems")
+  const [panel, setPanel] = useState<"problems" | "review" | "bom" | "nets" | "gpio" | "history" | "explain" | "changes">("problems")
   const [panelOpen, setPanelOpen] = useState(true)
   const [bomVersion, setBomVersion] = useState(0)
   const [dropId, setDropId] = useState<{ id: string; n: number } | null>(null)
@@ -74,6 +76,9 @@ export default function Workspace({ name, onSaved }: { name: string; onSaved: ()
   const [focus, setFocus] = useState<{ where: NonNullable<CheckIssue["where"]>; nonce: number } | null>(null)
   const [qty, setQty] = useState(10)
   const [exportOpen, setExportOpen] = useState(false)
+  const [highlight, setHighlight] = useState<Highlight | null>(null)
+  // Explain highlights are drawn as markers on the interactive PCB view
+  const marks = useMemo(() => highlight?.rects.map((r) => ({ x: r.center.x, y: r.center.y, w: r.width, h: r.height })) ?? null, [highlight])
   const buildSeq = useRef(0)
   const filesRef = useRef(files)
   filesRef.current = files
@@ -385,7 +390,7 @@ export default function Workspace({ name, onSaved }: { name: string; onSaved: ()
           <section className="pane preview-pane"
             onDragOver={(e) => { if (e.dataTransfer.types.includes(PALETTE_MIME)) e.preventDefault() }}
             onDrop={(e) => { const id = e.dataTransfer.getData(PALETTE_MIME); if (id) { e.preventDefault(); setDropId({ id, n: Date.now() }) } }}>
-            {diff ? <DiffView diff={diff.result} label={diff.label} focus={diffFocus} onFocus={setDiffFocus} onClose={() => { setDiff(null); setDiffFocus(null) }} /> : <Preview circuitJson={circuit} building={build.status === "building"} focus={focus} connect={{ on: conn.on, onPort, highlightIds }}
+            {diff ? <DiffView diff={diff.result} label={diff.label} focus={diffFocus} onFocus={setDiffFocus} onClose={() => { setDiff(null); setDiffFocus(null) }} /> : <Preview circuitJson={circuit} building={build.status === "building"} focus={focus} highlight={marks} connect={{ on: conn.on, onPort, highlightIds }}
               canvas={model ? { model, fitKey: name, selected, netKey, editable: isEditable, snap, setSnap, onPick, onMove, onRotate } : undefined}
               overlay={model && selected && model.compByName.get(selected) ? (
                 <Properties comp={model.compByName.get(selected)!} src={srcOf(selected)} model={model} netKey={netKey}
@@ -400,11 +405,11 @@ export default function Workspace({ name, onSaved }: { name: string; onSaved: ()
           <div className="gutter y" onPointerDown={panelOpen ? bottom.onPointerDown : undefined} />
           <section className="pane bottom" style={{ height: panelOpen ? bottom.size : 38 }}>
             <div className="tabs small">
-              {(["problems", "review", "bom", "nets", "gpio", "history"] as const).map((t) => (
+              {(["problems", "review", "bom", "nets", "gpio", "history", "explain", "changes"] as const).map((t) => (
                 <button key={t} className={`tab ${panel === t ? "on" : ""}`} onClick={() => { setPanel(t); setPanelOpen(true) }}>
                   {panel === t && <motion.span layoutId="bottab" className="tab-bg" transition={{ type: "spring", visualDuration: 0.2, bounce: 0 }} />}
                   <span className="tab-label">
-                    {{ problems: "Problems", review: "Review", bom: "BOM & cost", nets: "Nets & connect", gpio: "GPIO map", history: "Snapshots & diff" }[t]}
+                    {{ problems: "Problems", review: "Review", bom: "BOM & cost", nets: "Nets & connect", gpio: "GPIO map", history: "Snapshots & diff", explain: "Explain", changes: "Describe a change" }[t]}
                     {t === "problems" && (probErr > 0 || probWarn > 0) && (
                       <span className="counts">
                         {probErr > 0 && <span className="cnt bad">{probErr}</span>}
@@ -433,6 +438,16 @@ export default function Workspace({ name, onSaved }: { name: string; onSaved: ()
                   <Gpio name={name} source={files["index.tsx"] ?? ""} onSource={setIndexSource} />
                 ) : panel === "history" ? (
                   <Snapshots name={name} files={files} version={snapVersion} diff={diff} focus={diffFocus} onFocus={setDiffFocus} onDiff={setDiff} onRestore={onRestore} />
+                ) : panel === "explain" ? (
+                  <Explain name={name} version={bomVersion} onHighlight={setHighlight} />
+                ) : panel === "changes" ? (
+                  <Changes name={name} dirty={dirty} onAccepted={(f) => {
+                    setSaved(f); setFiles(f); filesRef.current = f
+                    setActive((a) => (a in f ? a : f["index.tsx"] !== undefined ? "index.tsx" : Object.keys(f)[0]))
+                    setBomVersion((v) => v + 1)
+                    runBuild("quick")
+                    onSaved()
+                  }} />
                 ) : (
                   <Bom name={name} version={bomVersion} dirty={dirty} qty={qty} setQty={setQty} onFilesChanged={onFilesChanged} />
                 )}

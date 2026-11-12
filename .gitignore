@@ -22,4 +22,5 @@ tools/nodered_state.json
 nodered/**/*.tgz
 hardware/node_modules/
 hardware/.cache/
+hardware/.designer-state/
 hardware/app/dist/

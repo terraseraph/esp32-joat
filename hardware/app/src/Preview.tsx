@@ -57,7 +57,7 @@ export type PreviewConnect = { on: boolean; onPort: (schematicPortId: string) =>
 /** A spot to show: from clicking a Problems entry. */
 export type PreviewFocus = { where: Where; nonce: number }
 
-export default function Preview({ circuitJson, building, canvas, overlay, connect, focus }: { circuitJson: any[] | null; building: boolean; canvas?: Canvas; overlay?: ReactNode; connect?: PreviewConnect; focus?: PreviewFocus | null }) {
+export default function Preview({ circuitJson, building, canvas, overlay, connect, focus, highlight }: { circuitJson: any[] | null; building: boolean; canvas?: Canvas; overlay?: ReactNode; connect?: PreviewConnect; focus?: PreviewFocus | null; highlight?: { x: number; y: number; w: number; h: number }[] | null }) {
   const [tab, setTab] = useState<Tab>(() => {
     try { return (localStorage.getItem("previewTab") as Tab) || "pcb" } catch { return "pcb" }
   })
@@ -117,7 +117,7 @@ export default function Preview({ circuitJson, building, canvas, overlay, connec
                       onSchematicComponentClicked={canvas && !connect?.on ? ({ schematicComponentId }) => canvas.onPick({ comp: canvas.model.compBySchId.get(schematicComponentId)?.name ?? null }) : undefined} />
                   </div>
                 )}
-                {w > 0 && h > 0 && tab === "pcb" && (canvas ? <PcbEdit {...canvas} stale={building} focus={focus?.where.view === "pcb" ? { ...focus.where, nonce: focus.nonce } : null} /> : <PcbViewer circuitJson={pcbJson as any} height={h} />)}
+                {w > 0 && h > 0 && tab === "pcb" && (canvas ? <PcbEdit {...canvas} stale={building} focus={focus?.where.view === "pcb" ? { ...focus.where, nonce: focus.nonce } : null} marks={highlight ?? null} /> : <PcbViewer circuitJson={pcbJson as any} height={h} />)}
                 {w > 0 && h > 0 && tab === "pcbview" && <PcbViewer circuitJson={pcbJson as any} height={h} />}
                 {w > 0 && h > 0 && tab === "3d" && (
                   <div style={{ width: w, height: h }}>

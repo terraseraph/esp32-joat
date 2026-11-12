@@ -7,6 +7,7 @@ import { bomCsv, computeBom, cplCsv } from "./bom.js"
 import { buildDesign, buildStatus, cancelBuild, readDiskBuild, NAME_RE, readDesignFiles, readMeta, ROOT, safeDesignPath } from "./build.js"
 import { countNameRefs, EditError, listComponents, patchComponent, type PropValue } from "./source-edit.js"
 import { gitCommit, gitPush, gitStatus } from "./git.js"
+import { registerPalette } from "./palette.js"
 
 const app = Fastify({ logger: { level: "warn" }, bodyLimit: 20 * 1024 * 1024 })
 
@@ -182,6 +183,8 @@ app.post("/api/git/push", async (_req, reply) => {
   const r = await gitPush()
   return reply.code(r.ok ? 200 : 500).send(r)
 })
+
+registerPalette(app)
 
 app.setErrorHandler((err: any, _req, reply) => {
   reply.code(err.statusCode ?? 500).send({ error: err.message ?? String(err) })

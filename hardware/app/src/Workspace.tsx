@@ -10,6 +10,7 @@ import Preview from "./Preview"
 import Problems from "./Problems"
 import Bom from "./Bom"
 import BuildProgress from "./BuildProgress"
+import Palette, { PALETTE_MIME } from "./Palette"
 
 function useSplit(initial: number, min: number, max: number, axis: "x" | "y", invert = false) {
   // clamp: innerWidth is 0 when the tab first renders in the background
@@ -49,6 +50,8 @@ export default function Workspace({ name, onSaved }: { name: string; onSaved: ()
   const [panel, setPanel] = useState<"problems" | "bom">("problems")
   const [panelOpen, setPanelOpen] = useState(true)
   const [bomVersion, setBomVersion] = useState(0)
+  const [dropId, setDropId] = useState<{ id: string; n: number } | null>(null)
+  const knownNames = useMemo(() => (circuit ?? []).filter((e) => e.type === "source_component" && e.name).map((e) => String(e.name)), [circuit])
   const buildSeq = useRef(0)
   const filesRef = useRef(files)
   filesRef.current = files
@@ -254,6 +257,8 @@ export default function Workspace({ name, onSaved }: { name: string; onSaved: ()
       </div>
 
       <div className="panes">
+        <Palette name={name} getSource={() => filesRef.current["index.tsx"] ?? ""} knownNames={knownNames} dropId={dropId} onInsert={(src) => { setFiles((f) => ({ ...f, "index.tsx": src })); setActive("index.tsx") }} />
+        <div className="gutter x" />
         {codeOpen && (
           <>
             <section className="pane editor-pane" style={{ width: left.size }}>
@@ -263,7 +268,9 @@ export default function Workspace({ name, onSaved }: { name: string; onSaved: ()
           </>
         )}
         <div className="right">
-          <section className="pane preview-pane">
+          <section className="pane preview-pane"
+            onDragOver={(e) => { if (e.dataTransfer.types.includes(PALETTE_MIME)) e.preventDefault() }}
+            onDrop={(e) => { const id = e.dataTransfer.getData(PALETTE_MIME); if (id) { e.preventDefault(); setDropId({ id, n: Date.now() }) } }}>
             <Preview circuitJson={circuit} building={build.status === "building"}
               canvas={model ? { model, fitKey: name, selected, netKey, editable: isEditable, snap, setSnap, onPick, onMove, onRotate } : undefined}
               overlay={model && selected && model.compByName.get(selected) ? (

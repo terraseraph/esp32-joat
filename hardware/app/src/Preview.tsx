@@ -31,6 +31,7 @@ export type Canvas = {
 }
 
 type Tab = "schematic" | "pcb" | "pcbview" | "3d"
+import type { Where } from "./api"
 
 const TABS: { id: Tab; label: string }[] = [
   { id: "schematic", label: "Schematic" },
@@ -53,13 +54,22 @@ function useSize() {
 }
 
 export type PreviewConnect = { on: boolean; onPort: (schematicPortId: string) => void; highlightIds: string[] }
+/** A spot to show: from clicking a Problems entry. */
+export type PreviewFocus = { where: Where; nonce: number }
 
-export default function Preview({ circuitJson, building, canvas, overlay, connect }: { circuitJson: any[] | null; building: boolean; canvas?: Canvas; overlay?: ReactNode; connect?: PreviewConnect }) {
+export default function Preview({ circuitJson, building, canvas, overlay, connect, focus }: { circuitJson: any[] | null; building: boolean; canvas?: Canvas; overlay?: ReactNode; connect?: PreviewConnect; focus?: PreviewFocus | null }) {
   const [tab, setTab] = useState<Tab>(() => {
     try { return (localStorage.getItem("previewTab") as Tab) || "pcb" } catch { return "pcb" }
   })
   const { ref, w, h } = useSize()
   const pcbJson = useMemo(() => (circuitJson ? pcbSafe(circuitJson) : null), [circuitJson])
+  // a Problems click switches to the view the issue lives in; the interactive PCB view pans/zooms to it
+  const handled = useRef(0)
+  useEffect(() => {
+    if (!focus || focus.nonce === handled.current) return
+    handled.current = focus.nonce
+    setTab(focus.where.view === "pcb" ? "pcb" : "schematic")
+  }, [focus])
   const pick = (t: Tab) => {
     setTab(t)
     try { localStorage.setItem("previewTab", t) } catch {}
@@ -107,7 +117,7 @@ export default function Preview({ circuitJson, building, canvas, overlay, connec
                       onSchematicComponentClicked={canvas && !connect?.on ? ({ schematicComponentId }) => canvas.onPick({ comp: canvas.model.compBySchId.get(schematicComponentId)?.name ?? null }) : undefined} />
                   </div>
                 )}
-                {w > 0 && h > 0 && tab === "pcb" && (canvas ? <PcbEdit {...canvas} stale={building} /> : <PcbViewer circuitJson={pcbJson as any} height={h} />)}
+                {w > 0 && h > 0 && tab === "pcb" && (canvas ? <PcbEdit {...canvas} stale={building} focus={focus?.where.view === "pcb" ? { ...focus.where, nonce: focus.nonce } : null} /> : <PcbViewer circuitJson={pcbJson as any} height={h} />)}
                 {w > 0 && h > 0 && tab === "pcbview" && <PcbViewer circuitJson={pcbJson as any} height={h} />}
                 {w > 0 && h > 0 && tab === "3d" && (
                   <div style={{ width: w, height: h }}>

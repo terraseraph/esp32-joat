@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { AnimatePresence, motion } from "motion/react"
-import { api, iterApi, type BuildMode, type BuildResult, type BuildStatus, type Design, type PropValue, type SrcComponent } from "./api"
+import { api, iterApi, type BuildMode, type BuildResult, type BuildStatus, type CheckIssue, type Design, type Meta, type PropValue, type SrcComponent } from "./api"
 import { buildModel } from "./pcbModel"
 import Properties from "./Properties"
 import type { PcbPick } from "./PcbEdit"
@@ -17,6 +17,7 @@ import { indexCircuit } from "../../shared/nets"
 import Snapshots, { type ActiveDiff } from "./Snapshots"
 import DiffView from "./DiffView"
 import { useHistory } from "./useHistory"
+import Review from "./Review"
 
 function useSplit(initial: number, min: number, max: number, axis: "x" | "y", invert = false) {
   // clamp: innerWidth is 0 when the tab first renders in the background
@@ -59,7 +60,7 @@ export default function Workspace({ name, onSaved }: { name: string; onSaved: ()
   const [build, setBuild] = useState<BuildState>({ status: "idle" })
   const [result, setResult] = useState<BuildResult | null>(null)
   const [circuit, setCircuit] = useState<any[] | null>(null) // last good
-  const [panel, setPanel] = useState<"problems" | "bom" | "nets" | "gpio" | "history">("problems")
+  const [panel, setPanel] = useState<"problems" | "review" | "bom" | "nets" | "gpio" | "history">("problems")
   const [panelOpen, setPanelOpen] = useState(true)
   const [bomVersion, setBomVersion] = useState(0)
   const [dropId, setDropId] = useState<{ id: string; n: number } | null>(null)
@@ -68,6 +69,7 @@ export default function Workspace({ name, onSaved }: { name: string; onSaved: ()
   // read by the PCB view pick handler: in Connect mode a pad click picks that pin
   const connectRef = useRef<{ on: boolean; onPort: (portId: string) => void }>({ on: false, onPort: () => {} })
   const circuitIndex = useMemo(() => (circuit ? indexCircuit(circuit) : null), [circuit])
+  const [focus, setFocus] = useState<{ where: NonNullable<CheckIssue["where"]>; nonce: number } | null>(null)
   const buildSeq = useRef(0)
   const filesRef = useRef(files)
   filesRef.current = files
@@ -289,11 +291,20 @@ export default function Workspace({ name, onSaved }: { name: string; onSaved: ()
   })()
   const setIndexSource = (src: string) => setFiles((f) => ({ ...f, "index.tsx": src }))
 
+  // board.json is the single source for checklist + rules; Review patches it on disk through the API
+  const boardMeta = useMemo<Meta>(() => { try { return JSON.parse(files["board.json"] ?? "null") } catch { return null } }, [files])
+  const onMetaSaved = useCallback((text: string) => {
+    setSaved((s) => ({ ...s, "board.json": text }))
+    setFiles((f) => ({ ...f, "board.json": text }))
+  }, [])
+  const locate = useCallback((i: CheckIssue) => { if (i.where) setFocus({ where: i.where, nonce: Date.now() }) }, [])
+
   if (loadErr) return <div className="empty err">Could not load "{name}": {loadErr}</div>
   if (!design) return <div className="empty">Loading…</div>
 
   const errCount = result?.errors.length ?? 0
-  const warnCount = result?.warnings.length ?? 0
+  const probErr = result?.checks?.counts.error ?? errCount // Problems badge includes design-rule checks
+  const probWarn = result?.checks?.counts.warning ?? (result?.warnings.length ?? 0)
   const hasErrors = build.status === "error"
   const cancel = () => {
     buildSeq.current++
@@ -369,7 +380,7 @@ export default function Workspace({ name, onSaved }: { name: string; onSaved: ()
           <section className="pane preview-pane"
             onDragOver={(e) => { if (e.dataTransfer.types.includes(PALETTE_MIME)) e.preventDefault() }}
             onDrop={(e) => { const id = e.dataTransfer.getData(PALETTE_MIME); if (id) { e.preventDefault(); setDropId({ id, n: Date.now() }) } }}>
-            {diff ? <DiffView diff={diff.result} label={diff.label} focus={diffFocus} onFocus={setDiffFocus} onClose={() => { setDiff(null); setDiffFocus(null) }} /> : <Preview circuitJson={circuit} building={build.status === "building"} connect={{ on: conn.on, onPort, highlightIds }}
+            {diff ? <DiffView diff={diff.result} label={diff.label} focus={diffFocus} onFocus={setDiffFocus} onClose={() => { setDiff(null); setDiffFocus(null) }} /> : <Preview circuitJson={circuit} building={build.status === "building"} focus={focus} connect={{ on: conn.on, onPort, highlightIds }}
               canvas={model ? { model, fitKey: name, selected, netKey, editable: isEditable, snap, setSnap, onPick, onMove, onRotate } : undefined}
               overlay={model && selected && model.compByName.get(selected) ? (
                 <Properties comp={model.compByName.get(selected)!} src={srcOf(selected)} model={model} netKey={netKey}
@@ -384,15 +395,15 @@ export default function Workspace({ name, onSaved }: { name: string; onSaved: ()
           <div className="gutter y" onPointerDown={panelOpen ? bottom.onPointerDown : undefined} />
           <section className="pane bottom" style={{ height: panelOpen ? bottom.size : 38 }}>
             <div className="tabs small">
-              {(["problems", "bom", "nets", "gpio", "history"] as const).map((t) => (
+              {(["problems", "review", "bom", "nets", "gpio", "history"] as const).map((t) => (
                 <button key={t} className={`tab ${panel === t ? "on" : ""}`} onClick={() => { setPanel(t); setPanelOpen(true) }}>
                   {panel === t && <motion.span layoutId="bottab" className="tab-bg" transition={{ type: "spring", visualDuration: 0.2, bounce: 0 }} />}
                   <span className="tab-label">
-                    {{ problems: "Problems", bom: "BOM & cost", nets: "Nets & connect", gpio: "GPIO map", history: "Snapshots & diff" }[t]}
-                    {t === "problems" && (errCount > 0 || warnCount > 0) && (
+                    {{ problems: "Problems", review: "Review", bom: "BOM & cost", nets: "Nets & connect", gpio: "GPIO map", history: "Snapshots & diff" }[t]}
+                    {t === "problems" && (probErr > 0 || probWarn > 0) && (
                       <span className="counts">
-                        {errCount > 0 && <span className="cnt bad">{errCount}</span>}
-                        {warnCount > 0 && <span className="cnt warn">{warnCount}</span>}
+                        {probErr > 0 && <span className="cnt bad">{probErr}</span>}
+                        {probWarn > 0 && <span className="cnt warn">{probWarn}</span>}
                       </span>
                     )}
                   </span>
@@ -408,7 +419,9 @@ export default function Workspace({ name, onSaved }: { name: string; onSaved: ()
             {panelOpen && (
               <div className="panel-body">
                 {panel === "problems" ? (
-                  <Problems result={result} fatal={build.fatal} />
+                  <Problems result={result} fatal={build.fatal} onLocate={locate} />
+                ) : panel === "review" ? (
+                  <Review name={name} checklist={boardMeta?.checklist ?? []} notes={boardMeta?.notes ?? ""} rules={boardMeta?.rules} baseText={files["board.json"]} onMetaSaved={onMetaSaved} />
                 ) : panel === "nets" ? (
                   <Connect name={name} index={circuitIndex} source={files["index.tsx"] ?? ""} onSource={setIndexSource} onFiles={(f) => setFiles((x) => ({ ...x, ...f }))} state={conn} setState={setConn} />
                 ) : panel === "gpio" ? (

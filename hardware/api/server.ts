@@ -8,6 +8,7 @@ import { buildDesign, buildStatus, cancelBuild, readDiskBuild, NAME_RE, readDesi
 import { countNameRefs, EditError, listComponents, patchComponent, type PropValue } from "./source-edit.js"
 import { registerConnectRoutes } from "./connect-routes.js"
 import { registerIterateRoutes } from "./iterate.js"
+import { patchBoardJson, runChecks } from "./checks.js"
 import { gitCommit, gitPush, gitStatus } from "./git.js"
 import { registerPalette } from "./palette.js"
 
@@ -67,7 +68,11 @@ app.post<{ Params: { name: string }; Body: { files?: Record<string, string>; mod
   if (files) for (const rel of Object.keys(files)) if (!safeDesignPath(name, rel)) return reply.code(400).send({ error: `invalid file: ${rel}` })
   const mode = req.body?.mode === "quick" ? "quick" : "full"
   const { ok, circuitJson, errors, warnings, durationMs, cached, cancelled } = await buildDesign(name, files, mode)
-  return { ok, circuitJson, errors, warnings, durationMs, mode, cached, cancelled }
+  // design-rule checks run on every build; board.json (possibly an unsaved override) supplies the rules
+  let rulesSrc = readMeta(name)?.rules
+  if (files?.["board.json"]) try { rulesSrc = JSON.parse(files["board.json"]).rules } catch {}
+  const checks = circuitJson.length && !cancelled ? await runChecks(circuitJson, rulesSrc).catch(() => null) : null
+  return { ok, circuitJson, errors, warnings, durationMs, mode, cached, cancelled, checks }
 })
 
 // Build progress (poll), cancel, and the last good build persisted on disk.
@@ -78,6 +83,28 @@ app.get<{ Params: { name: string } }>("/api/designs/:name/build/cached", async (
   if (!hit) return reply.code(404).send({ error: "no cached build" })
   return { ...hit.result, mode: hit.mode, cached: true }
 })
+
+// Full design-rule check results (stock @tscircuit/checks + custom rules) with plain-English explanations.
+app.get<{ Params: { name: string } }>("/api/designs/:name/checks", async (req, reply) => {
+  const { name } = req.params
+  if (!designExists(name)) return notFound(reply)
+  const build = await buildDesign(name)
+  if (!build.circuitJson.length) return reply.code(422).send({ error: build.errors[0]?.message ?? "build failed" })
+  const meta = readMeta(name)
+  const checks = await runChecks(build.circuitJson, meta?.rules)
+  return { name, buildOk: build.ok, ...checks, checklist: meta?.checklist ?? [], notes: meta?.notes ?? "" }
+})
+
+// Patch board.json: { checklist?, rules?, notes?, splitNotes? } (other keys are preserved).
+app.patch<{ Params: { name: string }; Body: { checklist?: unknown; rules?: unknown; notes?: string; splitNotes?: boolean; base?: string } }>(
+  "/api/designs/:name/meta",
+  async (req, reply) => {
+    const { name } = req.params
+    if (!designExists(name)) return notFound(reply)
+    const b = req.body ?? {}
+    return patchBoardJson(name, { checklist: b.checklist, rules: b.rules, notes: b.notes, splitNotes: b.splitNotes, base: b.base })
+  },
+)
 
 app.get<{ Params: { name: string }; Querystring: { qty?: string; refresh?: string } }>("/api/designs/:name/bom", async (req, reply) => {
   const { name } = req.params
@@ -195,4 +222,4 @@ app.setErrorHandler((err: any, _req, reply) => {
 })
 
 await app.listen({ host: "127.0.0.1", port: Number(process.env.HW_API_PORT ?? 3101) })
-console.log("hardware api on http://127.0.0.1:3101")
+console.log(`hardware api on http://127.0.0.1:${app.server.address() && (app.server.address() as any).port}`)

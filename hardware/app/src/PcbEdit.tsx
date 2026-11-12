@@ -12,7 +12,7 @@ const BOT = "#4b7fd6"
  * Interactive PCB view drawn straight from circuit JSON (the stock tscircuit PcbViewer cannot report clicks or
  * drag parts). Click a part to select it, drag to move, R rotates, click a pad or trace to highlight its net.
  */
-export default function PcbEdit({ model, fitKey, selected, netKey, editable, snap, setSnap, onPick, onMove, onRotate, stale }: {
+export default function PcbEdit({ model, fitKey, selected, netKey, editable, snap, setSnap, onPick, onMove, onRotate, stale, focus }: {
   model: Model
   fitKey: string
   selected: string | null
@@ -25,6 +25,8 @@ export default function PcbEdit({ model, fitKey, selected, netKey, editable, sna
   onMove: (name: string, dx: number, dy: number) => void
   onRotate: (name: string, delta: number) => void
   stale: boolean
+  /** pan/zoom to this spot (mm) and mark it, e.g. from a Problems click; a new nonce re-triggers */
+  focus?: { x: number; y: number; w: number; h: number; nonce: number } | null
 }) {
   const box = useRef<HTMLDivElement>(null)
   const [size, setSize] = useState({ w: 0, h: 0 })
@@ -59,6 +61,16 @@ export default function PcbEdit({ model, fitKey, selected, netKey, editable, sna
 
   // a fresh build replaces the temporary "moved" preview
   useEffect(() => setPending({}), [model])
+
+  const [mark, setMark] = useState<{ x: number; y: number; w: number; h: number } | null>(null)
+  useEffect(() => {
+    if (!focus || !size.w || !size.h) return
+    const w = Math.max(focus.w, 4), h = Math.max(focus.h, 4)
+    userView.current = true
+    setView({ cx: focus.x, cy: focus.y, s: Math.min(60, Math.max(2, Math.min((size.w * 0.4) / w, (size.h * 0.4) / h))) })
+    setMark({ x: focus.x, y: focus.y, w: Math.max(focus.w, 1.5) + 0.8, h: Math.max(focus.h, 1.5) + 0.8 })
+  }, [focus?.nonce, size.w > 0]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => setMark(null), [model]) // a rebuild moves things; drop the stale marker
 
   const toWorld = (clientX: number, clientY: number) => {
     const r = box.current!.getBoundingClientRect()
@@ -225,6 +237,7 @@ export default function PcbEdit({ model, fitKey, selected, netKey, editable, sna
             ))}
           </g>
           {model.comps.map(compGroup)}
+          {mark && <rect x={mark.x - mark.w / 2} y={mark.y - mark.h / 2} width={mark.w} height={mark.h} fill="none" stroke="#ff4d6d" strokeWidth={2.5} vectorEffect="non-scaling-stroke" strokeDasharray="6 4" pointerEvents="none" />}
         </g>
       </svg>
       <div className="pcbedit-tools" onPointerDown={(e) => e.stopPropagation()}>

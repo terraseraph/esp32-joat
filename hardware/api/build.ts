@@ -56,7 +56,13 @@ function buildFsMap(name: string, overrides?: Record<string, string>) {
   const fsMap: Record<string, string> = {}
   walk(path.join(ROOT, "lib"), ROOT, fsMap)
   const files = { ...readDesignFiles(name), ...(overrides ?? {}) }
-  for (const [rel, content] of Object.entries(files)) fsMap[`designs/${name}/${rel.replace(/\\/g, "/")}`] = content
+  // board.json holds notes/checklist/rules: keep it out of the build (and its cache hash) unless a source file reads it,
+  // so ticking a checklist item does not trigger a multi-minute rebuild.
+  const usesMeta = Object.entries(files).some(([rel, c]) => rel !== "board.json" && c.includes("board.json"))
+  for (const [rel, content] of Object.entries(files)) {
+    if (rel === "board.json" && !usesMeta) continue
+    fsMap[`designs/${name}/${rel.replace(/\\/g, "/")}`] = content
+  }
   return fsMap
 }
 

@@ -280,7 +280,7 @@ export default function Workspace({ name, onSaved }: { name: string; onSaved: ()
     const on = (e: KeyboardEvent) => {
       const mod = e.ctrlKey || e.metaKey
       const k = e.key.toLowerCase()
-      const t = e.target as HTMLElement
+      const t = (e.target instanceof Element ? e.target : document.body) as HTMLElement
       if (mod && k === "s") { e.preventDefault(); save(); return }
       // Ctrl+Z / Ctrl+Shift+Z / Ctrl+Y: the code editor keeps its own undo; this covers everywhere else
       if (mod && (k === "z" || k === "y") && !t?.closest?.(".cm-editor, input, textarea, select")) {

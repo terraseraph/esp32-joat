@@ -71,7 +71,7 @@ app.post<{ Params: { name: string }; Body: { files?: Record<string, string>; mod
   // design-rule checks run on every build; board.json (possibly an unsaved override) supplies the rules
   let rulesSrc = readMeta(name)?.rules
   if (files?.["board.json"]) try { rulesSrc = JSON.parse(files["board.json"]).rules } catch {}
-  const checks = circuitJson.length && !cancelled ? await runChecks(circuitJson, rulesSrc).catch(() => null) : null
+  const checks = circuitJson.length && !cancelled ? await runChecks(circuitJson, rulesSrc, { quick: mode === "quick" }).catch(() => null) : null
   return { ok, circuitJson, errors, warnings, durationMs, mode, cached, cancelled, checks }
 })
 
@@ -85,13 +85,15 @@ app.get<{ Params: { name: string } }>("/api/designs/:name/build/cached", async (
 })
 
 // Full design-rule check results (stock @tscircuit/checks + custom rules) with plain-English explanations.
-app.get<{ Params: { name: string } }>("/api/designs/:name/checks", async (req, reply) => {
+// ?mode=quick checks the unrouted quick build (seconds); the default full build autoroutes first (minutes on big boards).
+app.get<{ Params: { name: string }; Querystring: { mode?: string } }>("/api/designs/:name/checks", async (req, reply) => {
   const { name } = req.params
   if (!designExists(name)) return notFound(reply)
-  const build = await buildDesign(name)
+  const quick = req.query.mode === "quick"
+  const build = await buildDesign(name, undefined, quick ? "quick" : "full")
   if (!build.circuitJson.length) return reply.code(422).send({ error: build.errors[0]?.message ?? "build failed" })
   const meta = readMeta(name)
-  const checks = await runChecks(build.circuitJson, meta?.rules)
+  const checks = await runChecks(build.circuitJson, meta?.rules, { quick })
   return { name, buildOk: build.ok, ...checks, checklist: meta?.checklist ?? [], notes: meta?.notes ?? "" }
 })
 

@@ -395,11 +395,12 @@ function checkAntennaKeepout(cj: any[], ctx: Ctx): CheckIssue[] {
     const side = (Object.entries(count).sort((a, b) => a[1] - b[1])[0][0]) as keyof typeof count
     // the module body continues ~8 mm past the last pad on that side (antenna ~6.5 mm + margin), then keep-out beyond
     const DEPTH_OUT = 18
+    // the zone starts at the antenna-side edge of the pad field and runs outward only (not over the pin area)
     const zone = { x0: x0p, x1: x1p, y0: y0p, y1: y1p }
-    if (side === "left") zone.x0 -= DEPTH_OUT
-    if (side === "right") zone.x1 += DEPTH_OUT
-    if (side === "bottom") zone.y0 -= DEPTH_OUT
-    if (side === "top") zone.y1 += DEPTH_OUT
+    if (side === "left") { zone.x1 = x0p; zone.x0 = x0p - DEPTH_OUT }
+    if (side === "right") { zone.x0 = x1p; zone.x1 = x1p + DEPTH_OUT }
+    if (side === "bottom") { zone.y1 = y0p; zone.y0 = y0p - DEPTH_OUT }
+    if (side === "top") { zone.y0 = y1p; zone.y1 = y1p + DEPTH_OUT }
     const b = ctx.board
     const clipped = b ? {
       x0: Math.max(zone.x0, b.center.x - b.width / 2), x1: Math.min(zone.x1, b.center.x + b.width / 2),
@@ -525,12 +526,13 @@ const withRules = (cj: any[], rules: Rules) =>
 // keyed by circuit-json identity (the build cache returns the same array for unchanged inputs) + rules
 const checkCache = new WeakMap<object, Map<string, ChecksResult>>()
 
-export async function runChecks(cj: any[], metaRules: any): Promise<ChecksResult> {
+/** `quick`: the build skipped autorouting, so unrouted connections are expected and trace checks have nothing to measure. */
+export async function runChecks(cj: any[], metaRules: any, opts: { quick?: boolean } = {}): Promise<ChecksResult> {
   const rules = normalizeRules(metaRules)
-  const rk = JSON.stringify(rules)
+  const rk = JSON.stringify(rules) + (opts.quick ? "|quick" : "")
   const hit = checkCache.get(cj)?.get(rk)
   if (hit) return hit
-  const res = await runChecksUncached(cj, rules)
+  const res = await runChecksUncached(cj, rules, !!opts.quick)
   const m = checkCache.get(cj) ?? new Map<string, ChecksResult>()
   m.clear() // only the latest rules per build
   m.set(rk, res)
@@ -538,15 +540,19 @@ export async function runChecks(cj: any[], metaRules: any): Promise<ChecksResult
   return res
 }
 
-async function runChecksUncached(cj: any[], rules: Rules): Promise<ChecksResult> {
+const UNROUTED = /^pcb_(port_not_connected|trace_missing)_error$/
+
+async function runChecksUncached(cj: any[], rules: Rules, quick: boolean): Promise<ChecksResult> {
   const ctx = buildCtx(cj)
   const issues: CheckIssue[] = []
   const seen = new Set<string>()
   const key = (e: any) => `${e.type}|${e.message}`
   let n = 0
+  let unrouted = 0
   for (const e of cj) {
     if (!e.type?.endsWith("_error") && !e.type?.endsWith("_warning")) continue
     seen.add(key(e))
+    if (quick && UNROUTED.test(e.type)) { unrouted++; continue }
     const it = fromElement(e, "build", ctx, e.type.endsWith("_error") ? "error" : "warning", n++)
     if (/^schematic_|source_no_(power|ground)_pin|pins_underspecified/.test(e.type)) it.severity = "info" // tidiness hints, not board faults
     issues.push(it)
@@ -556,6 +562,7 @@ async function runChecksUncached(cj: any[], rules: Rules): Promise<ChecksResult>
     for (const e of extra as any[]) {
       if (seen.has(key(e))) continue
       seen.add(key(e))
+      if (quick && UNROUTED.test(String(e.type))) { unrouted++; continue }
       issues.push(fromElement(e, "tscircuit-checks", ctx, String(e.type).endsWith("_warning") ? "warning" : "error", n++))
     }
   } catch (err: any) {
@@ -565,7 +572,14 @@ async function runChecksUncached(cj: any[], rules: Rules): Promise<ChecksResult>
       why: "The tscircuit check library threw on this design, so only the built-in and custom checks ran.",
     })
   }
-  for (const f of [checkTraceCurrent, checkMinTrace, checkDecoupling]) issues.push(...f(cj, ctx, rules))
+  if (quick) {
+    if (unrouted) issues.push({
+      id: "quick-unrouted", severity: "info", source: "build", rule: "quick-unrouted",
+      title: `${unrouted} connections not routed yet`, message: "This is a quick preview: parts are placed but no copper tracks are drawn.",
+      why: "Quick builds skip the autorouter so edits show in seconds. Trace width and current checks need real tracks.", fix: "Press Route for a full build; the trace checks run then.",
+    })
+    issues.push(...checkDecoupling(cj, ctx, rules))
+  } else for (const f of [checkTraceCurrent, checkMinTrace, checkDecoupling]) issues.push(...f(cj, ctx, rules))
   issues.push(...checkAntennaKeepout(cj, ctx))
   const rank = { error: 0, warning: 1, info: 2 }
   issues.sort((a, b) => rank[a.severity] - rank[b.severity])

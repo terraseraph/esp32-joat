@@ -15,6 +15,12 @@ export type BomSummary = {
 export type Bom = { qty: number; rows: BomRow[]; summary: BomSummary }
 export type GitStatus = { branch: string; dirty: boolean; files: { status: string; path: string }[]; ahead: number }
 
+export type EditResp = { ok: boolean; changed: boolean; how?: string; source: string; written: boolean; net?: string; count?: number; libWarning?: string; map?: GpioMap | null }
+export type GpioNote = { level: "error" | "warn" | "info"; text: string }
+export type GpioRow = { pin: string; pinNumber: number; net: string | null; isDefault: boolean; notes: GpioNote[] }
+export type GpioMap = { component: string; rows: GpioRow[]; clashes: { level: "error" | "warn" | "info"; text: string; pins: string[] }[]; nets: string[] }
+export type PinRefT = { ref: string; pin: string }
+
 async function req<T>(url: string, init?: RequestInit): Promise<T> {
   const res = await fetch(url, {
     ...init,
@@ -41,6 +47,14 @@ export const api = {
   exportUrl: (n: string) => `/api/designs/${enc(n)}/export`,
   gitStatus: () => req<GitStatus>("/api/git/status"),
   commit: (message: string) => post("/api/git/commit", { message }) as Promise<{ ok: boolean; output: string }>,
+  // connect / nets / GPIO: pass the editor's index.tsx as `source` to get edited text back without touching disk
+  connect: (n: string, a: PinRefT, b: PinRefT | undefined, net: string | undefined, source: string) =>
+    post(`/api/designs/${enc(n)}/connect`, { a, b, net, source }) as Promise<EditResp>,
+  renameNet: (n: string, from: string, to: string, source: string, force = false) =>
+    post(`/api/designs/${enc(n)}/rename-net`, { from, to, source, force }) as Promise<EditResp>,
+  gpio: (n: string, source: string) => post(`/api/designs/${enc(n)}/gpio`, { source }) as Promise<{ map: GpioMap | null }>,
+  assignGpio: (n: string, pin: string, net: string | null, source: string) =>
+    post(`/api/designs/${enc(n)}/gpio/assign`, { pin, net, source }) as Promise<EditResp>,
   push: () => post("/api/git/push") as Promise<{ ok: boolean; output: string }>,
 }
 

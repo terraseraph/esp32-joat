@@ -37,10 +37,13 @@ function useSize() {
   return { ref, ...size }
 }
 
-export default function Preview({ circuitJson, building }: { circuitJson: any[] | null; building: boolean }) {
-  const [tab, setTab] = useState<Tab>(() => {
+export type PreviewConnect = { on: boolean; onPort: (schematicPortId: string) => void; highlightIds: string[] }
+
+export default function Preview({ circuitJson, building, connect }: { circuitJson: any[] | null; building: boolean; connect?: PreviewConnect }) {
+  const [tab0, setTab] = useState<Tab>(() => {
     try { return (localStorage.getItem("previewTab") as Tab) || "pcb" } catch { return "pcb" }
   })
+  const tab: Tab = connect?.on ? "schematic" : tab0 // Connect mode picks pins on the schematic
   const { ref, w, h } = useSize()
   const pick = (t: Tab) => {
     setTab(t)
@@ -57,6 +60,7 @@ export default function Preview({ circuitJson, building }: { circuitJson: any[] 
           </button>
         ))}
         <div className="grow" />
+        {connect?.on && <span className="small pad-r connect-banner">Connect mode: click pin A, then pin B</span>}
         {building && <span className="muted small pad-r">updating…</span>}
       </div>
       <div className="viewport" ref={ref}>
@@ -74,7 +78,9 @@ export default function Preview({ circuitJson, building }: { circuitJson: any[] 
               transition={{ duration: 0.15 }}
             >
               <ViewerBoundary resetKey={circuitJson}>
-                {w > 0 && h > 0 && tab === "schematic" && <SchematicViewer circuitJson={circuitJson as any} containerStyle={{ width: w, height: h }} />}
+                {w > 0 && h > 0 && tab === "schematic" && <SchematicViewer circuitJson={circuitJson as any} containerStyle={{ width: w, height: h }}
+                  {...(connect?.on ? { showSchematicPorts: true, onSchematicPortClicked: ({ schematicPortId }: { schematicPortId: string }) => connect.onPort(schematicPortId) } : {})}
+                  highlightedSchematicComponentIds={connect?.highlightIds} />}
                 {w > 0 && h > 0 && tab === "pcb" && <PcbViewer circuitJson={circuitJson as any} height={h} />}
                 {w > 0 && h > 0 && tab === "3d" && (
                   <div style={{ width: w, height: h }}>

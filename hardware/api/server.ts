@@ -5,6 +5,7 @@ import fs from "node:fs"
 import path from "node:path"
 import { bomCsv, computeBom, cplCsv } from "./bom.js"
 import { buildDesign, NAME_RE, readDesignFiles, readMeta, ROOT, safeDesignPath } from "./build.js"
+import { registerConnectRoutes } from "./connect-routes.js"
 import { gitCommit, gitPush, gitStatus } from "./git.js"
 
 const app = Fastify({ logger: { level: "warn" }, bodyLimit: 20 * 1024 * 1024 })
@@ -101,6 +102,8 @@ app.get<{ Params: { name: string } }>("/api/designs/:name/export", async (req, r
   if (build.errors.length) reply.header("X-Build-Errors", String(build.errors.length))
   return reply.send(buf)
 })
+
+registerConnectRoutes(app, { designExists, notFound })
 
 app.get("/api/git/status", async () => gitStatus())
 

@@ -6,6 +6,9 @@ import Editor from "./Editor"
 import Preview from "./Preview"
 import Problems from "./Problems"
 import Bom from "./Bom"
+import Connect, { NO_CONNECT, type ConnectState } from "./Connect"
+import Gpio from "./Gpio"
+import { indexCircuit } from "../../shared/nets"
 
 function useSplit(initial: number, min: number, max: number, axis: "x" | "y", invert = false) {
   const [size, setSize] = useState(initial)
@@ -41,9 +44,11 @@ export default function Workspace({ name, onSaved }: { name: string; onSaved: ()
   const [build, setBuild] = useState<BuildState>({ status: "idle" })
   const [result, setResult] = useState<BuildResult | null>(null)
   const [circuit, setCircuit] = useState<any[] | null>(null) // last good
-  const [panel, setPanel] = useState<"problems" | "bom">("problems")
+  const [panel, setPanel] = useState<"problems" | "bom" | "nets" | "gpio">("problems")
   const [panelOpen, setPanelOpen] = useState(true)
   const [bomVersion, setBomVersion] = useState(0)
+  const [conn, setConn] = useState<ConnectState>(NO_CONNECT)
+  const circuitIndex = useMemo(() => (circuit ? indexCircuit(circuit) : null), [circuit])
   const buildSeq = useRef(0)
   const filesRef = useRef(files)
   filesRef.current = files
@@ -114,6 +119,18 @@ export default function Workspace({ name, onSaved }: { name: string; onSaved: ()
     return () => removeEventListener("keydown", on)
   }, [save])
 
+  const onPort = (schematicPortId: string) => {
+    // the viewer reports either a schematic_port id or a source_port id
+    const port = circuitIndex?.ports[circuitIndex.portBySchematic[schematicPortId] ?? schematicPortId]
+    if (!port) return
+    setConn((s) => ({ ...s, picks: s.picks.length >= 2 ? [{ ref: port.ref, pin: port.pin }] : [...s.picks, { ref: port.ref, pin: port.pin }] }))
+  }
+  const highlightIds = (() => {
+    const net = circuitIndex?.nets.find((n) => n.name === conn.highlightNet)
+    return net ? net.pins.map((p) => circuitIndex!.ports[p.sourcePortId].schematicComponentId).filter((x): x is string => !!x) : []
+  })()
+  const setIndexSource = (src: string) => setFiles((f) => ({ ...f, "index.tsx": src }))
+
   if (loadErr) return <div className="empty err">Could not load "{name}": {loadErr}</div>
   if (!design) return <div className="empty">Loading…</div>
 
@@ -168,16 +185,16 @@ export default function Workspace({ name, onSaved }: { name: string; onSaved: ()
         <div className="gutter x" onPointerDown={left.onPointerDown} />
         <div className="right">
           <section className="pane preview-pane">
-            <Preview circuitJson={circuit} building={build.status === "building"} />
+            <Preview circuitJson={circuit} building={build.status === "building"} connect={{ on: conn.on, onPort, highlightIds }} />
           </section>
           <div className="gutter y" onPointerDown={panelOpen ? bottom.onPointerDown : undefined} />
           <section className="pane bottom" style={{ height: panelOpen ? bottom.size : 38 }}>
             <div className="tabs small">
-              {(["problems", "bom"] as const).map((t) => (
+              {(["problems", "bom", "nets", "gpio"] as const).map((t) => (
                 <button key={t} className={`tab ${panel === t ? "on" : ""}`} onClick={() => { setPanel(t); setPanelOpen(true) }}>
                   {panel === t && <motion.span layoutId="bottab" className="tab-bg" transition={{ type: "spring", visualDuration: 0.2, bounce: 0 }} />}
                   <span className="tab-label">
-                    {t === "problems" ? "Problems" : "BOM & cost"}
+                    {{ problems: "Problems", bom: "BOM & cost", nets: "Nets & connect", gpio: "GPIO map" }[t]}
                     {t === "problems" && (errCount > 0 || warnCount > 0) && (
                       <span className="counts">
                         {errCount > 0 && <span className="cnt bad">{errCount}</span>}
@@ -198,6 +215,10 @@ export default function Workspace({ name, onSaved }: { name: string; onSaved: ()
               <div className="panel-body">
                 {panel === "problems" ? (
                   <Problems result={result} fatal={build.fatal} />
+                ) : panel === "nets" ? (
+                  <Connect name={name} index={circuitIndex} source={files["index.tsx"] ?? ""} onSource={setIndexSource} state={conn} setState={setConn} />
+                ) : panel === "gpio" ? (
+                  <Gpio name={name} source={files["index.tsx"] ?? ""} onSource={setIndexSource} />
                 ) : (
                   <Bom name={name} version={bomVersion} dirty={dirty} />
                 )}

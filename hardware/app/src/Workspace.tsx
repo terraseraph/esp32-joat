@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { AnimatePresence, motion } from "motion/react"
-import { api, type BuildResult, type Design } from "./api"
+import { api, type BuildMode, type BuildResult, type BuildStatus, type Design } from "./api"
 import { useToast } from "./toast"
 import Editor from "./Editor"
 import Preview from "./Preview"
 import Problems from "./Problems"
 import Bom from "./Bom"
+import BuildProgress from "./BuildProgress"
 
 function useSplit(initial: number, min: number, max: number, axis: "x" | "y", invert = false) {
   const [size, setSize] = useState(initial)
@@ -29,7 +30,7 @@ function useSplit(initial: number, min: number, max: number, axis: "x" | "y", in
   return { size, onPointerDown }
 }
 
-export type BuildState = { status: "idle" | "building" | "ok" | "error"; durationMs?: number; fatal?: string }
+export type BuildState = { status: "idle" | "building" | "ok" | "error"; durationMs?: number; fatal?: string; mode?: BuildMode; cached?: boolean }
 
 export default function Workspace({ name, onSaved }: { name: string; onSaved: () => void }) {
   const toast = useToast()
@@ -53,16 +54,17 @@ export default function Workspace({ name, onSaved }: { name: string; onSaved: ()
 
   const dirty = useMemo(() => Object.keys(files).some((k) => files[k] !== saved[k]), [files, saved])
 
-  const runBuild = useCallback(async () => {
+  const runBuild = useCallback(async (mode: BuildMode = "quick") => {
     const id = ++buildSeq.current
-    setBuild((b) => ({ ...b, status: "building", fatal: undefined }))
+    setBuild((b) => ({ ...b, status: "building", fatal: undefined, mode }))
     try {
-      const r = await api.build(name, filesRef.current)
+      const r = await api.build(name, filesRef.current, mode)
       if (id !== buildSeq.current) return
+      if (r.cancelled) { setBuild((b) => ({ ...b, status: "idle" })); return }
       setResult(r)
       if (r.circuitJson?.length && r.errors.length === 0) setCircuit(r.circuitJson)
       else if (r.circuitJson?.length) setCircuit((c) => c ?? r.circuitJson)
-      setBuild({ status: r.errors.length ? "error" : "ok", durationMs: r.durationMs })
+      setBuild({ status: r.errors.length ? "error" : "ok", durationMs: r.durationMs, mode: r.mode ?? mode, cached: r.cached })
     } catch (e: any) {
       if (id !== buildSeq.current) return
       setBuild({ status: "error", fatal: e.message })
@@ -77,7 +79,11 @@ export default function Workspace({ name, onSaved }: { name: string; onSaved: ()
         setFiles(d.files)
         setActive(d.files["index.tsx"] !== undefined ? "index.tsx" : Object.keys(d.files)[0])
         filesRef.current = d.files
-        runBuild()
+        // show the last good build from disk immediately while the rebuild runs
+        api.cachedBuild(name).then((c) => {
+          if (c?.circuitJson?.length) setCircuit((cur) => cur ?? c.circuitJson)
+        })
+        runBuild("quick")
       })
       .catch((e) => setLoadErr(e.message))
   }, [name, runBuild])
@@ -87,7 +93,7 @@ export default function Workspace({ name, onSaved }: { name: string; onSaved: ()
   useEffect(() => {
     if (!design) return
     if (first.current) { first.current = false; return }
-    const t = setTimeout(runBuild, 1000)
+    const t = setTimeout(() => runBuild("quick"), 1000)
     return () => clearTimeout(t)
   }, [files, design, runBuild])
 
@@ -120,6 +126,11 @@ export default function Workspace({ name, onSaved }: { name: string; onSaved: ()
   const errCount = result?.errors.length ?? 0
   const warnCount = result?.warnings.length ?? 0
   const hasErrors = build.status === "error"
+  const cancel = () => {
+    buildSeq.current++
+    setBuild((b) => ({ ...b, status: "idle" }))
+    api.cancelBuild(name).catch(() => {})
+  }
 
   const doExport = () => {
     if (dirty) toast("info", "Export uses saved files; you have unsaved edits")
@@ -144,8 +155,8 @@ export default function Workspace({ name, onSaved }: { name: string; onSaved: ()
               transition={{ duration: 0.14 }}
             >
               <span className={`dot ${build.status === "building" ? "pulse" : build.status === "ok" ? "good" : build.status === "error" ? "bad" : ""}`} />
-              {build.status === "building" && "Building…"}
-              {build.status === "ok" && `Built in ${((build.durationMs ?? 0) / 1000).toFixed(1)}s`}
+              {build.status === "building" && <BuildProgress name={name} mode={build.mode ?? "quick"} onCancel={cancel} />}
+              {build.status === "ok" && `${build.mode === "full" ? "Routed" : "Quick preview"} in ${((build.durationMs ?? 0) / 1000).toFixed(1)}s${build.cached ? " (cached)" : ""}`}
               {build.status === "error" && (build.fatal ? `Build failed` : `${errCount} error${errCount === 1 ? "" : "s"}`)}
               {build.status === "idle" && "Idle"}
               {build.status === "error" && circuit && <span className="muted"> · showing last good</span>}
@@ -154,7 +165,8 @@ export default function Workspace({ name, onSaved }: { name: string; onSaved: ()
         </div>
         <div className="grow" />
         {dirty && <span className="muted small">Unsaved changes</span>}
-        <button className="btn" onClick={runBuild} disabled={build.status === "building"}>Build</button>
+        <button className="btn" onClick={() => runBuild("quick")} disabled={build.status === "building"} title="Fast build: placement + ratsnest, no autorouting">Build</button>
+        <button className="btn" onClick={() => runBuild("full")} disabled={build.status === "building"} title="Full build with autorouting (slow on big boards)">Route</button>
         <button className="btn" onClick={save} disabled={!dirty}>Save</button>
         <button className="btn primary" onClick={doExport} title={hasErrors ? "Last build had errors" : "Download JLCPCB zip"}>
           {hasErrors && <span className="dot bad" />}Export

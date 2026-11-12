@@ -2,7 +2,9 @@ export type Meta = { name?: string; description?: string; revision?: string; not
 export type DesignSummary = { name: string; meta: Meta }
 export type Design = { name: string; meta: Meta; files: Record<string, string> }
 export type Issue = { type: string; message: string; stack?: string }
-export type BuildResult = { ok: boolean; circuitJson: any[]; errors: Issue[]; warnings: Issue[]; durationMs: number }
+export type BuildMode = "quick" | "full"
+export type BuildResult = { ok: boolean; circuitJson: any[]; errors: Issue[]; warnings: Issue[]; durationMs: number; mode?: BuildMode; cached?: boolean; cancelled?: boolean }
+export type BuildStatus = { state: "idle" | "running"; id?: number; mode?: BuildMode; phase?: string; progress?: number; elapsedMs?: number }
 export type BomRow = {
   refs: string[]; lcsc: string; mfr: string; package: string; description: string
   qtyPerBoard: number; unitPrice: number; lineCostPerBoard: number; stock: number
@@ -35,7 +37,11 @@ export const api = {
   design: (n: string) => req<Design>(`/api/designs/${enc(n)}`),
   save: (n: string, files: Record<string, string>) =>
     req<any>(`/api/designs/${enc(n)}/files`, { method: "PUT", body: JSON.stringify({ files }) }),
-  build: (n: string, files?: Record<string, string>) => post(`/api/designs/${enc(n)}/build`, { files }) as Promise<BuildResult>,
+  build: (n: string, files?: Record<string, string>, mode: BuildMode = "full") =>
+    post(`/api/designs/${enc(n)}/build`, { files, mode }) as Promise<BuildResult>,
+  buildStatus: (n: string) => req<BuildStatus>(`/api/designs/${enc(n)}/build/status`),
+  cancelBuild: (n: string) => post(`/api/designs/${enc(n)}/build/cancel`) as Promise<{ cancelled: boolean }>,
+  cachedBuild: (n: string) => req<BuildResult>(`/api/designs/${enc(n)}/build/cached`).catch(() => null),
   bom: (n: string, qty: number, refresh = false) =>
     req<Bom>(`/api/designs/${enc(n)}/bom?qty=${qty}${refresh ? "&refresh=1" : ""}`),
   exportUrl: (n: string) => `/api/designs/${enc(n)}/export`,

@@ -4,7 +4,7 @@ import { convertCircuitJsonToGerberFiles } from "circuit-json-to-gerber"
 import fs from "node:fs"
 import path from "node:path"
 import { bomCsv, computeBom, cplCsv } from "./bom.js"
-import { buildDesign, NAME_RE, readDesignFiles, readMeta, ROOT, safeDesignPath } from "./build.js"
+import { buildDesign, buildStatus, cancelBuild, readDiskBuild, NAME_RE, readDesignFiles, readMeta, ROOT, safeDesignPath } from "./build.js"
 import { gitCommit, gitPush, gitStatus } from "./git.js"
 
 const app = Fastify({ logger: { level: "warn" }, bodyLimit: 20 * 1024 * 1024 })
@@ -55,21 +55,31 @@ app.put<{ Params: { name: string }; Body: { files?: Record<string, string> } }>(
   return { ok: true, written: targets.length }
 })
 
-app.post<{ Params: { name: string }; Body: { files?: Record<string, string> } }>("/api/designs/:name/build", async (req, reply) => {
+app.post<{ Params: { name: string }; Body: { files?: Record<string, string>; mode?: "quick" | "full" } }>("/api/designs/:name/build", async (req, reply) => {
   const { name } = req.params
   const files = req.body?.files
   if (!NAME_RE.test(name)) return reply.code(400).send({ error: "invalid design name" })
   if (!designExists(name) && !files?.["index.tsx"]) return notFound(reply)
   if (files) for (const rel of Object.keys(files)) if (!safeDesignPath(name, rel)) return reply.code(400).send({ error: `invalid file: ${rel}` })
-  const { ok, circuitJson, errors, warnings, durationMs } = await buildDesign(name, files)
-  return { ok, circuitJson, errors, warnings, durationMs }
+  const mode = req.body?.mode === "quick" ? "quick" : "full"
+  const { ok, circuitJson, errors, warnings, durationMs, cached, cancelled } = await buildDesign(name, files, mode)
+  return { ok, circuitJson, errors, warnings, durationMs, mode, cached, cancelled }
+})
+
+// Build progress (poll), cancel, and the last good build persisted on disk.
+app.get<{ Params: { name: string } }>("/api/designs/:name/build/status", async (req) => buildStatus(req.params.name))
+app.post<{ Params: { name: string } }>("/api/designs/:name/build/cancel", async (req) => ({ cancelled: cancelBuild(req.params.name) }))
+app.get<{ Params: { name: string } }>("/api/designs/:name/build/cached", async (req, reply) => {
+  const hit = readDiskBuild(req.params.name)
+  if (!hit) return reply.code(404).send({ error: "no cached build" })
+  return { ...hit.result, mode: hit.mode, cached: true }
 })
 
 app.get<{ Params: { name: string }; Querystring: { qty?: string; refresh?: string } }>("/api/designs/:name/bom", async (req, reply) => {
   const { name } = req.params
   if (!designExists(name)) return notFound(reply)
   const qty = Math.max(1, parseInt(req.query.qty ?? "10", 10) || 10)
-  const build = await buildDesign(name)
+  const build = await buildDesign(name, undefined, "quick") // placement is enough for the BOM
   if (!build.circuitJson.length) return reply.code(422).send({ error: build.errors[0]?.message ?? "build failed" })
   return computeBom(build.circuitJson, qty, req.query.refresh === "1")
 })

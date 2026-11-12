@@ -184,3 +184,13 @@ h1 { font-size: 22px; margin: 0; letter-spacing: -0.02em; }
   * { transition-duration: 0.01ms !important; }
 }
 .bom-table td.nowrap { white-space: nowrap; }
+
+/* build progress (toolbar) */
+.build-progress { display: inline-flex; align-items: center; gap: 8px }
+.build-progress .bp-bar { position: relative; width: 90px; height: 4px; border-radius: 2px; background: rgba(128,128,128,.25); overflow: hidden }
+.build-progress .bp-bar > span { position: absolute; left: 0; top: 0; bottom: 0; background: currentColor; opacity: .7; transition: width .3s }
+.build-progress .bp-bar > span.indet { width: 35%; animation: bp-slide 1.2s ease-in-out infinite }
+@keyframes bp-slide { 0% { left: -35% } 100% { left: 100% } }
+.build-progress .btn.small { padding: 1px 8px; font-size: 11px }
+.build-progress { white-space: nowrap; flex-wrap: nowrap }
+.build-progress .bp-phase { max-width: 200px; overflow: hidden; text-overflow: ellipsis }

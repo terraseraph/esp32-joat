@@ -22,6 +22,7 @@ import CostChip from "./CostChip"
 import ExportPanel from "./ExportPanel"
 import Explain, { type Highlight } from "./Explain"
 import Changes from "./Changes"
+import Shortcuts from "./Shortcuts"
 
 function useSplit(initial: number, min: number, max: number, axis: "x" | "y", invert = false) {
   // clamp: innerWidth is 0 when the tab first renders in the background
@@ -79,6 +80,7 @@ export default function Workspace({ name, onSaved }: { name: string; onSaved: ()
   const [highlight, setHighlight] = useState<Highlight | null>(null)
   // Explain highlights are drawn as markers on the interactive PCB view
   const marks = useMemo(() => highlight?.rects.map((r) => ({ x: r.center.x, y: r.center.y, w: r.width, h: r.height })) ?? null, [highlight])
+  const [help, setHelp] = useState(false)
   const buildSeq = useRef(0)
   const filesRef = useRef(files)
   filesRef.current = files
@@ -272,16 +274,32 @@ export default function Workspace({ name, onSaved }: { name: string; onSaved: ()
     } catch (e: any) { toast("err", e.message) }
   }
 
+  const runBuildRef = useRef(runBuild)
+  runBuildRef.current = runBuild
   useEffect(() => {
     const on = (e: KeyboardEvent) => {
-      if (!(e.ctrlKey || e.metaKey)) return
+      const mod = e.ctrlKey || e.metaKey
       const k = e.key.toLowerCase()
-      if (k === "s") { e.preventDefault(); save() }
+      const t = e.target as HTMLElement
+      if (mod && k === "s") { e.preventDefault(); save(); return }
       // Ctrl+Z / Ctrl+Shift+Z / Ctrl+Y: the code editor keeps its own undo; this covers everywhere else
-      else if ((k === "z" || k === "y") && !(e.target as HTMLElement)?.closest?.(".cm-editor, input, textarea, select")) {
+      if (mod && (k === "z" || k === "y") && !t?.closest?.(".cm-editor, input, textarea, select")) {
         e.preventDefault()
         if (k === "y" || e.shiftKey) hist.redo(); else hist.undo()
+        return
       }
+      if (mod && e.key === "Enter") {
+        // inside CodeMirror, Ctrl+Enter inserts a line; leave it to the editor there
+        if (t.closest(".cm-editor")) return
+        e.preventDefault(); runBuildRef.current(); return
+      }
+      const typing = t.closest("input, textarea, select, .cm-editor, [contenteditable=true]")
+      if (e.key === "Escape" && typing && t.closest(".cm-editor")) { (t as HTMLElement).blur(); return }
+      if (typing || mod || e.altKey) return
+      if (e.key === "?") { e.preventDefault(); setHelp((o) => !o) }
+      else if (k === "1" || k === "2" || k === "3") dispatchEvent(new CustomEvent("hw-preview-tab", { detail: ["schematic", "pcb", "3d"][+k - 1] }))
+      else if (k === "j") setPanelOpen((o) => !o)
+      else if (k === "e") { e.preventDefault(); toggleCode(true); setTimeout(() => document.querySelector<HTMLElement>(".cm-content")?.focus(), 50) }
     }
     addEventListener("keydown", on)
     return () => removeEventListener("keydown", on)
@@ -332,6 +350,7 @@ export default function Workspace({ name, onSaved }: { name: string; onSaved: ()
 
   return (
     <div className="workspace">
+      <Shortcuts open={help} onOpenChange={setHelp} />
       <div className="toolbar">
         <div className={`status ${build.status}`}>
           <AnimatePresence mode="wait" initial={false}>
@@ -363,13 +382,14 @@ export default function Workspace({ name, onSaved }: { name: string; onSaved: ()
           <input type="checkbox" checked={autosave} onChange={toggleAutosave} /> Autosave
         </label>
         <span className="muted small" aria-live="polite">{saving ? "Saving…" : dirty ? "Unsaved changes" : "Saved"}</span>
+        <button className="icon-btn" onClick={() => setHelp(true)} title="Keyboard shortcuts (?)" aria-label="Keyboard shortcuts">?</button>
         <CostChip name={name} qty={qty} version={bomVersion} onOpen={() => { setPanel("bom"); setPanelOpen(true) }} />
         <button className={`btn ${codeOpen ? "on" : ""}`} onClick={() => toggleCode(!codeOpen)} aria-pressed={codeOpen} title="Show or hide the source code">{"</>"} Code</button>
         <button className="btn" onClick={() => { setPanel("history"); setPanelOpen(true) }} title="Open snapshots">Snapshots</button>
         <button className="btn" onClick={newVariant} title="Copy this design to a new revision folder">New variant</button>
-        <button className="btn" onClick={() => runBuild("quick")} disabled={build.status === "building"} title="Fast build: placement + ratsnest, no autorouting">Build</button>
+        <button className="btn" onClick={() => runBuild("quick")} disabled={build.status === "building"} title="Fast build: placement + ratsnest, no autorouting (Ctrl+Enter)">Build</button>
         <button className="btn" onClick={() => runBuild("full")} disabled={build.status === "building"} title="Full build with autorouting (slow on big boards)">Route</button>
-        <button className="btn" onClick={() => save()} disabled={!dirty}>Save</button>
+        <button className="btn" onClick={() => save()} disabled={!dirty} title="Save (Ctrl+S)">Save</button>
         <button className="btn primary" onClick={doExport} title={hasErrors ? "Last build had errors" : "Download JLCPCB zip"}>
           {hasErrors && <span className="dot bad" />}Export
         </button>

@@ -74,12 +74,19 @@ export default function Preview({ circuitJson, building, canvas, overlay, connec
     setTab(t)
     try { localStorage.setItem("previewTab", t) } catch {}
   }
+  // keyboard shortcuts 1/2/3 (Workspace) switch tabs through this event
+  useEffect(() => {
+    const on = (e: Event) => pick((e as CustomEvent<Tab>).detail)
+    addEventListener("hw-preview-tab", on)
+    return () => removeEventListener("hw-preview-tab", on)
+  }, [])
+
 
   return (
     <div className="preview">
       <div className="tabs">
-        {TABS.map((t) => (
-          <button key={t.id} className={`tab ${tab === t.id ? "on" : ""}`} onClick={() => pick(t.id)}>
+        {TABS.map((t, i) => (
+          <button key={t.id} className={`tab ${tab === t.id ? "on" : ""}`} onClick={() => pick(t.id)} title={({ schematic: "Schematic (1)", pcb: "PCB (2)", "3d": "3D (3)" } as Record<string, string>)[t.id] ?? t.label}>
             {tab === t.id && <motion.span layoutId="prevtab" className="tab-bg" transition={{ type: "spring", visualDuration: 0.2, bounce: 0 }} />}
             <span className="tab-label">{t.label}</span>
           </button>

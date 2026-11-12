@@ -20,7 +20,9 @@ type Gid = (typeof ORDER)[number][0]
 
 const txt0 = (c: ComponentInfo) => `${c.type} ${c.mpn ?? ""}`
 const isConnector = (c: ComponentInfo) => /header|terminal|connector|usb|jack/i.test(c.type + " " + (c.mpn ?? "")) || /^(J|P|CN|TB|X)\d*($|_)/i.test(c.ref)
-const REG_MPN = /AMS1117|LDO|LM1117|LM2596|LM78|AP2112|AP7\d|TPS\d|MP\d{4}|XC6|RT9|SY8|ME6|HT7|XL\d{4}|LM3\d{2}|buck|boost/i
+const FET_MPN = /^(AOw*d|AON|SId|IRF|IRL|BSS|2N7002|DMN|DMP|FDN|CSD|NTD|BUK)/i
+const REG_REF = /^(U|L|D|C)_?(BUCK|LDO|REG|BOOST)/i
+const REG_MPN = /TLVd|AMS1117|LDO|LM1117|LM2596|LM78|AP2112|AP7\d|TPS\d|MP\d{4}|XC6|RT9|SY8|ME6|HT7|XL\d{4}|LM3\d{2}|buck|boost/i
 const PROT_MPN = /TVS|ESD|SMBJ|SMAJ|PRTR|USBLC|PESD|fuse|PTC|varistor|MOV|ferrite|bead/i
 const MON_MPN = /INA\d|ADS\d|TMP\d|LM75|BME|BMP|SHT\d|MCP3|ACS7/i
 const RELAY = /relay|SRD|G5Q|HF\d/i
@@ -30,8 +32,8 @@ function classify(c: ComponentInfo): Gid | "passive" {
   if (c.type === "led") return "monitoring"
   if (MON_MPN.test(txt)) return "monitoring"
   if (c.type === "fuse" || PROT_MPN.test(txt) || c.type === "diode") return "protection"
-  if (c.type === "inductor" || REG_MPN.test(txt)) return "regulation"
-  if (c.type === "transistor" || RELAY.test(txt)) return "io"
+  if (c.type === "inductor" || REG_MPN.test(txt) || (c.type === "chip" && REG_REF.test(c.ref))) return "regulation"
+  if (c.type === "transistor" || RELAY.test(txt) || FET_MPN.test(c.mpn ?? "")) return "io"
   if (isConnector(c)) return "connectors"
   if (c.type === "chip") return "logic"
   if (c.type === "resistor" || c.type === "capacitor") return "passive"
@@ -75,15 +77,20 @@ export function explain(meta: any, comps: ComponentInfo[], nets: NetInfo[]): Exp
     const rails = Object.values(c.pins).filter((n) => n && kindOf(n) !== "signal")
     group.set(c.ref, c.type === "capacitor" && rails.length >= 2 ? "regulation" : pick ?? (rails.length ? "regulation" : "other"))
   }
+  const netsOf0 = (c: ComponentInfo) => [...new Set(Object.values(c.pins).filter((n): n is string => !!n))]
   // a connector that carries a supply rail is the board's power input
   for (const c of comps) {
-    if (group.get(c.ref) === "connectors" && Object.values(c.pins).some((n) => kindOf(n) === "power")) group.set(c.ref, "power")
+    if (group.get(c.ref) !== "connectors") continue
+    const live = netsOf0(c).filter((n) => kindOf(n) !== "ground")
+    const powerOnly = live.length > 0 && live.length <= 2 && live.every((n) => kindOf(n) === "power")
+    const usbPower = /usb/i.test(`${c.mpn ?? ""} ${c.ref}`) && live.some((n) => kindOf(n) === "power")
+    if (powerOnly || usbPower) group.set(c.ref, "power")
   }
 
   // 2. phrase
   // unnamed nets ("~U1.P0/RG1.pin1") read better as "the node shared with RG1"
   const disp = (c: ComponentInfo, n: string) => (n.startsWith("~") ? `node shared with ${[...(membersOf.get(n) ?? [])].filter((r) => r !== c.ref).join("/") || "itself"}` : n)
-  const netsOf = (c: ComponentInfo) => [...new Set(Object.values(c.pins).filter((n): n is string => !!n).map((n) => disp(c, n)))]
+  const netsOf = (c: ComponentInfo) => [...new Set(Object.values(c.pins).filter((n): n is string => !!n && !(n.startsWith("~") && (membersOf.get(n)?.size ?? 0) <= 1)).map((n) => disp(c, n)))]
   const sig = (c: ComponentInfo) => netsOf(c).filter((n) => kindOf(n) === "signal")
   const names = (list: string[], max = 6) => (list.length > max ? list.slice(0, max).join(", ") + ` and ${list.length - max} more` : list.join(", "))
   const role = (c: ComponentInfo): { key: string; text: string } => {
@@ -105,6 +112,9 @@ export function explain(meta: any, comps: ComponentInfo[], nets: NetInfo[]): Exp
       return rail && k.includes("ground") ? { key: `${who}|decouple`, text: `${c.value ?? "capacitor"} decoupling on ${rail}` } : { key: `${who}|cap`, text: `${c.value ?? "capacitor"} on ${names(ns)}` }
     }
     if (c.type === "led") return { key: `${who}|led`, text: `${c.value ?? ""} LED indicator${sig(c).length ? ` on ${names(sig(c))}` : ""}`.replace("  ", " ") }
+    if (c.type === "diode" && /TVS|SMBJ|SMAJ|ESD/i.test(c.mpn ?? "")) return { key: `${who}|tvs`, text: `${c.mpn} TVS surge clamp on ${names(ns.filter((n) => kindOf(n) !== "ground"))}` }
+    if (c.type === "diode" && ns.length === 2 && k.every((x) => x !== "signal")) return { key: `${who}|pdiode`, text: `${c.mpn ?? "diode"} power diode between ${ns[0]} and ${ns[1]} (OR-ing, reverse-block or catch)` }
+    if (c.type === "fuse" || /^F[_0-9]/.test(c.ref)) return { key: `${who}|fuse`, text: `${c.mpn ?? c.value ?? "fuse"} fuse in series between ${names(ns)}` }
     if (c.type === "diode") return { key: `${who}|diode`, text: `${c.mpn ?? "diode"} clamp/flyback diode between ${names(ns)}` }
     if (c.type === "transistor") return { key: `${who}|fet`, text: `${c.mpn ?? "transistor"} ${c.value ?? ""} switch`.replace("  ", " ") + (sig(c).length ? ` driving ${names(sig(c))}` : "") }
     if (RELAY.test(txt0(c))) return { key: `${who}|relay`, text: `relay ${c.mpn ?? ""}: coil from ${disp(c, c.pins.COIL_A ?? "?")} to ${disp(c, c.pins.COIL_B ?? "?")}, contacts COM/NO/NC wired to ${[...new Set(["COM", "NO", "NC"].map((p) => disp(c, c.pins[p] ?? "?")))].join(", ")}`.replace("relay  ", "relay ") }

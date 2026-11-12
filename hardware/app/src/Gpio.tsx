@@ -23,7 +23,11 @@ export default function Gpio({ name, source, onSource }: { name: string; source:
   const assign = async (pin: string, net: string | null) => {
     try {
       const r = await api.assignGpio(name, pin, net, source)
-      if (!r.changed) return
+      if (!r.changed) {
+        setMap(r.map ?? null)
+        toast("info", `${pin} not changed: ${r.how}`)
+        return
+      }
       onSource(r.source)
       setMap(r.map ?? null)
       setEditing(null)
@@ -72,7 +76,7 @@ export default function Gpio({ name, source, onSource }: { name: string; source:
                   <td className="mono nowrap"><b>{r.pin}</b> <span className="muted small">#{r.pinNumber}</span></td>
                   <td>
                     {!isIo ? (
-                      <span className="mono">{r.net ?? <span className="muted">-</span>}</span>
+                      <span className="mono" title={r.isDefault ? "Set by the module block in lib/, not editable here" : "Not a GPIO"}>{r.net ?? <span className="muted">-</span>}{r.isDefault && <span className="muted small"> (module default)</span>}</span>
                     ) : editing?.pin === r.pin ? (
                       <span className="rename">
                         <input autoFocus className="input mono" placeholder="NET_NAME" value={editing.text}

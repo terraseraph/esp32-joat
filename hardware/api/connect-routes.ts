@@ -1,8 +1,8 @@
 import fs from "node:fs"
 import path from "node:path"
 import type { FastifyInstance } from "fastify"
-import { buildDesign, ROOT } from "./build.js"
-import { assignGpio, connectPins, gpioMap, libMentions, normNet, renameNet } from "./connect.js"
+import { buildDesign, readDesignFiles, ROOT } from "./build.js"
+import { assignGpio, connectPins, gpioMap, libMentions, netExists, normNet, renameNet } from "./connect.js"
 import { indexCircuit, suggestNetName } from "../shared/nets.js"
 
 type Deps = { designExists: (n: string) => boolean; notFound: (r: any) => any }
@@ -49,17 +49,23 @@ export function registerConnectRoutes(app: FastifyInstance, { designExists, notF
     }
   })
 
-  app.post<{ Params: { name: string }; Body: { from?: string; to?: string; source?: string; force?: boolean } }>("/api/designs/:name/rename-net", async (req, reply) => {
+  app.post<{ Params: { name: string }; Body: { from?: string; to?: string; source?: string; merge?: boolean } }>("/api/designs/:name/rename-net", async (req, reply) => {
     const { name } = req.params
     if (!designExists(name)) return notFound(reply)
-    const { from, to, source } = req.body ?? {}
+    const { from, to, source, merge } = req.body ?? {}
     if (!from || !to) return fail(reply, new Error("from and to required"))
     try {
-      const r = renameNet(load(name, source), from, to)
+      // every design file is renamed together; `source` (the editor's unsaved index.tsx) replaces the disk copy
+      const files = { ...readDesignFiles(name), "index.tsx": load(name, source) }
       const lib = libMentions(from)
-      if (lib.length && !req.body.force) return fail(reply, new Error(`"${from}" is also used inside lib/${lib.join(", lib/")}; renaming it here would split the net. Pass force:true to rename only the references in index.tsx.`))
-      if (!r.count) return fail(reply, new Error(`"${from}" is not written in index.tsx${lib.length ? ` (it comes from lib/${lib.join(", lib/")}; rename it there)` : ""}`))
-      return finish(name, req.body, { source: r.source, changed: true, how: `renamed ${r.count} reference(s)` }, { count: r.count, libWarning: lib.length ? `also used in lib/${lib.join(", lib/")} (not changed)` : undefined })
+      if (lib.length) return fail(reply, new Error(`"${from}" is also used in lib/${lib.join(", lib/")}; renaming it here would split the net. Rename it in the lib block (or pass the net in as a prop) instead.`))
+      const clash = normNet(to) === normNet(from) ? [] : netExists(files, to)
+      if (clash.length && !merge) return fail(reply, new Error(`net "${normNet(to)}" already exists (in ${clash.join(", ")}); renaming would merge the two nets. Pass merge:true to do it anyway.`))
+      const r = renameNet(files, from, to)
+      if (!r.count) return fail(reply, new Error(`"${from}" is not written in any design file`))
+      const write = typeof source !== "string"
+      if (write) for (const [k, v] of Object.entries(r.files)) fs.writeFileSync(path.join(ROOT, "designs", name, k), v)
+      return { ok: true, changed: true, how: `renamed ${r.count} reference(s) in ${Object.keys(r.files).join(", ")}`, source: r.files["index.tsx"] ?? files["index.tsx"], files: r.files, written: write, count: r.count }
     } catch (e) {
       return fail(reply, e)
     }

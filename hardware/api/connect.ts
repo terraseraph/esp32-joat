@@ -85,7 +85,10 @@ export function setPinNet(source: string, { ref, pin }: PinRef, net: string | nu
           return { source: apply(source, [{ start: from, end, text: idx > 0 && props.hasTrailingComma ? "," : "" }]), changed: true, how: `removed ${ref}.${pin} from connections` }
         }
         if (prop.initializer.getText() === lit) return { source, changed: false, how: "already set" }
-        return { source: apply(source, [{ start: prop.initializer.getStart(), end: prop.initializer.end, text: lit }]), changed: true, how: `changed ${ref}.${pin} in connections` }
+        const oldSel = ts.isStringLiteral(prop.initializer) && prop.initializer.text.startsWith(".") ? prop.initializer.text : undefined
+        let out = apply(source, [{ start: prop.initializer.getStart(), end: prop.initializer.end, text: lit }])
+        if (oldSel) out = addTrace(out, oldSel, value!) // keep the old partner pin connected
+        return { source: out, changed: true, how: `changed ${ref}.${pin} in connections${oldSel ? ` and kept ${oldSel} on the net` : ""}` }
       }
       if (value === null) return { source, changed: false, how: "pin was not connected here" }
       const entry = `${key}: ${lit}`
@@ -112,19 +115,29 @@ export function setPinNet(source: string, { ref, pin }: PinRef, net: string | nu
       return { source: apply(source, [{ start: ls, end: le < 0 ? full.end : le + 1, text: "" }]), changed: true, how: "removed trace" }
     }
     if (strAttr(to) === value) return { source, changed: false, how: "already set" }
-    return { source: apply(source, [{ start: to.getStart(), end: to.end, text: `to=${JSON.stringify(value)}` }]), changed: true, how: `retargeted trace ${ref}.${pin}` }
+    const old = strAttr(to)
+    const partner = old && old.startsWith(".") ? old : undefined
+    let out = apply(source, [{ start: to.getStart(), end: to.end, text: `to=${JSON.stringify(value)}` }])
+    // pin-to-pin trace: keep the other end connected by putting it on the new net too
+    if (partner) out = addTrace(out, partner, value)
+    return { source: out, changed: true, how: `retargeted trace ${ref}.${pin}${partner ? ` and kept ${partner} on the net` : ""}` }
   }
   if (value === null) return { source, changed: false, how: "pin was not connected in this file" }
-  // new trace, inserted before the closing tag of the board/group
+  return { source: addTrace(source, `.${ref} > .${pin}`, value), changed: true, how: `added <trace> for ${ref}.${pin}` }
+}
+
+/** New <trace>, inserted before the closing tag of the board/group. */
+function addTrace(source: string, from: string, to: string): string {
+  const sf = parse(source)
   const root = [...walk(sf)].find((n): n is ts.JsxElement => ts.isJsxElement(n) && ["board", "group", "subcircuit"].includes(tagText(n.openingElement)))
   if (!root) throw new Error("no <board> found to add a trace to")
   const closeAt = root.closingElement.getStart()
   const lineStart = source.lastIndexOf("\n", closeAt) + 1
   const closeIndent = source.slice(lineStart, closeAt)
   const ownLine = closeIndent.trim() === ""
-  const text = `${ownLine ? closeIndent + "  " : "  "}<trace from=${JSON.stringify(`.${ref} > .${pin}`)} to=${JSON.stringify(value)} />\n`
+  const text = `${ownLine ? closeIndent + "  " : "  "}<trace from=${JSON.stringify(from)} to=${JSON.stringify(to)} />\n`
   const at = ownLine ? lineStart : closeAt
-  return { source: apply(source, [{ start: at, end: at, text }]), changed: true, how: `added <trace> for ${ref}.${pin}` }
+  return apply(source, [{ start: at, end: at, text }])
 }
 
 /** Put `a` (and `b`) on one net. */
@@ -142,14 +155,30 @@ export function connectPins(source: string, a: PinRef, b: PinRef | undefined, ne
   return { source: s, changed, how: how.join("; ") }
 }
 
-export function renameNet(source: string, from: string, to: string): { source: string; count: number } {
-  if (!NET_NAME_RE.test(bareNet(to))) throw new Error(`invalid net name "${to}"`)
-  const sf = parse(source)
+function renameIn(source: string, from: string, to: string) {
   const edits: Edit[] = []
-  const f = normNet(from)
-  for (const n of walk(sf))
-    if ((ts.isStringLiteral(n) || ts.isNoSubstitutionTemplateLiteral(n)) && n.text === f) edits.push({ start: n.getStart() + 1, end: n.end - 1, text: normNet(to) })
+  for (const n of walk(parse(source)))
+    if ((ts.isStringLiteral(n) || ts.isNoSubstitutionTemplateLiteral(n)) && n.text === from) edits.push({ start: n.getStart() + 1, end: n.end - 1, text: to })
   return { source: apply(source, edits), count: edits.length }
+}
+
+/** Rename a net in every design file. Returns only the files that changed. */
+export function renameNet(files: Record<string, string>, from: string, to: string): { files: Record<string, string>; count: number } {
+  if (!NET_NAME_RE.test(bareNet(to))) throw new Error(`invalid net name "${to}"`)
+  const out: Record<string, string> = {}
+  let count = 0
+  for (const [k, v] of Object.entries(files)) {
+    if (!/\.tsx?$/.test(k)) continue
+    const r = renameIn(v, normNet(from), normNet(to))
+    if (r.count) { out[k] = r.source; count += r.count }
+  }
+  return { files: out, count }
+}
+
+/** Files (design files or lib/) where the net name already appears; renaming onto it would merge nets. */
+export function netExists(files: Record<string, string>, net: string): string[] {
+  const hit = Object.entries(files).filter(([k, v]) => /\.tsx?$/.test(k) && renameIn(v, normNet(net), normNet(net)).count > 0).map(([k]) => k)
+  return [...hit, ...libMentions(net).map((n) => "lib/" + n)]
 }
 
 /** Files in lib/ that mention a net literal (renaming in a design does not touch shared blocks). */
@@ -197,7 +226,7 @@ export function pinNotes(label: string): Note[] {
   if (n === 0) notes.push({ level: "warn", text: "Strapping pin: low at reset = download mode. Normally the BOOT button; do not drive hard." })
   if (n === 3) notes.push({ level: "warn", text: "Strapping pin: selects the JTAG signal source. Avoid loads that pull it at reset." })
   if (n === 45) notes.push({ level: "warn", text: "Strapping pin: sets the flash/PSRAM voltage (VDD_SPI). Must be low at reset on 3.3 V modules." })
-  if (n === 46) notes.push({ level: "warn", text: "Strapping pin (ROM boot log) and input-only: cannot be an output." })
+  if (n === 46) notes.push({ level: "warn", text: "Strapping pin: must not be pulled high at reset when entering download mode; also controls the ROM boot log. Avoid hard loads." })
   if (n === 19 || n === 20) notes.push({ level: "warn", text: `Native USB ${n === 19 ? "D-" : "D+"}. Using it as GPIO disables USB serial/JTAG.` })
   if (n >= 39 && n <= 42) notes.push({ level: "info", text: "Default JTAG pins (MTCK/MTDO/MTDI/MTMS). Fine as GPIO if you do not need JTAG." })
   if (n >= 11 && n <= 20) notes.push({ level: "info", text: "ADC2 channel: ADC2 reads are unreliable while WiFi is active. Use IO1–IO10 (ADC1) for analog." })

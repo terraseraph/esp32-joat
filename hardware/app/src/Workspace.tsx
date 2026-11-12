@@ -216,7 +216,7 @@ export default function Workspace({ name, onSaved }: { name: string; onSaved: ()
                 {panel === "problems" ? (
                   <Problems result={result} fatal={build.fatal} />
                 ) : panel === "nets" ? (
-                  <Connect name={name} index={circuitIndex} source={files["index.tsx"] ?? ""} onSource={setIndexSource} state={conn} setState={setConn} />
+                  <Connect name={name} index={circuitIndex} source={files["index.tsx"] ?? ""} onSource={setIndexSource} onFiles={(f) => setFiles((x) => ({ ...x, ...f }))} state={conn} setState={setConn} />
                 ) : panel === "gpio" ? (
                   <Gpio name={name} source={files["index.tsx"] ?? ""} onSource={setIndexSource} />
                 ) : (

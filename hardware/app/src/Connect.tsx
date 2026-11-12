@@ -11,6 +11,7 @@ type Props = {
   index: CircuitIndex | null
   source: string
   onSource: (src: string) => void
+  onFiles: (files: Record<string, string>) => void
   state: ConnectState
   setState: (f: (s: ConnectState) => ConnectState) => void
 }
@@ -19,7 +20,7 @@ const label = (p?: PinRefT) => (p ? `${p.ref}.${p.pin}` : "click a pin…")
 const netKey = (n: string) => (n.startsWith("net.") ? n : `net.${n}`)
 
 /** Connect mode (click pin A, pin B, pick a net) + the nets list with highlight and rename. */
-export default function Connect({ name, index, source, onSource, state, setState }: Props) {
+export default function Connect({ name, index, source, onSource, onFiles, state, setState }: Props) {
   const toast = useToast()
   const [choice, setChoice] = useState("") // "" = existing-or-auto
   const [custom, setCustom] = useState("")
@@ -64,14 +65,16 @@ export default function Connect({ name, index, source, onSource, state, setState
     let r: any = null
     setBusy(true)
     try {
-      r = await api.renameNet(name, renaming.from, renaming.to, source)
-    } catch (e: any) {
-      if (/force:true/.test(e.message) && confirm(`${e.message.split(" Pass force")[0]}\n\nRename only the index.tsx references anyway?`)) {
-        try { r = await api.renameNet(name, renaming.from, renaming.to, source, true) } catch (e2: any) { toast("err", e2.message) }
-      } else if (!/force:true/.test(e.message)) toast("err", e.message)
-    } finally { setBusy(false) }
+      try {
+        r = await api.renameNet(name, renaming.from, renaming.to, source)
+      } catch (e: any) {
+        if (/merge:true/.test(e.message)) {
+          if (confirm(`Merge into existing net ${netKey(renaming.to)}? ${renaming.from} and ${netKey(renaming.to)} will become one net.`)) r = await api.renameNet(name, renaming.from, renaming.to, source, true)
+        } else throw e
+      }
+    } catch (e: any) { toast("err", e.message) } finally { setBusy(false) }
     if (!r) return
-    onSource(r.source)
+    onFiles(r.files ?? { "index.tsx": r.source })
     toast("ok", `Renamed ${r.count} reference${r.count === 1 ? "" : "s"}`)
     setRenaming(null)
   }

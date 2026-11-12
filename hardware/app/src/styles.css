@@ -184,3 +184,22 @@ h1 { font-size: 22px; margin: 0; letter-spacing: -0.02em; }
   * { transition-duration: 0.01ms !important; }
 }
 .bom-table td.nowrap { white-space: nowrap; }
+
+/* iterate safely */
+.row.small { gap: 6px; flex-wrap: wrap; }
+.snaps { display: flex; gap: 16px; height: 100%; padding: 10px 12px; overflow: hidden; }
+.snap-col { flex: 1; min-width: 0; overflow: auto; display: flex; flex-direction: column; gap: 8px; }
+.snap-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.snap-list li { display: flex; align-items: center; gap: 8px; padding: 3px 6px; border-radius: 7px; }
+.snap-list li:hover, .snap-list li.sel { background: var(--hover); }
+.snap-list li.auto b { font-weight: 450; color: var(--muted); }
+.snap-main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+.kind { font-size: 10px; padding: 1px 7px; border-radius: 99px; color: #fff; text-transform: uppercase; letter-spacing: .03em; }
+.diffview { display: flex; flex-direction: column; height: 100%; min-height: 0; }
+.diffview svg { flex: 1; min-height: 0; width: 100%; }
+.diffview .legend { display: flex; gap: 12px; font-size: 12px; color: var(--muted); align-items: center; }
+.diffview .legend i { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 5px; }
+.diff-note { padding: 4px 12px; font-size: 12px; color: var(--muted); }
+.autosave { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); cursor: pointer; user-select: none; }
+
+.pad-l { padding-left: 12px; }

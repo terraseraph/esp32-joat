@@ -5,6 +5,7 @@ import fs from "node:fs"
 import path from "node:path"
 import { bomCsv, computeBom, cplCsv } from "./bom.js"
 import { buildDesign, NAME_RE, readDesignFiles, readMeta, ROOT, safeDesignPath } from "./build.js"
+import { registerIterateRoutes } from "./iterate.js"
 import { gitCommit, gitPush, gitStatus } from "./git.js"
 
 const app = Fastify({ logger: { level: "warn" }, bodyLimit: 20 * 1024 * 1024 })
@@ -115,6 +116,8 @@ app.post("/api/git/push", async (_req, reply) => {
   const r = await gitPush()
   return reply.code(r.ok ? 200 : 500).send(r)
 })
+
+registerIterateRoutes(app, designExists)
 
 app.setErrorHandler((err: any, _req, reply) => {
   reply.code(err.statusCode ?? 500).send({ error: err.message ?? String(err) })

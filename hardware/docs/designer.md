@@ -17,3 +17,22 @@ A local Vite app plus a Fastify API (127.0.0.1:3101) that renders tscircuit boar
 3. If the board needs firmware support that does not exist (a module type, an EEPROM record format, a board profile), say so under **Gaps** in the hardware doc and in the firmware doc; if it is a real mismatch, add a line to [docs/lockstep-issues.md](../../docs/lockstep-issues.md).
 4. Keep planned-but-undesigned things under **Gaps**, marked as planned. Do not describe them as provided.
 5. Run `node tools/precheck.mjs`; it fails if a feature has no hardware doc.
+
+## Iterate safely (undo, autosave, snapshots, variants, diff)
+- **Undo/redo**: `app/src/useHistory.ts` keeps a stack of whole file maps per open design. Every edit source calls `history.push(update, {key})` (the code editor does; a property panel or API-driven edit should too). Same-`key` edits within 1 s merge into one step. Ctrl+Z / Ctrl+Shift+Z (or Ctrl+Y) work outside the code editor, which keeps its own undo; toolbar buttons do the same. Snapshot restore goes through the stack, so it is undoable.
+- **Autosave**: toggle in the toolbar (default on, remembered in localStorage). Saves 1.5 s after the last change and when you leave the design. The toolbar reads Saving / Unsaved changes / Saved from the real difference between editor and disk. Ctrl+S still works.
+- **Snapshots** live in `hardware/.cache/snapshots/<design>/<id>.json` (gitignored). Not in `designs/<name>/.snapshots`: the build walks every `.ts/.tsx/.json` under the design folder and would treat snapshots as design files and show them in `git status`. Restore first stores the current disk state as an automatic snapshot, so it is never destructive. Snapshots are not a substitute for git commits.
+- **New variant**: button on each design card and in the workspace. Copies the folder to `<base>-revb`, `-revc`... (first free name) and bumps `board.json` `revision` (A to B, 3 to 4).
+- **Revision diff**: "Snapshots & diff" tab. Pick two snapshots or one vs current (unsaved editor state included). Builds both revisions, matches parts by name, lists added / removed / moved / changed (value or footprint props, position, rotation, layer, board size). The preview pane switches to a board map with the same colours; click a row or a part to focus it. It is a separate SVG built from circuit-json geometry, not drawn inside the tscircuit PCB viewer (its pan/zoom is not exposed). Diffs build two full revisions, so they are slow on boards that autoroute slowly.
+
+### API (for Claude and scripts)
+```
+GET    /api/designs/:name/snapshots                  list, newest first
+POST   /api/designs/:name/snapshots   {label?, files?}  files omitted = files on disk
+GET    /api/designs/:name/snapshots/:id              full snapshot with files
+DELETE /api/designs/:name/snapshots/:id
+POST   /api/designs/:name/snapshots/:id/restore      writes files to disk, returns {files, backup}
+POST   /api/designs/:name/variant     {name?}        returns {name, revision}
+POST   /api/designs/:name/diff        {a, b, files?}  a/b = snapshot id or "current"; files = unsaved state for "current"
+```
+Set `HW_API_PORT` / `HW_APP_PORT` to run on other ports. Known limit: a build with override files still merges the files on disk, so diffing a snapshot that lacks a file that exists on disk sees that file.

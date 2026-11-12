@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react"
 import { motion } from "motion/react"
-import { api, newBoardJson, NEW_INDEX, type DesignSummary, type GitStatus } from "./api"
+import { api, iterApi, newBoardJson, NEW_INDEX, type DesignSummary, type GitStatus } from "./api"
 import { useToast } from "./toast"
 
 export default function DesignList({ git }: { git: GitStatus | null }) {
@@ -24,6 +24,16 @@ export default function DesignList({ git }: { git: GitStatus | null }) {
     } catch (e: any) {
       toast("err", e.message)
     }
+  }
+
+  const variant = async (e: React.MouseEvent, from: string) => {
+    e.preventDefault()
+    e.stopPropagation()
+    try {
+      const v = await iterApi.variant(from)
+      toast("ok", `Created ${v.name} (rev ${v.revision})`)
+      location.hash = `#/design/${encodeURIComponent(v.name)}`
+    } catch (err: any) { toast("err", err.message) }
   }
 
   return (
@@ -64,6 +74,7 @@ export default function DesignList({ git }: { git: GitStatus | null }) {
               <div className="card-foot mono">
                 <span>{d.name}</span>
                 {dirty && <span className="dirty-tag">uncommitted</span>}
+                <button className="btn ghost" onClick={(e) => variant(e, d.name)} title="Copy to a new revision folder">New variant</button>
               </div>
             </motion.a>
           )

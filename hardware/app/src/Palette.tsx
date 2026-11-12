@@ -232,7 +232,7 @@ export default function Palette({ name, getSource, knownNames, onInsert, dropId 
   const [q, setQ] = useState("")
   const [mode, setMode] = useState<"items" | "parts">("items")
   const [pos, setPos] = useState<{ x: number; y: number } | undefined>()
-  const [collapsed, setCollapsed] = useState(() => { try { return localStorage.getItem("hw.paletteCollapsed") === "1" } catch { return false } })
+  const [collapsed, setCollapsed] = useState(() => { try { const v = localStorage.getItem("hw.paletteCollapsed"); return v === null ? innerWidth < 1100 : v === "1" } catch { return innerWidth < 1100 } })
   const collapse = (c: boolean) => { setCollapsed(c); try { localStorage.setItem("hw.paletteCollapsed", c ? "1" : "0") } catch {} }
 
   useEffect(() => { api.palette().then(setPalette).catch((e) => setErr(e.message)) }, [])

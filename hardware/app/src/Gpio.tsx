@@ -2,6 +2,9 @@ import { useEffect, useMemo, useState } from "react"
 import { api, type GpioMap } from "./api"
 import { useToast } from "./toast"
 
+/** display name: the Nets list and the rest of the UI show nets without the source `net.` prefix */
+const shown = (n: string) => n.replace(/^net\./, "")
+
 const NEW = "__new__"
 const NONE = "__none__"
 
@@ -76,7 +79,7 @@ export default function Gpio({ name, source, onSource }: { name: string; source:
                   <td className="mono nowrap"><b>{r.pin}</b> <span className="muted small">#{r.pinNumber}</span></td>
                   <td>
                     {!isIo ? (
-                      <span className="mono" title={r.isDefault ? "Set by the module block in lib/, not editable here" : "Not a GPIO"}>{r.net ?? <span className="muted">-</span>}{r.isDefault && <span className="muted small"> (module default)</span>}</span>
+                      <span className="mono" title={r.isDefault ? "Set by the module block in lib/, not editable here" : "Not a GPIO"}>{r.net ? shown(r.net) : <span className="muted">-</span>}{r.isDefault && <span className="muted small"> (module default)</span>}</span>
                     ) : editing?.pin === r.pin ? (
                       <span className="rename">
                         <input autoFocus className="input mono" placeholder="NET_NAME" value={editing.text}
@@ -89,8 +92,8 @@ export default function Gpio({ name, source, onSource }: { name: string; source:
                       <select className="input mono" value={r.net ?? NONE}
                         onChange={(e) => (e.target.value === NEW ? setEditing({ pin: r.pin, text: "" }) : assign(r.pin, e.target.value === NONE ? null : e.target.value))}>
                         <option value={NONE}>(unconnected)</option>
-                        {r.net && !nets.includes(r.net) && <option value={r.net}>{r.net}</option>}
-                        {nets.map((n) => <option key={n} value={n}>{n}</option>)}
+                        {r.net && !nets.includes(r.net) && <option value={r.net}>{shown(r.net)}</option>}
+                        {nets.map((n) => <option key={n} value={n}>{shown(n)}</option>)}
                         <option value={NEW}>New net…</option>
                       </select>
                     )}

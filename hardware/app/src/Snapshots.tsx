@@ -66,7 +66,7 @@ export default function Snapshots({ name, files, version, diff, focus, onFocus, 
           <input className="input" placeholder="Label (optional)" value={label} onChange={(e) => setLabel(e.target.value)} />
           <button className="btn primary" type="submit" disabled={busy === "save"}>Save snapshot</button>
         </form>
-        {list.length === 0 && <p className="muted small">No snapshots yet. They are stored outside git, in hardware/.cache/snapshots.</p>}
+        {list.length === 0 && <p className="muted small">No snapshots yet. Save one before a risky change; you can compare against it or roll back. (Kept locally, not in git.)</p>}
         <ul className="snap-list">
           {list.map((s) => (
             <li key={s.id} className={s.auto ? "auto" : ""}>

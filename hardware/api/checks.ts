@@ -555,6 +555,8 @@ async function runChecksUncached(cj: any[], rules: Rules, quick: boolean): Promi
     if (quick && UNROUTED.test(e.type)) { unrouted++; continue }
     const it = fromElement(e, "build", ctx, e.type.endsWith("_error") ? "error" : "warning", n++)
     if (/^schematic_|source_no_(power|ground)_pin|pins_underspecified/.test(e.type)) it.severity = "info" // tidiness hints, not board faults
+    // a datasheet lookup that timed out is a network hiccup during the build, not a board fault
+    if (e.type === "source_property_ignored_warning" && /Datasheet information .* could not be fetched/.test(String(e.message))) it.severity = "info"
     issues.push(it)
   }
   try {

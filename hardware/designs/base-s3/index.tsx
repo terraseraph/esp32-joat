@@ -35,14 +35,22 @@ const HOLES = [
 
 const OUTPUT_X = [-22, -2, 18, 38]
 
+// board outline (120 x 90, centred) with the antenna keep-out cut out at the top edge
+const POUR_OUTLINE = [
+  { x: -60, y: -45 }, { x: 60, y: -45 }, { x: 60, y: 45 },
+  { x: 54, y: 45 }, { x: 54, y: 37 }, { x: 30, y: 37 }, { x: 30, y: 45 },
+  { x: -60, y: 45 },
+]
+
 export default function BaseS3() {
   return (
     <board width="120mm" height="90mm" layers={4} routeRemaining>
       {HOLES.map(([x, y], i) => (
         <hole key={i} name={`H${i + 1}`} diameter="3.2mm" pcbX={x} pcbY={y} />
       ))}
-      <copperpour layer="inner1" connectsTo={GND} />
-      <copperpour layer="bottom" connectsTo={GND} />
+      {/* GND pours with a notch under the ESP32 antenna (x 30..54, y 37..45: from the module's last pads to the top edge) */}
+      <copperpour layer="inner1" connectsTo={GND} outline={POUR_OUTLINE} />
+      <copperpour layer="bottom" connectsTo={GND} outline={POUR_OUTLINE} />
 
       {/* ---------- logic power inputs ---------- */}
       <PluggableTerminal2 name="J_DC" nets={["net.VDC_IN", GND]} labels={["VIN", "GND"]} pcbX={-56} pcbY={20} pcbRotation={90} />

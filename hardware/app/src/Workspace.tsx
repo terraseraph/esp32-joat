@@ -6,6 +6,7 @@ import Editor from "./Editor"
 import Preview from "./Preview"
 import Problems from "./Problems"
 import Bom from "./Bom"
+import Shortcuts from "./Shortcuts"
 
 function useSplit(initial: number, min: number, max: number, axis: "x" | "y", invert = false) {
   const [size, setSize] = useState(initial)
@@ -44,6 +45,7 @@ export default function Workspace({ name, onSaved }: { name: string; onSaved: ()
   const [panel, setPanel] = useState<"problems" | "bom">("problems")
   const [panelOpen, setPanelOpen] = useState(true)
   const [bomVersion, setBomVersion] = useState(0)
+  const [help, setHelp] = useState(false)
   const buildSeq = useRef(0)
   const filesRef = useRef(files)
   filesRef.current = files
@@ -106,9 +108,22 @@ export default function Workspace({ name, onSaved }: { name: string; onSaved: ()
     }
   }, [name, saved, toast, onSaved])
 
+  const runBuildRef = useRef(runBuild)
+  runBuildRef.current = runBuild
   useEffect(() => {
     const on = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") { e.preventDefault(); save() }
+      const mod = e.ctrlKey || e.metaKey
+      const k = e.key.toLowerCase()
+      if (mod && k === "s") { e.preventDefault(); save(); return }
+      if (mod && e.key === "Enter") { e.preventDefault(); runBuildRef.current(); return }
+      const t = e.target as HTMLElement
+      const typing = t.closest("input, textarea, select, .cm-editor, [contenteditable=true]")
+      if (e.key === "Escape" && typing && t.closest(".cm-editor")) { (t as HTMLElement).blur(); return }
+      if (typing || mod || e.altKey) return
+      if (e.key === "?") { e.preventDefault(); setHelp((o) => !o) }
+      else if (k === "1" || k === "2" || k === "3") dispatchEvent(new CustomEvent("hw-preview-tab", { detail: ["schematic", "pcb", "3d"][+k - 1] }))
+      else if (k === "j") setPanelOpen((o) => !o)
+      else if (k === "e") { e.preventDefault(); document.querySelector<HTMLElement>(".cm-content")?.focus() }
     }
     addEventListener("keydown", on)
     return () => removeEventListener("keydown", on)
@@ -132,6 +147,7 @@ export default function Workspace({ name, onSaved }: { name: string; onSaved: ()
 
   return (
     <div className="workspace">
+      <Shortcuts open={help} onOpenChange={setHelp} />
       <div className="toolbar">
         <div className={`status ${build.status}`}>
           <AnimatePresence mode="wait" initial={false}>
@@ -154,8 +170,9 @@ export default function Workspace({ name, onSaved }: { name: string; onSaved: ()
         </div>
         <div className="grow" />
         {dirty && <span className="muted small">Unsaved changes</span>}
-        <button className="btn" onClick={runBuild} disabled={build.status === "building"}>Build</button>
-        <button className="btn" onClick={save} disabled={!dirty}>Save</button>
+        <button className="icon-btn" onClick={() => setHelp(true)} title="Keyboard shortcuts (?)" aria-label="Keyboard shortcuts">?</button>
+        <button className="btn" onClick={runBuild} disabled={build.status === "building"} title="Build (Ctrl+Enter)">Build</button>
+        <button className="btn" onClick={save} disabled={!dirty} title="Save (Ctrl+S)">Save</button>
         <button className="btn primary" onClick={doExport} title={hasErrors ? "Last build had errors" : "Download JLCPCB zip"}>
           {hasErrors && <span className="dot bad" />}Export
         </button>

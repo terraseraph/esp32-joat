@@ -1,5 +1,9 @@
 export type Meta = { name?: string; description?: string; revision?: string; notes?: string } | null
-export type DesignSummary = { name: string; meta: Meta }
+export type DesignSummary = { name: string; meta: Meta; modified?: number; hasThumb?: boolean }
+export type NewDesignOptions = {
+  name: string; template?: "blank" | "expansion" | "base"; width?: number; height?: number
+  layers?: 2 | 4; holes?: "none" | "m3-corners"; description?: string
+}
 export type Design = { name: string; meta: Meta; files: Record<string, string> }
 export type Issue = { type: string; message: string; stack?: string }
 export type BuildResult = { ok: boolean; circuitJson: any[]; errors: Issue[]; warnings: Issue[]; durationMs: number }
@@ -32,6 +36,10 @@ const post = (url: string, body?: unknown) =>
 const enc = encodeURIComponent
 export const api = {
   designs: () => req<DesignSummary[]>("/api/designs"),
+  createDesign: (o: NewDesignOptions) => post("/api/designs", o) as Promise<{ ok: boolean; name: string }>,
+  duplicate: (n: string, to?: string) => post(`/api/designs/${enc(n)}/duplicate`, { to }) as Promise<{ ok: boolean; name: string }>,
+  trash: (n: string) => req<{ ok: boolean; trashedTo: string }>(`/api/designs/${enc(n)}`, { method: "DELETE" }),
+  thumbUrl: (n: string, v?: number) => `/api/designs/${enc(n)}/thumb.svg${v ? `?v=${v}` : ""}`,
   design: (n: string) => req<Design>(`/api/designs/${enc(n)}`),
   save: (n: string, files: Record<string, string>) =>
     req<any>(`/api/designs/${enc(n)}/files`, { method: "PUT", body: JSON.stringify({ files }) }),

@@ -5,6 +5,8 @@ import fs from "node:fs"
 import path from "node:path"
 import { bomCsv, computeBom, cplCsv } from "./bom.js"
 import { buildDesign, NAME_RE, readDesignFiles, readMeta, ROOT, safeDesignPath } from "./build.js"
+import { duplicateDesign, lastModified, saveThumb, slug, thumbPath, trashDesign } from "./designs.js"
+import { renderTemplate, SIZE_PRESETS, TEMPLATES, type NewDesignOptions } from "./templates/index.js"
 import { gitCommit, gitPush, gitStatus } from "./git.js"
 
 const app = Fastify({ logger: { level: "warn" }, bodyLimit: 20 * 1024 * 1024 })
@@ -28,7 +30,55 @@ app.get("/api/designs", async () => {
   return fs
     .readdirSync(dir, { withFileTypes: true })
     .filter((e) => e.isDirectory() && !e.name.startsWith("_") && NAME_RE.test(e.name))
-    .map((e) => ({ name: e.name, meta: readMeta(e.name) }))
+    .map((e) => ({ name: e.name, meta: readMeta(e.name), modified: lastModified(e.name), hasThumb: fs.existsSync(thumbPath(e.name)) }))
+})
+
+app.get("/api/templates", async () => ({ templates: TEMPLATES, sizes: SIZE_PRESETS }))
+
+// Create a design from a template: { name, template?, width?, height?, layers?, holes?, description? }
+app.post<{ Body: NewDesignOptions }>("/api/designs", async (req, reply) => {
+  const opts = req.body ?? ({} as NewDesignOptions)
+  const name = slug(String(opts.name ?? ""))
+  if (!name || !NAME_RE.test(name)) return reply.code(400).send({ error: "invalid design name" })
+  if (fs.existsSync(path.join(ROOT, "designs", name))) return reply.code(409).send({ error: `"${name}" already exists` })
+  let files: Record<string, string>
+  try {
+    files = renderTemplate({ ...opts, name }, ROOT)
+  } catch (e: any) {
+    return reply.code(400).send({ error: e.message })
+  }
+  fs.mkdirSync(path.join(ROOT, "designs", name), { recursive: true })
+  for (const [rel, content] of Object.entries(files)) fs.writeFileSync(path.join(ROOT, "designs", name, rel), content)
+  return { ok: true, name, files }
+})
+
+app.post<{ Params: { name: string }; Body: { to?: string } }>("/api/designs/:name/duplicate", async (req, reply) => {
+  const { name } = req.params
+  if (!designExists(name)) return notFound(reply)
+  let to = slug(req.body?.to ?? "")
+  if (!to) {
+    to = `${name}-copy`
+    for (let i = 2; fs.existsSync(path.join(ROOT, "designs", to)); i++) to = `${name}-copy-${i}`
+  }
+  try {
+    duplicateDesign(name, to)
+  } catch (e: any) {
+    return reply.code(e.message.includes("exists") ? 409 : 400).send({ error: e.message })
+  }
+  return { ok: true, name: to }
+})
+
+// Soft delete: the folder moves to hardware/.trash/, it is never removed.
+app.delete<{ Params: { name: string } }>("/api/designs/:name", async (req, reply) => {
+  const { name } = req.params
+  if (!designExists(name)) return notFound(reply)
+  return { ok: true, trashedTo: trashDesign(name) }
+})
+
+app.get<{ Params: { name: string } }>("/api/designs/:name/thumb.svg", async (req, reply) => {
+  const { name } = req.params
+  if (!NAME_RE.test(name) || !fs.existsSync(thumbPath(name))) return notFound(reply)
+  return reply.header("Content-Type", "image/svg+xml").header("Cache-Control", "no-cache").send(fs.readFileSync(thumbPath(name)))
 })
 
 app.get<{ Params: { name: string } }>("/api/designs/:name", async (req, reply) => {
@@ -62,6 +112,7 @@ app.post<{ Params: { name: string }; Body: { files?: Record<string, string> } }>
   if (!designExists(name) && !files?.["index.tsx"]) return notFound(reply)
   if (files) for (const rel of Object.keys(files)) if (!safeDesignPath(name, rel)) return reply.code(400).send({ error: `invalid file: ${rel}` })
   const { ok, circuitJson, errors, warnings, durationMs } = await buildDesign(name, files)
+  if (ok && circuitJson.length) void saveThumb(name, circuitJson)
   return { ok, circuitJson, errors, warnings, durationMs }
 })
 

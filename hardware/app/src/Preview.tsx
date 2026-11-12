@@ -37,6 +37,9 @@ function useSize() {
   return { ref, ...size }
 }
 
+type Layer = { id: number; cj: any[] }
+let layerSeq = 0
+
 export default function Preview({ circuitJson, building }: { circuitJson: any[] | null; building: boolean }) {
   const [tab, setTab] = useState<Tab>(() => {
     try { return (localStorage.getItem("previewTab") as Tab) || "pcb" } catch { return "pcb" }
@@ -46,12 +49,43 @@ export default function Preview({ circuitJson, building }: { circuitJson: any[] 
     setTab(t)
     try { localStorage.setItem("previewTab", t) } catch {}
   }
+  useEffect(() => {
+    const on = (e: Event) => pick((e as CustomEvent<Tab>).detail)
+    addEventListener("hw-preview-tab", on)
+    return () => removeEventListener("hw-preview-tab", on)
+  }, [])
+
+  // Rebuilds mount the new viewer underneath/over the old one and fade it in once it has had
+  // time to render; the previous layer stays visible until then, so the preview never blanks.
+  const [layers, setLayers] = useState<Layer[]>([])
+  const [ready, setReady] = useState<number | null>(null)
+  useEffect(() => {
+    if (!circuitJson) return
+    const id = ++layerSeq
+    setLayers((l) => (l.length && l[l.length - 1].cj === circuitJson ? l : [...l, { id, cj: circuitJson }]))
+    const first = layers.length === 0
+    const t = setTimeout(() => setReady(id), first ? 0 : 450)
+    return () => clearTimeout(t)
+  }, [circuitJson])
+  const done = (id: number) => setLayers((l) => (l.length > 1 && l[l.length - 1].id === id ? [l[l.length - 1]] : l))
+
+  const viewer = (cj: any[]) => (
+    <ViewerBoundary resetKey={cj}>
+      {w > 0 && h > 0 && tab === "schematic" && <SchematicViewer circuitJson={cj as any} containerStyle={{ width: w, height: h }} />}
+      {w > 0 && h > 0 && tab === "pcb" && <PcbViewer circuitJson={cj as any} height={h} />}
+      {w > 0 && h > 0 && tab === "3d" && (
+        <div style={{ width: w, height: h }}>
+          <CadViewer circuitJson={cj as any} />
+        </div>
+      )}
+    </ViewerBoundary>
+  )
 
   return (
     <div className="preview">
       <div className="tabs">
-        {TABS.map((t) => (
-          <button key={t.id} className={`tab ${tab === t.id ? "on" : ""}`} onClick={() => pick(t.id)}>
+        {TABS.map((t, i) => (
+          <button key={t.id} className={`tab ${tab === t.id ? "on" : ""}`} onClick={() => pick(t.id)} title={`${t.label} (${i + 1})`}>
             {tab === t.id && <motion.span layoutId="prevtab" className="tab-bg" transition={{ type: "spring", visualDuration: 0.2, bounce: 0 }} />}
             <span className="tab-label">{t.label}</span>
           </button>
@@ -60,7 +94,7 @@ export default function Preview({ circuitJson, building }: { circuitJson: any[] 
         {building && <span className="muted small pad-r">updating…</span>}
       </div>
       <div className="viewport" ref={ref}>
-        {!circuitJson ? (
+        {!layers.length ? (
           <div className="empty">{building ? "Building first preview…" : "No successful build yet"}</div>
         ) : (
           <AnimatePresence mode="popLayout" initial={false}>
@@ -73,15 +107,22 @@ export default function Preview({ circuitJson, building }: { circuitJson: any[] 
               exit={{ opacity: 0, transition: { duration: 0.08 } }}
               transition={{ duration: 0.15 }}
             >
-              <ViewerBoundary resetKey={circuitJson}>
-                {w > 0 && h > 0 && tab === "schematic" && <SchematicViewer circuitJson={circuitJson as any} containerStyle={{ width: w, height: h }} />}
-                {w > 0 && h > 0 && tab === "pcb" && <PcbViewer circuitJson={circuitJson as any} height={h} />}
-                {w > 0 && h > 0 && tab === "3d" && (
-                  <div style={{ width: w, height: h }}>
-                    <CadViewer circuitJson={circuitJson as any} />
-                  </div>
-                )}
-              </ViewerBoundary>
+              {layers.map((l, i) => {
+                const top = i === layers.length - 1
+                const show = !top || layers.length === 1 || ready === l.id
+                return (
+                  <motion.div
+                    key={l.id}
+                    className="viewer-layer"
+                    initial={false}
+                    animate={{ opacity: show ? 1 : 0 }}
+                    transition={{ duration: 0.25 }}
+                    onAnimationComplete={() => show && done(l.id)}
+                  >
+                    {viewer(l.cj)}
+                  </motion.div>
+                )
+              })}
             </motion.div>
           </AnimatePresence>
         )}

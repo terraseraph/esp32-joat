@@ -53,7 +53,7 @@ async function getJson(url: string, tries = 4): Promise<any> {
   }
 }
 
-function parseBreaks(price: unknown): Part["breaks"] {
+export function parseBreaks(price: unknown): Part["breaks"] {
   if (typeof price === "number") return [{ min: 1, price }]
   if (typeof price !== "string") return []
   return price

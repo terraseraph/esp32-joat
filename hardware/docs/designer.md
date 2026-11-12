@@ -17,3 +17,15 @@ A local Vite app plus a Fastify API (127.0.0.1:3101) that renders tscircuit boar
 3. If the board needs firmware support that does not exist (a module type, an EEPROM record format, a board profile), say so under **Gaps** in the hardware doc and in the firmware doc; if it is a real mismatch, add a line to [docs/lockstep-issues.md](../../docs/lockstep-issues.md).
 4. Keep planned-but-undesigned things under **Gaps**, marked as planned. Do not describe them as provided.
 5. Run `node tools/precheck.mjs`; it fails if a feature has no hardware doc.
+
+## Parts palette (left sidebar)
+Lists the `lib/` blocks (parsed from each file's exported component, its `…Props` type and doc comment) plus primitives (resistor, capacitor, LED, diode, pin header, chip, mounting hole). Click an item, or drag it onto the preview, to open a small form: `name` is auto-generated and unique (R1, C2, TB3…), defaults are filled, optional props sit under **Advanced**. **Add to board** inserts the JSX before `</board>` (and the `lib/` import) in the editor buffer; it is unsaved until Save, like any edit. The **JLC search** tab, and the search box on parts with an LCSC field, query jlcsearch (stock, price, Basic/Preferred/Extended, package); picking a result fills the LCSC number, and the footprint when the package is a plain standard one.
+
+API (`api/palette.ts`), also usable by Claude:
+- `GET /api/palette` – `{ lib, primitives }`, each item `{ id, label, tag, props[], … }` (`id` like `lib:SrdRelay`, `prim:resistor`).
+- `GET /api/parts/search?q=…` – `[{ lcsc, mfr, package, stock, price, tier, footprint }]`.
+- `POST /api/designs/:name/components` `{ item, props?, source? }` – without `source` it edits `designs/<name>/index.tsx` on disk; with `source` it writes nothing and returns the edited text (the UI uses this for its unsaved buffer). Returns `{ name, snippet, source }`; 422 on a bad prop or duplicate name.
+
+Placement: a blank position lands near the board centre, staggered so inserts do not stack; set `pcbX`/`pcbY` for exact placement. Open: placing at the pointer on drop (needs pcb-viewer coordinates), and "save selection as block".
+
+Dev ports: `HW_API_PORT` / `HW_APP_PORT` env vars (defaults 3101 / 5173).

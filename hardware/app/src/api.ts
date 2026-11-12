@@ -29,6 +29,18 @@ async function req<T>(url: string, init?: RequestInit): Promise<T> {
 const post = (url: string, body?: unknown) =>
   req<any>(url, { method: "POST", body: JSON.stringify(body ?? {}) })
 
+export type PropSpec = {
+  name: string; type: "string" | "number" | "boolean" | "raw" | "select"; options?: string[]
+  default?: string | number | boolean; required: boolean; doc?: string; advanced?: boolean
+}
+export type PaletteItem = {
+  id: string; kind: "lib" | "primitive"; label: string; tag: string; description: string; prefix: string; props: PropSpec[]
+}
+export type PartHit = {
+  lcsc: string; mfr: string; package: string; description: string; stock: number | null
+  price: number | null; tier: "basic" | "preferred" | "extended"; footprint: string
+}
+
 const enc = encodeURIComponent
 export const api = {
   designs: () => req<DesignSummary[]>("/api/designs"),
@@ -38,6 +50,11 @@ export const api = {
   build: (n: string, files?: Record<string, string>) => post(`/api/designs/${enc(n)}/build`, { files }) as Promise<BuildResult>,
   bom: (n: string, qty: number, refresh = false) =>
     req<Bom>(`/api/designs/${enc(n)}/bom?qty=${qty}${refresh ? "&refresh=1" : ""}`),
+  palette: () => req<{ lib: PaletteItem[]; primitives: PaletteItem[] }>("/api/palette"),
+  searchParts: (q: string) => req<PartHit[]>(`/api/parts/search?q=${enc(q)}`),
+  /** with `source` nothing is written; the edited source comes back */
+  insertComponent: (n: string, item: string, props: Record<string, string>, source?: string) =>
+    post(`/api/designs/${enc(n)}/components`, { item, props, source }) as Promise<{ ok: boolean; name: string | null; snippet: string; source: string }>,
   exportUrl: (n: string) => `/api/designs/${enc(n)}/export`,
   gitStatus: () => req<GitStatus>("/api/git/status"),
   commit: (message: string) => post("/api/git/commit", { message }) as Promise<{ ok: boolean; output: string }>,

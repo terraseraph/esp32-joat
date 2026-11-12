@@ -6,6 +6,7 @@ import Editor from "./Editor"
 import Preview from "./Preview"
 import Problems from "./Problems"
 import Bom from "./Bom"
+import Palette, { PALETTE_MIME } from "./Palette"
 
 function useSplit(initial: number, min: number, max: number, axis: "x" | "y", invert = false) {
   const [size, setSize] = useState(initial)
@@ -44,6 +45,7 @@ export default function Workspace({ name, onSaved }: { name: string; onSaved: ()
   const [panel, setPanel] = useState<"problems" | "bom">("problems")
   const [panelOpen, setPanelOpen] = useState(true)
   const [bomVersion, setBomVersion] = useState(0)
+  const [dropId, setDropId] = useState<{ id: string; n: number } | null>(null)
   const buildSeq = useRef(0)
   const filesRef = useRef(files)
   filesRef.current = files
@@ -162,12 +164,16 @@ export default function Workspace({ name, onSaved }: { name: string; onSaved: ()
       </div>
 
       <div className="panes">
+        <Palette name={name} files={files} dropId={dropId} onInsert={(src) => { setFiles((f) => ({ ...f, "index.tsx": src })); setActive("index.tsx") }} />
+        <div className="gutter x" />
         <section className="pane editor-pane" style={{ width: left.size }}>
           <Editor files={files} saved={saved} active={active} setActive={setActive} onChange={(k, v) => setFiles((f) => ({ ...f, [k]: v }))} />
         </section>
         <div className="gutter x" onPointerDown={left.onPointerDown} />
         <div className="right">
-          <section className="pane preview-pane">
+          <section className="pane preview-pane"
+            onDragOver={(e) => { if (e.dataTransfer.types.includes(PALETTE_MIME)) e.preventDefault() }}
+            onDrop={(e) => { const id = e.dataTransfer.getData(PALETTE_MIME); if (id) { e.preventDefault(); setDropId({ id, n: Date.now() }) } }}>
             <Preview circuitJson={circuit} building={build.status === "building"} />
           </section>
           <div className="gutter y" onPointerDown={panelOpen ? bottom.onPointerDown : undefined} />

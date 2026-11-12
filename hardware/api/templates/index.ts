@@ -17,7 +17,7 @@ type Size = [number, number]
  *  - blank: one 0402.
  *  - expansion: header column (6 pins, 15.2 mm tall) at x = -W/2+4, EEPROM/caps/pull-up out to
  *    x = -W/2+23; holes at y = +-(H/2-4) must clear the header ends (H >= 28).
- *  - base: power header + Buck3v3 block spans 24 mm from the left edge, WROOM module is 18 x 25.5 mm
+ *  - base: power header + Buck3v3 block spans 24 mm from the left edge; the WROOM module (18 x 25.5 mm) sits 8 mm in from the right edge with its antenna at the top edge, and the EN parts sit left of it, so 60 mm is the narrowest board that keeps them apart
  *    on the right; the module courtyard is 19.5 x 26.5 mm, placed 3.5 mm below its origin (module y -3.5), and holes must clear its ends (H >= 40).
  */
 export const TEMPLATES: {
@@ -26,7 +26,7 @@ export const TEMPLATES: {
 }[] = [
   { id: "blank", label: "Blank", blurb: "Empty board with one resistor to start from.", defaultSize: [50, 40], defaultLayers: 2, minSize: { none: [10, 10], "m3-corners": [14, 14] } },
   { id: "expansion", label: "Expansion card", blurb: "1x6 expansion header + ID EEPROM, like relay-8.", defaultSize: [60, 40], defaultLayers: 2, minSize: { none: [30, 22], "m3-corners": [30, 28] } },
-  { id: "base", label: "Base controller", blurb: "ESP32-S3 module + Buck3v3 power, EN reset network.", defaultSize: [80, 60], defaultLayers: 4, minSize: { none: [50, 32], "m3-corners": [50, 40] } },
+  { id: "base", label: "Base controller", blurb: "ESP32-S3 module + Buck3v3 power, EN reset network.", defaultSize: [80, 60], defaultLayers: 4, minSize: { none: [60, 34], "m3-corners": [60, 40] } },
 ]
 
 export const SIZE_PRESETS = [
@@ -88,7 +88,12 @@ function body(t: Template): { imports: string; pre: string; inner: string } {
 import { Buck3v3 } from "../../lib/buck-3v3"
 `,
       pre: "",
-      inner: `      <copperpour layer="bottom" connectsTo={GND} />
+      inner: `      {/* GND pour on the bottom with a notch under the module antenna (keep-out: 22 x 9 mm at the top edge) */}
+      <copperpour layer="bottom" connectsTo={GND} outline={[
+        { x: -W / 2, y: -H / 2 }, { x: W / 2, y: -H / 2 }, { x: W / 2, y: H / 2 },
+        { x: W / 2 - 6, y: H / 2 }, { x: W / 2 - 6, y: H / 2 - 9 }, { x: W / 2 - 28, y: H / 2 - 9 }, { x: W / 2 - 28, y: H / 2 },
+        { x: -W / 2, y: H / 2 },
+      ]} />
 
       {/* 5 V in -> Buck3v3 -> 3.3 V */}
       <pinheader name="J_PWR" pinCount={2} pitch="2.54mm" gender="male" pinLabels={["V5", "GND"]}
@@ -96,11 +101,15 @@ import { Buck3v3 } from "../../lib/buck-3v3"
         connections={{ V5: "net.V5", GND }} />
       <Buck3v3 vin="net.V5" vout="net.V3_3" pcbX={-W / 2 + 13} pcbY={-4} />
 
-      <Esp32S3Module name="U_MCU" pcbX={W / 2 - 11} pcbY={-3.5} connections={{ EN: "net.EN" }} />
+      {/* module antenna at the top edge, clear of the corner hole; nothing under the antenna */}
+      <Esp32S3Module name="U_MCU" pcbX={W / 2 - 17} pcbY={H / 2 - 17.3} connections={{ EN: "net.EN" }} />
+      {/* bulk + HF decoupling next to the module 3V3 pin */}
+      <capacitor name="C_MCU1" capacitance="10uF" footprint="0805" supplierPartNumbers={{ jlcpcb: ["C15850"] }} pcbX={W / 2 - 30} pcbY={H / 2 - 10} pcbRotation={90} connections={{ pin1: "net.V3_3", pin2: GND }} />
+      <capacitor name="C_MCU2" capacitance="100nF" footprint="0603" supplierPartNumbers={{ jlcpcb: ["C14663"] }} pcbX={W / 2 - 28} pcbY={H / 2 - 10} pcbRotation={90} connections={{ pin1: "net.V3_3", pin2: GND }} />
 
       {/* EN: RC power-on reset */}
-      <resistor name="R_EN" resistance="10k" footprint="0603" supplierPartNumbers={{ jlcpcb: ["C25804"] }} pcbX={W / 2 - 24} pcbY={5} connections={{ pin1: "net.V3_3", pin2: "net.EN" }} />
-      <capacitor name="C_EN" capacitance="1uF" footprint="0603" supplierPartNumbers={{ jlcpcb: ["C15849"] }} pcbX={W / 2 - 24} pcbY={8} connections={{ pin1: "net.EN", pin2: GND }} />
+      <resistor name="R_EN" resistance="10k" footprint="0603" supplierPartNumbers={{ jlcpcb: ["C25804"] }} pcbX={W / 2 - 32} pcbY={0} connections={{ pin1: "net.V3_3", pin2: "net.EN" }} />
+      <capacitor name="C_EN" capacitance="1uF" footprint="0603" supplierPartNumbers={{ jlcpcb: ["C15849"] }} pcbX={W / 2 - 32} pcbY={-3} connections={{ pin1: "net.EN", pin2: GND }} />
 
       {/* add your circuit here */}
 `,

@@ -46,6 +46,7 @@ export default function Workspace({ name, onSaved }: { name: string; onSaved: ()
   const [panelOpen, setPanelOpen] = useState(true)
   const [bomVersion, setBomVersion] = useState(0)
   const [dropId, setDropId] = useState<{ id: string; n: number } | null>(null)
+  const knownNames = useMemo(() => (circuit ?? []).filter((e) => e.type === "source_component" && e.name).map((e) => String(e.name)), [circuit])
   const buildSeq = useRef(0)
   const filesRef = useRef(files)
   filesRef.current = files
@@ -164,7 +165,7 @@ export default function Workspace({ name, onSaved }: { name: string; onSaved: ()
       </div>
 
       <div className="panes">
-        <Palette name={name} files={files} dropId={dropId} onInsert={(src) => { setFiles((f) => ({ ...f, "index.tsx": src })); setActive("index.tsx") }} />
+        <Palette name={name} getSource={() => filesRef.current["index.tsx"] ?? ""} knownNames={knownNames} dropId={dropId} onInsert={(src) => { setFiles((f) => ({ ...f, "index.tsx": src })); setActive("index.tsx") }} />
         <div className="gutter x" />
         <section className="pane editor-pane" style={{ width: left.size }}>
           <Editor files={files} saved={saved} active={active} setActive={setActive} onChange={(k, v) => setFiles((f) => ({ ...f, [k]: v }))} />

@@ -69,7 +69,7 @@ export const PRIMITIVES: PaletteItem[] = [
     { name: "showSilkscreenPinLabels", type: "boolean", default: false, required: false, advanced: true },
     lcscProp()]),
   prim("chip", "Chip (by LCSC / footprint)", "U", "Any IC: pick a JLC part with the search box, which fills its LCSC number and footprint.", [
-    fpProp("soic8"),
+    { name: "footprint", type: "string", options: FOOTPRINTS, required: true, doc: "footprint, or jlcpcb:<LCSC> (set by the search box)" },
     { name: "manufacturerPartNumber", type: "string", required: false, doc: "MPN (the search box fills it)" },
     lcscProp()]),
   {
@@ -82,7 +82,7 @@ export const PRIMITIVES: PaletteItem[] = [
 // ---------- lib block discovery ----------
 
 const LIB_DIR = path.join(ROOT, "lib")
-const LIB_PREFIX: Record<string, string> = { SrdRelay: "K", ScrewTerminal3: "TB", IdEeprom: "U", ExpansionHeader: "J", RelayChannel: "" }
+const LIB_PREFIX: Record<string, string> = { SrdRelay: "K", ScrewTerminal3: "TB", IdEeprom: "U", ExpansionHeader: "J", RelayChannel: "", Buck3v3: "U", Buck5v: "U", Esp32S3Module: "U", ExpansionBus: "J", Ina226Monitor: "U", PluggableTerminal2: "J", UsbCDevice: "J", W5500Ethernet: "U" }
 const humanize = (s: string) => s.replace(/([a-z0-9])([A-Z])/g, "$1 $2")
 
 function typeBody(src: string, typeName: string): string | null {
@@ -161,16 +161,17 @@ export function listPalette() {
 
 // ---------- insertion ----------
 
-const esc = (s: string) => s.replace(/\\/g, "\\\\").replace(/"/g, '\\"')
+/** JSX string attributes have no escapes, so values with quotes, backslashes or newlines go in braces. */
+const strProp = (name: string, v: string) => (/["\\\n\r]/.test(v) ? `${name}={${JSON.stringify(v)}}` : `${name}="${v}"`)
 
-function usedNames(src: string): Set<string> {
-  const out = new Set<string>()
+function usedNames(src: string, extra: string[] = []): Set<string> {
+  const out = new Set<string>(extra)
   for (const m of src.matchAll(/\bname=(?:"([^"]+)"|\{`([^`]+)`\}|\{"([^"]+)"\})/g)) out.add(m[1] ?? m[2] ?? m[3])
   return out
 }
 
-export function uniqueName(src: string, prefix: string): string {
-  const used = usedNames(src)
+export function uniqueName(src: string, prefix: string, extra: string[] = []): string {
+  const used = usedNames(src, extra)
   const usedLc = new Set([...used].map((s) => s.toUpperCase()))
   for (let i = 1; ; i++) if (!usedLc.has(`${prefix}${i}`.toUpperCase())) return `${prefix}${i}`
 }
@@ -187,19 +188,20 @@ function jsxProp(spec: PropSpec, v: unknown): string | null {
     case "raw": return `${spec.name}={${String(v)}}`
     case "select":
       // numeric-literal unions (e.g. 1 | -1) must stay numbers
-      return /^-?\d+$/.test(String(v)) && spec.options?.every((o) => /^-?\d+$/.test(o)) ? `${spec.name}={${v}}` : `${spec.name}="${esc(String(v))}"`
-    default: return `${spec.name}="${esc(String(v))}"`
+      return /^-?\d+$/.test(String(v)) && spec.options?.every((o) => /^-?\d+$/.test(o)) ? `${spec.name}={${v}}` : strProp(spec.name, String(v))
+    default: return strProp(spec.name, String(v))
   }
 }
 
-export type InsertRequest = { item: string; props?: Record<string, unknown>; source?: string }
+/** knownNames: component names from the last build (generated or lib-internal ones), so new names never collide */
+export type InsertRequest = { item: string; props?: Record<string, unknown>; source?: string; knownNames?: string[] }
 export type InsertResult = { name: string | null; snippet: string; source: string; item: string }
 
 /** Pure: insert one component into `source` (an index.tsx) and return the new source. */
-export function insertIntoSource(source: string, item: PaletteItem, input: Record<string, unknown> = {}): InsertResult {
+export function insertIntoSource(source: string, item: PaletteItem, input: Record<string, unknown> = {}, knownNames: string[] = []): InsertResult {
   const close = source.lastIndexOf("</board>")
   if (close < 0) throw new Error("no <board>…</board> found in index.tsx (self-closing boards are not supported)")
-  const names = usedNames(source)
+  const names = usedNames(source, knownNames)
   const hasName = item.props.some((p) => p.name === "name")
   const values: Record<string, unknown> = { ...input }
   if (hasName) {
@@ -207,7 +209,7 @@ export function insertIntoSource(source: string, item: PaletteItem, input: Recor
     if (given) {
       if (!/^[A-Za-z][\w-]*$/.test(given)) throw new Error(`invalid name "${given}"`)
       if (names.has(given)) throw new Error(`name "${given}" already exists in the design`)
-    } else values.name = uniqueName(source, item.prefix || "X")
+    } else values.name = uniqueName(source, item.prefix || "X", knownNames)
   }
   // default position: board centre, staggered so successive inserts do not stack exactly
   const k = (source.match(/\bpcb[XY]=/g)?.length ?? 0) / 2
@@ -216,6 +218,9 @@ export function insertIntoSource(source: string, item: PaletteItem, input: Recor
     if (values[x] === undefined || values[x] === "") values[x] = ((Math.floor(k) % 5) - 2) * 4
     if (y && (values[y] === undefined || values[y] === "")) values[y] = -((Math.floor(k / 5) % 5) - 2) * 4
   }
+  const lc = String(values.lcsc ?? "").trim()
+  // a part picked by LCSC number but no footprint given: let JLCPCB's own footprint be used
+  if (lc && item.props.some((p) => p.name === "footprint") && !values.footprint) values.footprint = `jlcpcb:${lc.toUpperCase()}`
   const parts: string[] = []
   for (const spec of item.props) {
     let v = values[spec.name]
@@ -225,7 +230,7 @@ export function insertIntoSource(source: string, item: PaletteItem, input: Recor
     if (spec.name === "lcsc") continue
     const p = jsxProp(spec, v)
     if (p) parts.push(p)
-    else if (spec.required && item.kind === "lib") throw new Error(`${spec.name} is required`)
+    else if (spec.required) throw new Error(`${spec.name} is required`)
   }
   const lcsc = String(values.lcsc ?? "").trim()
   if (lcsc) {
@@ -268,12 +273,14 @@ export function findItem(id: string): PaletteItem | undefined {
 // ---------- JLC part search ----------
 
 const BASE = "https://jlcsearch.tscircuit.com"
-const KNOWN_FP = /^(0201|0402|0603|0805|1206|1210|2512|sot23|sot223|sot323|sod123|sod323|soic\d+|tssop\d+|ssop\d+|msop\d+|qfn\d+|dfn\d+|to92|to220|to252|dip\d+)$/
+const KNOWN_FP = /^(0201|0402|0603|0805|1206|1210|2512|sot223|sot323|sod123|sod323|soic\d+|tssop\d+|ssop\d+|msop\d+|qfn\d+|dfn\d+|to92|to220|to252|dip\d+)$/
 
 /** Map a JLC package string to a tscircuit footprint string when it is a plain standard one, else "". */
 export function guessFootprint(pkg: string): string {
   let p = pkg.toLowerCase().replace(/[\s_]/g, "")
-  p = p.replace(/^sot-?23-\d$/, "sot23").replace(/^sot-?23$/, "sot23").replace(/-/g, "")
+  const sot = /^sot-?23(?:-(\d))?$/.exec(p)
+  if (sot) return !sot[1] || sot[1] === "3" ? "sot23" : sot[1] === "5" || sot[1] === "6" ? `sot23_${sot[1]}` : ""
+  p = p.replace(/-/g, "")
   return KNOWN_FP.test(p) ? p : ""
 }
 
@@ -324,7 +331,7 @@ export function registerPalette(app: FastifyInstance) {
     if (!item) return reply.code(400).send({ error: `unknown item "${req.body?.item}"; see GET /api/palette` })
     const inMemory = typeof req.body.source === "string"
     try {
-      const r = insertIntoSource(inMemory ? req.body.source! : fs.readFileSync(full, "utf8"), item, req.body.props ?? {})
+      const r = insertIntoSource(inMemory ? req.body.source! : fs.readFileSync(full, "utf8"), item, req.body.props ?? {}, Array.isArray(req.body.knownNames) ? req.body.knownNames.map(String) : [])
       if (!inMemory) fs.writeFileSync(full, r.source)
       return { ok: true, written: !inMemory, name: r.name, snippet: r.snippet, source: r.source }
     } catch (e: any) {

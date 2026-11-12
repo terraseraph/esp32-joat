@@ -26,6 +26,6 @@ API (`api/palette.ts`), also usable by Claude:
 - `GET /api/parts/search?q=…` – `[{ lcsc, mfr, package, stock, price, tier, footprint }]`.
 - `POST /api/designs/:name/components` `{ item, props?, source? }` – without `source` it edits `designs/<name>/index.tsx` on disk; with `source` it writes nothing and returns the edited text (the UI uses this for its unsaved buffer). Returns `{ name, snippet, source }`; 422 on a bad prop or duplicate name.
 
-Placement: a blank position lands near the board centre, staggered so inserts do not stack; set `pcbX`/`pcbY` for exact placement. Open: placing at the pointer on drop (needs pcb-viewer coordinates), and "save selection as block".
+Chips take `footprint="jlcpcb:<LCSC>"` when picked from search; the UI sends the last build's component names so generated names never collide. Placement: a blank position lands near the board centre, staggered so inserts do not stack; set `pcbX`/`pcbY` for exact placement. Open: placing at the pointer on drop (needs pcb-viewer coordinates), and "save selection as block".
 
 Dev ports: `HW_API_PORT` / `HW_APP_PORT` env vars (defaults 3101 / 5173).

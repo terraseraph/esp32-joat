@@ -98,10 +98,11 @@ function PartSearch({ onPick }: { onPick: (p: PartHit) => void }) {
   )
 }
 
-function InsertForm({ item, name, files, onInsert, onBack, initialPart }: {
+function InsertForm({ item, name, getSource, knownNames, onInsert, onBack, initialPart }: {
   item: PaletteItem
   name: string
-  files: Record<string, string>
+  getSource: () => string
+  knownNames: string[]
   onInsert: (source: string, newName: string | null) => void
   onBack: () => void
   initialPart?: PartHit
@@ -116,8 +117,11 @@ function InsertForm({ item, name, files, onInsert, onBack, initialPart }: {
 
   const applyPart = (p: PartHit) => {
     setValues((s) => {
-      const n = { ...s, lcsc: p.lcsc }
-      if (p.footprint && item.props.some((x) => x.name === "footprint")) n.footprint = p.footprint
+      const n: Values = { ...s, lcsc: p.lcsc }
+      if (item.props.some((x) => x.name === "footprint")) {
+        // chips (and any part whose package is not a plain standard size) take the footprint JLCPCB has for that part
+        n.footprint = item.tag !== "chip" && p.footprint ? p.footprint : `jlcpcb:${p.lcsc}`
+      }
       if (item.props.some((x) => x.name === "manufacturerPartNumber")) n.manufacturerPartNumber = p.mfr
       return n
     })
@@ -136,7 +140,13 @@ function InsertForm({ item, name, files, onInsert, onBack, initialPart }: {
     try {
       const props: Record<string, string> = {}
       for (const [k, v] of Object.entries(values)) if (v !== "") props[k] = v
-      const r = await api.insertComponent(name, item.id, props, files["index.tsx"] ?? "")
+      // if the editor text changed while the request was in flight, redo the insert on the current text
+      let src = getSource()
+      let r = await api.insertComponent(name, item.id, props, src, knownNames)
+      if (getSource() !== src) {
+        src = getSource()
+        r = await api.insertComponent(name, item.id, props, src, knownNames)
+      }
       onInsert(r.source, r.name)
       toast("ok", r.name ? `Added ${r.name}` : `Added ${item.label}`)
     } catch (e: any) {
@@ -152,6 +162,7 @@ function InsertForm({ item, name, files, onInsert, onBack, initialPart }: {
       <h3>{item.label}</h3>
       {item.description && <p className="muted small desc">{item.description}</p>}
       {takesPart && <PartSearch onPick={applyPart} />}
+      {item.tag === "chip" && !values.footprint && <div className="pf-err">Unknown package: pick a JLC part above (its LCSC number sets the footprint) or type a footprint.</div>}
       {values.lcsc && <div className="chosen">LCSC <b>{values.lcsc}</b> <button className="link-btn" onClick={() => set("lcsc", "")}>clear</button></div>}
       <div className="pf">
         {main.map((p) => (
@@ -183,9 +194,25 @@ function InsertForm({ item, name, files, onInsert, onBack, initialPart }: {
 }
 
 /** Left sidebar: library blocks + primitives; click or drag an item to open its insert form. */
-export default function Palette({ name, files, onInsert, dropId }: {
+/** A searched part: choose how to use it (chip, resistor, capacitor, LED) from its description. */
+function PartFirst({ all, open }: { all: PaletteItem[]; open: (i: PaletteItem, p?: PartHit) => void }) {
+  return (
+    <div className="pal-section">
+      <PartSearch onPick={(p) => {
+        const c = /\bcapacitors?\b/i.test(p.description) ? "prim:capacitor" : /\bresistors?\b/i.test(p.description) ? "prim:resistor" : /\bLEDs?\b|light emitting diode/i.test(p.description) ? "prim:led" : "prim:chip"
+        const it = all.find((i) => i.id === c)
+        if (it) open(it, p)
+      }} />
+      <p className="muted small pad-s">Pick a result to insert it as a chip, resistor, capacitor or LED with its LCSC number filled in.</p>
+    </div>
+  )
+}
+
+export default function Palette({ name, getSource, knownNames, onInsert, dropId }: {
   name: string
-  files: Record<string, string>
+  getSource: () => string
+  /** component names in the last build (covers generated and lib-internal names) */
+  knownNames: string[]
   onInsert: (source: string) => void
   /** set by Workspace when an item is dropped on the preview */
   dropId: { id: string; n: number } | null
@@ -206,22 +233,10 @@ export default function Palette({ name, files, onInsert, dropId }: {
   const filt = (xs: PaletteItem[]) => xs.filter((i) => !q || (i.label + " " + i.description).toLowerCase().includes(q.toLowerCase()))
   const open = (i: PaletteItem, p?: PartHit) => { setPart(p); setItem(i) }
 
-  // a searched part: choose how to use it (chip, resistor, capacitor, ...)
-  const PartFirst = () => (
-    <div className="pal-section">
-      <PartSearch onPick={(p) => {
-        const c = /cap/i.test(p.description) ? "prim:capacitor" : /resistor/i.test(p.description) ? "prim:resistor" : /led|light emitting/i.test(p.description) ? "prim:led" : "prim:chip"
-        const it = all.find((i) => i.id === c)
-        if (it) open(it, p)
-      }} />
-      <p className="muted small pad-s">Pick a result to insert it as a chip, resistor, capacitor or LED with its LCSC number filled in.</p>
-    </div>
-  )
-
   return (
     <aside className="palette" aria-label="Parts palette">
       {item ? (
-        <InsertForm key={item.id + (part?.lcsc ?? "")} item={item} name={name} files={files} initialPart={part} onBack={() => setItem(null)} onInsert={(src) => { onInsert(src); setItem(null) }} />
+        <InsertForm key={item.id + (part?.lcsc ?? "")} item={item} name={name} getSource={getSource} knownNames={knownNames} initialPart={part} onBack={() => setItem(null)} onInsert={(src) => { onInsert(src); setItem(null) }} />
       ) : (
         <>
           <div className="pal-head">
@@ -233,7 +248,7 @@ export default function Palette({ name, files, onInsert, dropId }: {
           </div>
           {err && <div className="pf-err">{err}</div>}
           {!palette && !err && <div className="muted small pad-s">Loading…</div>}
-          {mode === "parts" ? <PartFirst /> : palette && (
+          {mode === "parts" ? <PartFirst all={all} open={open} /> : palette && (
             <div className="pal-list">
               {([["Primitives", filt(palette.primitives)], ["Shared blocks (lib/)", filt(palette.lib)]] as const).map(([title, xs]) =>
                 xs.length ? (

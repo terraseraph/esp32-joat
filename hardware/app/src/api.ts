@@ -53,8 +53,8 @@ export const api = {
   palette: () => req<{ lib: PaletteItem[]; primitives: PaletteItem[] }>("/api/palette"),
   searchParts: (q: string) => req<PartHit[]>(`/api/parts/search?q=${enc(q)}`),
   /** with `source` nothing is written; the edited source comes back */
-  insertComponent: (n: string, item: string, props: Record<string, string>, source?: string) =>
-    post(`/api/designs/${enc(n)}/components`, { item, props, source }) as Promise<{ ok: boolean; name: string | null; snippet: string; source: string }>,
+  insertComponent: (n: string, item: string, props: Record<string, string>, source?: string, knownNames?: string[]) =>
+    post(`/api/designs/${enc(n)}/components`, { item, props, source, knownNames }) as Promise<{ ok: boolean; name: string | null; snippet: string; source: string }>,
   exportUrl: (n: string) => `/api/designs/${enc(n)}/export`,
   gitStatus: () => req<GitStatus>("/api/git/status"),
   commit: (message: string) => post("/api/git/commit", { message }) as Promise<{ ok: boolean; output: string }>,

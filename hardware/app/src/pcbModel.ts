@@ -32,6 +32,8 @@ export type Model = {
   members: (key: string) => string[]
   schTraceIds: (key: string) => string[]
   compByName: Map<string, Comp>
+  /** Names used by more than one source component; edits by name would be ambiguous. */
+  dupNames: Set<string>
   compByPcbId: Map<string, Comp>
   compBySchId: Map<string, Comp>
 }
@@ -59,6 +61,7 @@ export function buildModel(cj: any[]): Model {
   const compByName = new Map<string, Comp>()
   const compByPcbId = new Map<string, Comp>()
   const compBySchId = new Map<string, Comp>()
+  const dupNames = new Set<string>()
   for (const e of cj) {
     if (e.type !== "pcb_component") continue
     const sc = srcComp.get(e.source_component_id)
@@ -69,6 +72,7 @@ export function buildModel(cj: any[]): Model {
       rotation: num(e.rotation), layer: e.layer ?? "top",
     }
     comps.push(c)
+    if (compByName.has(c.name)) dupNames.add(c.name)
     compByName.set(c.name, c)
     compByPcbId.set(c.id, c)
   }
@@ -145,7 +149,7 @@ export function buildModel(cj: any[]): Model {
   for (const e of cj) if (e.type === "schematic_trace" && e.subcircuit_connectivity_map_key) (sch.get(e.subcircuit_connectivity_map_key) ?? sch.set(e.subcircuit_connectivity_map_key, []).get(e.subcircuit_connectivity_map_key)!).push(e.schematic_trace_id)
 
   return {
-    board, comps, pads, traces, vias, holes, silk, outlines, compByName, compByPcbId, compBySchId,
+    board, comps, pads, traces, vias, holes, silk, outlines, compByName, dupNames, compByPcbId, compBySchId,
     netName: (k) => keyNames.get(k),
     members: (k) => membersByKey.get(k) ?? [],
     schTraceIds: (k) => sch.get(k) ?? [],

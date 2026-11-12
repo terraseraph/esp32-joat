@@ -73,20 +73,37 @@ export default function Workspace({ name, onSaved }: { name: string; onSaved: ()
     return () => clearTimeout(t)
   }, [files, design, name])
 
-  const srcOf = (n: string) => srcComps.find((c) => c.name === n)
-  const isEditable = useCallback((n: string) => {
+  const srcOf = (n: string) => (model?.dupNames.has(n) ? undefined : srcComps.find((c) => c.name === n))
+  /** Part can be moved/rotated from the board: it has its own line, isn't in a loop, and has literal pcbX/pcbY. */
+  const whyReadOnly = (n: string): string | null => {
+    if (model?.dupNames.has(n)) return `${n} is ambiguous (the same name is used by a lib/ block part and a design element)`
     const s = srcComps.find((c) => c.name === n)
-    return !!s && !s.inLoop
-  }, [srcComps])
+    if (!s) return `${n} comes from a shared lib/ block, so it can't be moved from here`
+    if (s.inLoop) return `${n} is made by a loop in the code; edit it there`
+    if (typeof s.props.pcbX !== "number" || typeof s.props.pcbY !== "number") return `${n} has no plain pcbX/pcbY number in the code (it is positioned by its group or an expression); edit it in the code`
+    return null
+  }
+  const isEditable = useCallback((n: string) => whyReadOnly(n) === null, [srcComps, model]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  /** Rewrite the source for one component (serialised so quick edits never overwrite each other). */
-  const applyProps = useCallback((comp: string, props: Record<string, PropValue>) => {
+  /**
+   * Rewrite the source for one component. Serialised, and relative `delta`s are resolved by the server against the
+   * text it patches, so quick repeated nudges/rotations never act on a stale value. If the user typed in the code
+   * pane while the request was in flight, the patch is redone on the new text instead of overwriting it.
+   */
+  const applyProps = useCallback((comp: string, props: Record<string, PropValue>, delta?: Record<string, number>) => {
     editChain.current = editChain.current.then(async () => {
       try {
-        const r = await api.patchComponent(name, comp, props, filesRef.current)
-        filesRef.current = { ...filesRef.current, [r.file]: r.content }
-        setFiles(filesRef.current)
-        if (typeof props.name === "string") setSelected(props.name)
+        for (let i = 0; i < 3; i++) {
+          const snap = filesRef.current
+          const r = await api.patchComponent(name, comp, props, snap, delta)
+          if (filesRef.current[r.file] !== snap[r.file]) continue
+          filesRef.current = { ...filesRef.current, [r.file]: r.content }
+          setFiles(filesRef.current)
+          if (typeof props.name === "string") setSelected(props.name)
+          for (const w of r.warnings ?? []) toast("info", w)
+          return
+        }
+        toast("err", "The code kept changing while applying the edit; try again")
       } catch (e: any) {
         toast("err", e.message)
       }
@@ -94,27 +111,18 @@ export default function Workspace({ name, onSaved }: { name: string; onSaved: ()
   }, [name, toast])
 
   const guard = (n: string) => {
-    if (isEditable(n)) return true
-    const s = srcOf(n)
-    toast("info", s?.inLoop ? `${n} is made by a loop in the code; edit it there` : `${n} comes from a shared lib/ block, so it can't be moved from here`)
-    return false
+    const why = whyReadOnly(n)
+    if (why) toast("info", why)
+    return !why
   }
   const onMove = useCallback((n: string, dx: number, dy: number) => {
     if (!guard(n)) return
-    const s = srcOf(n)!
-    const c = model?.compByName.get(n)
-    const px = typeof s.props.pcbX === "number" ? s.props.pcbX : c?.x ?? 0
-    const py = typeof s.props.pcbY === "number" ? s.props.pcbY : c?.y ?? 0
-    if (s.dynamic.includes("pcbX") || s.dynamic.includes("pcbY")) { toast("info", `${n} has a computed position; edit it in the code`); return }
-    applyProps(n, { pcbX: px + dx, pcbY: py + dy })
+    applyProps(n, {}, { pcbX: dx, pcbY: dy })
   }, [srcComps, model, applyProps]) // eslint-disable-line react-hooks/exhaustive-deps
   const onRotate = useCallback((n: string, d: number) => {
     if (!guard(n)) return
-    const s = srcOf(n)!
-    const r = s.props.pcbRotation
-    const cur = typeof r === "number" ? r : typeof r === "string" ? parseFloat(r) || 0 : 0
-    applyProps(n, { pcbRotation: (((cur + d) % 360) + 360) % 360 })
-  }, [srcComps, applyProps]) // eslint-disable-line react-hooks/exhaustive-deps
+    if (d) applyProps(n, {}, { pcbRotation: d })
+  }, [srcComps, model, applyProps]) // eslint-disable-line react-hooks/exhaustive-deps
   const onPick = useCallback((p: PcbPick) => {
     if (p.clear) { setSelected(null); setNetKey(null); return }
     if (p.comp !== undefined) setSelected(p.comp)

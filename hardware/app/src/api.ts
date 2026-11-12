@@ -44,10 +44,10 @@ export const api = {
   bom: (n: string, qty: number, refresh = false) =>
     req<Bom>(`/api/designs/${enc(n)}/bom?qty=${qty}${refresh ? "&refresh=1" : ""}`),
   /** Components named in the source (unsaved `files` overlay optional). */
-  components: (n: string, files?: Record<string, string>) => post(`/api/designs/${enc(n)}/components`, { files }) as Promise<SrcComponent[]>,
+  components: (n: string, files?: Record<string, string>) => post(`/api/designs/${enc(n)}/components/source`, { files }) as Promise<SrcComponent[]>,
   /** Rewrite props of one component in the in-memory `files`; returns the new file text (not written). */
-  patchComponent: (n: string, component: string, props: Record<string, PropValue>, files: Record<string, string>) =>
-    req<{ file: string; content: string }>(`/api/designs/${enc(n)}/components/${enc(component)}`, { method: "PATCH", body: JSON.stringify({ props, files }) }),
+  patchComponent: (n: string, component: string, props: Record<string, PropValue>, files: Record<string, string>, delta?: Record<string, number>) =>
+    req<{ file: string; content: string; warnings: string[] }>(`/api/designs/${enc(n)}/components/${enc(component)}`, { method: "PATCH", body: JSON.stringify({ props, delta, files }) }),
   exportUrl: (n: string) => `/api/designs/${enc(n)}/export`,
   gitStatus: () => req<GitStatus>("/api/git/status"),
   commit: (message: string) => post("/api/git/commit", { message }) as Promise<{ ok: boolean; output: string }>,

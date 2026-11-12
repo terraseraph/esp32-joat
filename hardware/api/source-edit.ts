@@ -122,7 +122,8 @@ const IDENT_RE = /^[A-Za-z_$][\w$-]*$/
 
 function render(key: string, v: string | number | boolean): string {
   if (key === "lcsc") return `supplierPartNumbers={{ jlcpcb: [${JSON.stringify(String(v))}] }}`
-  if (typeof v === "string") return `${key}=${JSON.stringify(v)}`
+  // JSX attribute strings have no escapes, so anything with a quote, backslash or newline goes in braces
+  if (typeof v === "string") return /["\\\n\r]/.test(v) ?`${key}={${JSON.stringify(v)}}` : `${key}="${v}"`
   if (v === true) return key
   return `${key}={${v}}`
 }
@@ -140,7 +141,42 @@ const tidy = (v: PropValue) => (typeof v === "number" ? Math.round(v * 1000) / 1
  * Apply `changes` to the element named `component`. Returns the new source.
  * Throws EditError (404 not found, 409 ambiguous/not editable) when it cannot do so safely.
  */
-export function patchComponent(src: string, component: string, changes: Record<string, PropValue>): string {
+export type PatchResult = { content: string; warnings: string[] }
+
+/** Number value of a literal prop on the element (also "90deg"-style strings), or undefined. */
+function numericProp(el: El, key: string): number | undefined {
+  for (const a of el.attributes.properties) {
+    if (ts.isJsxAttribute(a) && attrName(a) === key) {
+      const v = literalOf(a.initializer)
+      if (typeof v === "number") return v
+      if (typeof v === "string" && /^-?\d+(\.\d+)?(deg)?$/.test(v.trim())) return parseFloat(v)
+    }
+  }
+  return undefined
+}
+
+/**
+ * Like patchComponent, plus `deltas`: numeric props moved relative to their literal value in THIS text
+ * (so repeated nudges/rotations never act on a stale value). pcbX/pcbY need a literal number already;
+ * pcbRotation counts a missing prop as 0 and is wrapped to 0..359.
+ */
+export function patchComponent(src: string, component: string, changes: Record<string, PropValue>, deltas: Record<string, number> = {}): PatchResult {
+  const sf0 = parse(src)
+  const el0 = elements(sf0).filter((e) => nameOf(e) === component)
+  if (el0.length === 1 && Object.keys(deltas).length) {
+    changes = { ...changes }
+    for (const [k, d] of Object.entries(deltas)) {
+      if (!Number.isFinite(d)) throw new EditError(`bad delta for ${k}`)
+      const cur = numericProp(el0[0], k)
+      if (cur === undefined && k !== "pcbRotation") throw new EditError(`"${component}" has no literal ${k}; it is positioned by something else, edit it in the code`, 409)
+      const next = (cur ?? 0) + d
+      changes[k] = k === "pcbRotation" ? ((next % 360) + 360) % 360 : next
+    }
+  }
+  return patchComponentAbs(src, component, changes)
+}
+
+function patchComponentAbs(src: string, component: string, changes: Record<string, PropValue>): PatchResult {
   const sf = parse(src)
   const matches = elements(sf).filter((el) => nameOf(el) === component)
   if (matches.length === 0) throw new EditError(`No element with name="${component}" in this file`, 404)
@@ -151,6 +187,7 @@ export function patchComponent(src: string, component: string, changes: Record<s
   type Edit = { start: number; end: number; text: string }
   const edits: Edit[] = []
   const attrs = el.attributes.properties.filter(ts.isJsxAttribute)
+  const lastAny = el.attributes.properties[el.attributes.properties.length - 1] // may be a {...spread}
   const appended: string[] = []
 
   for (const [rawKey, raw] of Object.entries(changes)) {
@@ -173,7 +210,7 @@ export function patchComponent(src: string, component: string, changes: Record<s
   }
 
   if (appended.length) {
-    const last = attrs[attrs.length - 1]
+    const last = lastAny
     const multiline = last && sf.getLineAndCharacterOfPosition(last.getStart()).line !== sf.getLineAndCharacterOfPosition(el.tagName.getStart()).line
     if (last) {
       let sep = " "
@@ -211,5 +248,22 @@ export function patchComponent(src: string, component: string, changes: Record<s
   edits.sort((a, b) => b.start - a.start)
   let out = src
   for (const e of edits) out = out.slice(0, e.start) + e.text + out.slice(e.end)
-  return out
+  const warnings: string[] = []
+  if (typeof newName === "string" && newName !== component) {
+    const left = countNameRefs(out, component)
+    if (left) warnings.push(`${left} other string reference(s) to "${component}" remain in this file (e.g. sel.${component}); check them in the code`)
+  }
+  return { content: out, warnings }
+}
+
+/** String/template literals that still mention `name` as a whole word (".R1", "sel.R1", "R1 > pin"). */
+export function countNameRefs(src: string, name: string): number {
+  const re = new RegExp(`(?<![\\w$-])${name.replace(/[$]/g, "\\$&")}(?![\\w$-])`)
+  let n = 0
+  const visit = (node: ts.Node) => {
+    if ((ts.isStringLiteralLike(node) || ts.isTemplateHead(node) || ts.isTemplateMiddle(node) || ts.isTemplateTail(node)) && re.test(node.text) && !(node.parent && ts.isJsxAttribute(node.parent) && attrName(node.parent) === "name")) n++
+    ts.forEachChild(node, visit)
+  }
+  visit(parse(src))
+  return n
 }

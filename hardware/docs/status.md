@@ -6,10 +6,10 @@ Firmware: [docs/features/status.md](../../docs/features/status.md) · Node-RED: 
 No hardware dependency of its own. It reports whatever the other features read. The status LED pin is described in [system](system.md).
 
 ## Provided today
-Not applicable.
+`hardware/designs/base-s3` (rev A, draft, not reviewed) has an INA226 on each power input (I2C): DC input 0x40, PoE input 0x41, USB 0x44 (20 mOhm shunts) and load supply 0x45 (2 mOhm). Each reads bus voltage and current, so firmware can tell which source is live.
 
 ## Electrical limits
-None.
+INA226 bus and shunt pins are rated to 36 V (40 V abs max); the input TVS (SMBJ26A) can clamp above 40 V on a large surge. ALERT pins are not connected.
 
 ## Gaps
-Planned, not designed: per-input power monitoring would need a telemetry shape in the firmware as well as a circuit. Neither exists.
+The firmware currently targets the classic ESP32; base-s3 uses an ESP32-S3, so it needs an S3 build and board profile before any of this runs. The firmware has no INA226 driver and no telemetry shape for per-input power.

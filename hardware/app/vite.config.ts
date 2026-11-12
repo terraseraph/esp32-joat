@@ -21,8 +21,8 @@ export default defineConfig({
     },
   },
   server: {
-    port: 5173,
-    proxy: { "/api": "http://127.0.0.1:3101" },
+    port: Number(process.env.HW_APP_PORT ?? 5173),
+    proxy: { "/api": `http://127.0.0.1:${process.env.HW_API_PORT ?? 3101}` },
   },
   build: { outDir: "dist", emptyOutDir: true, chunkSizeWarningLimit: 6000 },
 })

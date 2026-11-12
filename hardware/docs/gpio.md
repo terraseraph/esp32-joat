@@ -6,10 +6,10 @@ Firmware: [docs/features/gpio.md](../../docs/features/gpio.md) · Node-RED: [nod
 Any output-capable GPIO for `out`; any input-capable GPIO for `in`. Not usable: GPIO 6-11 (SPI flash), 34-39 as outputs, 34-39 with internal pull-up/down. GPIO 0, 2, 5, 12, 15 are strapping pins; GPIO 0 is the BOOT button and GPIO 2 the status LED (see [system](system.md)); GPIO 1/3 are the UART console.
 
 ## Provided today
-Nothing yet. No design routes ESP32 GPIOs to connectors. The `relay-8` board does not use GPIOs for switching: its relays are driven through an I2C expander, which the firmware does not drive (see [modules](modules.md)).
+`hardware/designs/base-s3` (rev A, draft, not reviewed) switches loads through four MOSFET outputs on IO15-IO18 (see [pwm](pwm.md)); a GPIO set high turns its output on. Free S3 pins not used by the board: IO1, IO3, IO7, IO38-IO42, IO45, IO46, TXD0/RXD0; none reach a connector. The expansion header carries IO4-IO6 as IO_A-IO_C.
 
 ## Electrical limits
-The firmware only sets logic levels (3.3 V on the ESP32). Current limits are those of the pin; nothing in the repo adds protection or level shifting. The firmware offers no internal pull on 34-39.
+On base-s3 the outputs are low-side switches, not logic outputs, and there are no protected digital inputs. IO35-IO37 are used by the octal PSRAM on the N16R8 module. IO0, IO3, IO45 and IO46 are S3 strapping pins.
 
 ## Gaps
-The ESP32-S3 base board is planned but not designed; no `hardware/designs/` entry exists. The firmware currently targets the classic ESP32, so pin numbers here are classic-ESP32 pins. Planned, not designed: MOSFET outputs for switching, and screw terminals / JST-XH connectors for inputs and outputs.
+The firmware currently targets the classic ESP32; base-s3 uses an ESP32-S3, so it needs an S3 build and board profile before any of this runs. No protected digital inputs and no JST-XH signal connectors on base-s3 yet.

@@ -2,6 +2,12 @@
   "version": "0.0.1",
   "configurations": [
     {
+      "name": "hardware-app-5175",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["hardware/.cache/dev-alt.mjs"],
+      "port": 5175
+    },
+    {
       "name": "manager-dev",
       "runtimeExecutable": "npm",
       "runtimeArgs": ["--prefix", "manager", "run", "dev"],

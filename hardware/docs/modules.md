@@ -6,10 +6,10 @@ Firmware: [docs/features/modules.md](../../docs/features/modules.md) · Node-RED
 Depends on the module type: `mfrc522` needs an SPI bus plus CS, `bme280` an I2C bus (see [rfid](rfid.md), [bme280](bme280.md)). Modules are software types; the firmware has no module type for expansion boards.
 
 ## Provided today
-Partly. `hardware/designs/relay-8` is an expansion board with a 6-pin header (`hardware/lib/expansion-header.tsx`: V5, V3_3, GND, SDA, SCL, INT), a PCA9554 I2C expander at 0x20 and a 24C02 ID EEPROM at 0x50 (`hardware/lib/id-eeprom.tsx`, A0-A2 and WP tied low). The EEPROM is meant for auto-detect.
+Partly. `hardware/designs/base-s3` (rev A, draft, not reviewed) has a 2x8 2.54 mm shrouded expansion header (`hardware/lib/expansion-bus.tsx`): 5 V x2, 3.3 V x2, GND x2, SDA (IO8), SCL (IO9), INT (IO48, 10k pull-up on the base), CS (IO10), SCK/MOSI/MISO (IO12/IO11/IO13, shared with the W5500), IO_A/IO_B/IO_C (IO4/IO5/IO6, intended for I2S). The base board fits 4.7k I2C pull-ups. `hardware/designs/relay-8` is an expansion board on the older 6-pin header (`hardware/lib/expansion-header.tsx`), with a PCA9554 at 0x20 and a 24C02 ID EEPROM at 0x50 (`hardware/lib/id-eeprom.tsx`).
 
 ## Electrical limits
-`relay-8` puts 8 relay coils (about 576 mA at 5 V) through one header pin; its own notes flag this as unresolved. INT is open-drain with no pull-up on that board, so the base board must supply one. The board is a tooling proof, not review-ready.
+Header pins are about 1 A each, so 5 V to expansion boards is limited to about 2 A total. I2C addresses taken on base-s3: INA226 at 0x40, 0x41, 0x44, 0x45. relay-8 puts about 576 mA of coils through its single 5 V pin; it is a tooling proof, not review-ready.
 
 ## Gaps
-The ESP32-S3 base board is planned but not designed; no `hardware/designs/` entry exists. The firmware currently targets the classic ESP32, so pin numbers here are classic-ESP32 pins. Planned, not implemented: expansion auto-detect. The EEPROM exists on the board, but no firmware reads it and no record format is defined. There is no firmware module type for the PCA9554, so the firmware cannot switch the relay board today.
+The firmware currently targets the classic ESP32; base-s3 uses an ESP32-S3, so it needs an S3 build and board profile before any of this runs. relay-8 still uses the 1x6 header and its own I2C pull-ups; it needs moving to the 2x8 bus (pull-ups DNP). Planned, not implemented: expansion auto-detect. No firmware reads the ID EEPROM and no record format is defined. There is no firmware module type for the PCA9554.

@@ -120,5 +120,5 @@ app.setErrorHandler((err: any, _req, reply) => {
   reply.code(err.statusCode ?? 500).send({ error: err.message ?? String(err) })
 })
 
-await app.listen({ host: "127.0.0.1", port: 3101 })
+await app.listen({ host: "127.0.0.1", port: Number(process.env.HW_API_PORT ?? 3101) })
 console.log("hardware api on http://127.0.0.1:3101")

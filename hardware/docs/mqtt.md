@@ -12,4 +12,4 @@ Not applicable.
 None specific to this feature.
 
 ## Gaps
-Planned, not designed: Ethernet would give MQTT a wired link; the firmware has no driver for it.
+base-s3 (draft) has W5500 Ethernet, which would give MQTT a wired link; the firmware has no driver for it.

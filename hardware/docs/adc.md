@@ -12,4 +12,4 @@ Nothing yet. No design has an analog input, divider or protection.
 Do not exceed 3.3 V on the pin. Accuracy is worse near 0 V and 3.3 V. Without calibration the firmware reports raw counts, not millivolts.
 
 ## Gaps
-The ESP32-S3 base board is planned but not designed; no `hardware/designs/` entry exists. The firmware currently targets the classic ESP32, so pin numbers here are classic-ESP32 pins. Planned, not designed: per-input power monitoring. The firmware has no feature that reads a monitor chip either. The S3 has a different ADC pin map from the one in the [firmware doc](../../docs/features/adc.md), which describes the classic ESP32.
+base-s3 (draft) brings no analog inputs out; per-input power monitoring uses INA226 chips over I2C (see [status](status.md)), not the ADC. The S3 has a different ADC pin map from the one in the [firmware doc](../../docs/features/adc.md), which describes the classic ESP32.

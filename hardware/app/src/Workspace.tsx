@@ -23,6 +23,7 @@ import ExportPanel from "./ExportPanel"
 import Explain, { type Highlight } from "./Explain"
 import Changes from "./Changes"
 import Shortcuts from "./Shortcuts"
+import * as Menu from "@radix-ui/react-dropdown-menu"
 
 function useSplit(initial: number, min: number, max: number, axis: "x" | "y", invert = false) {
   // clamp: innerWidth is 0 when the tab first renders in the background
@@ -47,6 +48,16 @@ function useSplit(initial: number, min: number, max: number, axis: "x" | "y", in
   return { size, onPointerDown }
 }
 
+type PanelId = "problems" | "review" | "bom" | "nets" | "gpio" | "history" | "explain" | "changes"
+/** Bottom panel: five groups; a group with more than one view shows sub-tabs. */
+const GROUPS: { id: string; label: string; subs: { id: PanelId; label: string }[] }[] = [
+  { id: "check", label: "Problems", subs: [{ id: "problems", label: "Issues" }, { id: "review", label: "Review checklist" }] },
+  { id: "bom", label: "BOM & cost", subs: [{ id: "bom", label: "BOM" }] },
+  { id: "wiring", label: "Wiring", subs: [{ id: "nets", label: "Nets & connect" }, { id: "gpio", label: "GPIO map" }] },
+  { id: "history", label: "History", subs: [{ id: "history", label: "Snapshots & diff" }] },
+  { id: "ai", label: "Ask Claude", subs: [{ id: "explain", label: "Explain" }, { id: "changes", label: "Describe a change" }] },
+]
+
 export type BuildState = { status: "idle" | "building" | "ok" | "error"; durationMs?: number; fatal?: string; mode?: BuildMode; cached?: boolean }
 
 export default function Workspace({ name, onSaved }: { name: string; onSaved: () => void }) {
@@ -65,10 +76,18 @@ export default function Workspace({ name, onSaved }: { name: string; onSaved: ()
   const [build, setBuild] = useState<BuildState>({ status: "idle" })
   const [result, setResult] = useState<BuildResult | null>(null)
   const [circuit, setCircuit] = useState<any[] | null>(null) // last good
-  const [panel, setPanel] = useState<"problems" | "review" | "bom" | "nets" | "gpio" | "history" | "explain" | "changes">("problems")
+  const [panel, setPanel] = useState<PanelId>("problems")
+  // remembers the last sub-tab used in each group, so a group tab returns to where you were
+  const lastSub = useRef<Record<string, PanelId>>({})
+  const openPanel = (t: PanelId) => {
+    setPanel(t)
+    setPanelOpen(true)
+    const g = GROUPS.find((x) => x.subs.some((y) => y.id === t))
+    if (g) lastSub.current[g.id] = t
+  }
   const [panelOpen, setPanelOpen] = useState(true)
   const [bomVersion, setBomVersion] = useState(0)
-  const [dropId, setDropId] = useState<{ id: string; n: number } | null>(null)
+  const [dropId, setDropId] = useState<{ id: string; n: number; x?: number; y?: number } | null>(null)
   const knownNames = useMemo(() => (circuit ?? []).filter((e) => e.type === "source_component" && e.name).map((e) => String(e.name)), [circuit])
   const [conn, setConn] = useState<ConnectState>(NO_CONNECT)
   // read by the PCB view pick handler: in Connect mode a pad click picks that pin
@@ -372,27 +391,49 @@ export default function Workspace({ name, onSaved }: { name: string; onSaved: ()
           </AnimatePresence>
         </div>
         <div className="grow" />
-        <button className="icon-btn" onClick={hist.undo} disabled={!hist.canUndo} title="Undo (Ctrl+Z)" aria-label="Undo">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 14 4 9l5-5" /><path d="M4 9h10a6 6 0 0 1 0 12h-3" /></svg>
-        </button>
-        <button className="icon-btn" onClick={hist.redo} disabled={!hist.canRedo} title="Redo (Ctrl+Shift+Z)" aria-label="Redo">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m15 14 5-5-5-5" /><path d="M20 9H10a6 6 0 0 0 0 12h3" /></svg>
-        </button>
-        <label className="autosave" title="Save automatically a moment after you stop typing">
-          <input type="checkbox" checked={autosave} onChange={toggleAutosave} /> Autosave
-        </label>
-        <span className="muted small" aria-live="polite">{saving ? "Saving…" : dirty ? "Unsaved changes" : "Saved"}</span>
-        <button className="icon-btn" onClick={() => setHelp(true)} title="Keyboard shortcuts (?)" aria-label="Keyboard shortcuts">?</button>
-        <CostChip name={name} qty={qty} version={bomVersion} onOpen={() => { setPanel("bom"); setPanelOpen(true) }} />
-        <button className={`btn ${codeOpen ? "on" : ""}`} onClick={() => toggleCode(!codeOpen)} aria-pressed={codeOpen} title="Show or hide the source code">{"</>"} Code</button>
-        <button className="btn" onClick={() => { setPanel("history"); setPanelOpen(true) }} title="Open snapshots">Snapshots</button>
-        <button className="btn" onClick={newVariant} title="Copy this design to a new revision folder">New variant</button>
-        <button className="btn" onClick={() => runBuild("quick")} disabled={build.status === "building"} title="Fast build: placement + ratsnest, no autorouting (Ctrl+Enter)">Build</button>
-        <button className="btn" onClick={() => runBuild("full")} disabled={build.status === "building"} title="Full build with autorouting (slow on big boards)">Route</button>
-        <button className="btn" onClick={() => save()} disabled={!dirty} title="Save (Ctrl+S)">Save</button>
+        <div className="tb-group">
+          <button className="icon-btn" onClick={hist.undo} disabled={!hist.canUndo} title="Undo (Ctrl+Z)" aria-label="Undo">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 14 4 9l5-5" /><path d="M4 9h10a6 6 0 0 1 0 12h-3" /></svg>
+          </button>
+          <button className="icon-btn" onClick={hist.redo} disabled={!hist.canRedo} title="Redo (Ctrl+Shift+Z)" aria-label="Redo">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m15 14 5-5-5-5" /><path d="M20 9H10a6 6 0 0 0 0 12h3" /></svg>
+          </button>
+          {/* save state doubles as the save button; the autosave toggle lives in the ⋯ menu */}
+          <button className={`save-state ${dirty ? "dirty" : ""}`} onClick={() => save()} disabled={!dirty || saving} aria-live="polite"
+            title={dirty ? "Save now (Ctrl+S)" : autosave ? "Saved. Autosave is on" : "Saved. Autosave is off"}>
+            <span className={`dot ${saving ? "pulse" : dirty ? "warn" : "good"}`} />
+            {saving ? "Saving…" : dirty ? (autosave ? "Unsaved" : "Save") : "Saved"}
+          </button>
+        </div>
+        <CostChip name={name} qty={qty} version={bomVersion} onOpen={() => openPanel("bom")} />
+        <button className={`btn ${codeOpen ? "on" : ""}`} onClick={() => toggleCode(!codeOpen)} aria-pressed={codeOpen} title="Show or hide the source code (E)">{"</>"} Code</button>
+        <div className="seg build-seg" role="group" aria-label="Build">
+          <button onClick={() => runBuild("quick")} disabled={build.status === "building"} title="Quick build: parts placed, no tracks, seconds (Ctrl+Enter)">Build</button>
+          <button onClick={() => runBuild("full")} disabled={build.status === "building"} title="Full build with autorouted tracks (minutes on big boards)">Route</button>
+        </div>
         <button className="btn primary" onClick={doExport} title={hasErrors ? "Last build had errors" : "Download JLCPCB zip"}>
           {hasErrors && <span className="dot bad" />}Export
         </button>
+        <Menu.Root>
+          <Menu.Trigger asChild>
+            <button className="icon-btn" aria-label="More actions" title="More">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.8" /><circle cx="12" cy="12" r="1.8" /><circle cx="19" cy="12" r="1.8" /></svg>
+            </button>
+          </Menu.Trigger>
+          <Menu.Portal>
+            <Menu.Content className="menu" align="end" sideOffset={6}>
+              <Menu.Item className="menu-item" onSelect={() => openPanel("history")}>Snapshots & diff</Menu.Item>
+              <Menu.Item className="menu-item" onSelect={() => newVariant()}>New variant (next revision)</Menu.Item>
+              <Menu.Separator className="menu-sep" />
+              <Menu.CheckboxItem className="menu-item" checked={autosave} onCheckedChange={() => toggleAutosave()}>
+                <span className="menu-check">{autosave ? "✓" : ""}</span>Autosave
+              </Menu.CheckboxItem>
+              <Menu.Item className="menu-item" onSelect={() => save()} disabled={!dirty}>Save now<span className="menu-kbd">Ctrl+S</span></Menu.Item>
+              <Menu.Separator className="menu-sep" />
+              <Menu.Item className="menu-item" onSelect={() => setHelp(true)}>Keyboard shortcuts<span className="menu-kbd">?</span></Menu.Item>
+            </Menu.Content>
+          </Menu.Portal>
+        </Menu.Root>
       </div>
 
       <div className="panes">
@@ -411,7 +452,7 @@ export default function Workspace({ name, onSaved }: { name: string; onSaved: ()
             onDragOver={(e) => { if (e.dataTransfer.types.includes(PALETTE_MIME)) e.preventDefault() }}
             onDrop={(e) => { const id = e.dataTransfer.getData(PALETTE_MIME); if (id) { e.preventDefault(); setDropId({ id, n: Date.now() }) } }}>
             {diff ? <DiffView diff={diff.result} label={diff.label} focus={diffFocus} onFocus={setDiffFocus} onClose={() => { setDiff(null); setDiffFocus(null) }} /> : <Preview circuitJson={circuit} building={build.status === "building"} focus={focus} highlight={marks} connect={{ on: conn.on, onPort, highlightIds }}
-              canvas={model ? { model, fitKey: name, selected, netKey, editable: isEditable, snap, setSnap, onPick, onMove, onRotate } : undefined}
+              canvas={model ? { model, fitKey: name, selected, netKey, editable: isEditable, snap, setSnap, onPick, onMove, onRotate, connectMode: conn.on, onDropItem: (id, x, y) => setDropId({ id, n: Date.now(), x, y }) } : undefined}
               overlay={model && selected && model.compByName.get(selected) ? (
                 <Properties comp={model.compByName.get(selected)!} src={srcOf(selected)} model={model} netKey={netKey}
                   onChange={(p) => applyProps(selected, p)} onClose={() => { setSelected(null); setNetKey(null) }}
@@ -425,20 +466,31 @@ export default function Workspace({ name, onSaved }: { name: string; onSaved: ()
           <div className="gutter y" onPointerDown={panelOpen ? bottom.onPointerDown : undefined} />
           <section className="pane bottom" style={{ height: panelOpen ? bottom.size : 38 }}>
             <div className="tabs small">
-              {(["problems", "review", "bom", "nets", "gpio", "history", "explain", "changes"] as const).map((t) => (
-                <button key={t} className={`tab ${panel === t ? "on" : ""}`} onClick={() => { setPanel(t); setPanelOpen(true) }}>
-                  {panel === t && <motion.span layoutId="bottab" className="tab-bg" transition={{ type: "spring", visualDuration: 0.2, bounce: 0 }} />}
-                  <span className="tab-label">
-                    {{ problems: "Problems", review: "Review", bom: "BOM & cost", nets: "Nets & connect", gpio: "GPIO map", history: "Snapshots & diff", explain: "Explain", changes: "Describe a change" }[t]}
-                    {t === "problems" && (probErr > 0 || probWarn > 0) && (
-                      <span className="counts">
-                        {probErr > 0 && <span className="cnt bad">{probErr}</span>}
-                        {probWarn > 0 && <span className="cnt warn">{probWarn}</span>}
-                      </span>
-                    )}
-                  </span>
-                </button>
-              ))}
+              {GROUPS.map((g) => {
+                const on = g.subs.some((x) => x.id === panel)
+                return (
+                  <button key={g.id} className={`tab ${on ? "on" : ""}`} onClick={() => openPanel(lastSub.current[g.id] ?? g.subs[0].id)}>
+                    {on && <motion.span layoutId="bottab" className="tab-bg" transition={{ type: "spring", visualDuration: 0.2, bounce: 0 }} />}
+                    <span className="tab-label">
+                      {g.label}
+                      {g.id === "check" && (probErr > 0 || probWarn > 0) && (
+                        <span className="counts">
+                          {probErr > 0 && <span className="cnt bad">{probErr}</span>}
+                          {probWarn > 0 && <span className="cnt warn">{probWarn}</span>}
+                        </span>
+                      )}
+                    </span>
+                  </button>
+                )
+              })}
+              {(() => {
+                const g = GROUPS.find((x) => x.subs.some((y) => y.id === panel))
+                return g && g.subs.length > 1 && panelOpen ? (
+                  <div className="seg subtabs" role="tablist">
+                    {g.subs.map((x) => <button key={x.id} role="tab" aria-selected={panel === x.id} className={panel === x.id ? "on" : ""} onClick={() => openPanel(x.id)}>{x.label}</button>)}
+                  </div>
+                ) : null
+              })()}
               <div className="grow" />
               <button className="icon-btn" onClick={() => setPanelOpen((o) => !o)} aria-label="Toggle panel" title={panelOpen ? "Collapse" : "Expand"}>
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" style={{ transform: panelOpen ? "none" : "rotate(180deg)", transition: "transform .15s" }}>

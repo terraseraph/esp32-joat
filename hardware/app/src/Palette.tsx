@@ -98,7 +98,7 @@ function PartSearch({ onPick }: { onPick: (p: PartHit) => void }) {
   )
 }
 
-function InsertForm({ item, name, getSource, knownNames, onInsert, onBack, initialPart }: {
+function InsertForm({ item, name, getSource, knownNames, onInsert, onBack, initialPart, initialPos }: {
   item: PaletteItem
   name: string
   getSource: () => string
@@ -106,9 +106,17 @@ function InsertForm({ item, name, getSource, knownNames, onInsert, onBack, initi
   onInsert: (source: string, newName: string | null) => void
   onBack: () => void
   initialPart?: PartHit
+  /** where the item was dropped on the board (mm); fills pcbX/pcbY when the item has them */
+  initialPos?: { x: number; y: number }
 }) {
   const toast = useToast()
-  const [values, setValues] = useState<Values>(() => ({ ...initialValues(item) }))
+  const [values, setValues] = useState<Values>(() => {
+    const v: Values = { ...initialValues(item) }
+    const has = (k: string) => item.props.some((p: any) => p.name === k)
+    if (initialPos && has("pcbX") && has("pcbY")) { v.pcbX = String(initialPos.x); v.pcbY = String(initialPos.y) }
+    else if (initialPos && has("x") && has("y")) { v.x = String(initialPos.x); v.y = String(initialPos.y) } // some lib blocks take x/y
+    return v
+  })
   const [adv, setAdv] = useState(false)
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState<string | null>(null)
@@ -215,7 +223,7 @@ export default function Palette({ name, getSource, knownNames, onInsert, dropId 
   knownNames: string[]
   onInsert: (source: string) => void
   /** set by Workspace when an item is dropped on the preview */
-  dropId: { id: string; n: number } | null
+  dropId: { id: string; n: number; x?: number; y?: number } | null
 }) {
   const [palette, setPalette] = useState<{ lib: PaletteItem[]; primitives: PaletteItem[] } | null>(null)
   const [err, setErr] = useState<string | null>(null)
@@ -223,26 +231,43 @@ export default function Palette({ name, getSource, knownNames, onInsert, dropId 
   const [part, setPart] = useState<PartHit | undefined>()
   const [q, setQ] = useState("")
   const [mode, setMode] = useState<"items" | "parts">("items")
+  const [pos, setPos] = useState<{ x: number; y: number } | undefined>()
+  const [collapsed, setCollapsed] = useState(() => { try { return localStorage.getItem("hw.paletteCollapsed") === "1" } catch { return false } })
+  const collapse = (c: boolean) => { setCollapsed(c); try { localStorage.setItem("hw.paletteCollapsed", c ? "1" : "0") } catch {} }
 
   useEffect(() => { api.palette().then(setPalette).catch((e) => setErr(e.message)) }, [])
   const all = useMemo(() => (palette ? [...palette.primitives, ...palette.lib] : []), [palette])
   useEffect(() => {
-    if (dropId) { const it = all.find((i) => i.id === dropId.id); if (it) { setPart(undefined); setItem(it) } }
+    if (dropId) { const it = all.find((i) => i.id === dropId.id); if (it) { setPart(undefined); setPos(dropId.x !== undefined && dropId.y !== undefined ? { x: dropId.x, y: dropId.y } : undefined); setItem(it); collapse(false) } }
   }, [dropId, all])
 
   const filt = (xs: PaletteItem[]) => xs.filter((i) => !q || (i.label + " " + i.description).toLowerCase().includes(q.toLowerCase()))
-  const open = (i: PaletteItem, p?: PartHit) => { setPart(p); setItem(i) }
+  const open = (i: PaletteItem, p?: PartHit) => { setPart(p); setPos(undefined); setItem(i) }
+
+  if (collapsed) return (
+    <aside className="palette collapsed" aria-label="Parts palette (collapsed)">
+      <button className="icon-btn" onClick={() => collapse(false)} title="Show parts palette" aria-label="Show parts palette">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M12 5v14M5 12h14" /></svg>
+      </button>
+      <span className="rail-label">Parts</span>
+    </aside>
+  )
 
   return (
     <aside className="palette" aria-label="Parts palette">
       {item ? (
-        <InsertForm key={item.id + (part?.lcsc ?? "")} item={item} name={name} getSource={getSource} knownNames={knownNames} initialPart={part} onBack={() => setItem(null)} onInsert={(src) => { onInsert(src); setItem(null) }} />
+        <InsertForm key={item.id + (part?.lcsc ?? "")} item={item} name={name} getSource={getSource} knownNames={knownNames} initialPart={part} initialPos={pos} onBack={() => setItem(null)} onInsert={(src) => { onInsert(src); setItem(null) }} />
       ) : (
         <>
           <div className="pal-head">
+            <div className="pal-top">
             <div className="pal-tabs">
               <button className={mode === "items" ? "on" : ""} onClick={() => setMode("items")}>Parts</button>
               <button className={mode === "parts" ? "on" : ""} onClick={() => setMode("parts")}>JLC search</button>
+            </div>
+            <button className="icon-btn" onClick={() => collapse(true)} title="Hide parts palette" aria-label="Hide parts palette">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="m15 6-6 6 6 6" /></svg>
+            </button>
             </div>
             {mode === "items" && <input className="pal-search" placeholder="Filter…" value={q} onChange={(e) => setQ(e.target.value)} />}
           </div>

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react"
+import { PALETTE_MIME } from "./Palette"
 import type { Comp, Model, Pad } from "./pcbModel"
 
 export type PcbPick = { comp?: string | null; key?: string | null; clear?: boolean; port?: string }
@@ -12,7 +13,7 @@ const BOT = "#4b7fd6"
  * Interactive PCB view drawn straight from circuit JSON (the stock tscircuit PcbViewer cannot report clicks or
  * drag parts). Click a part to select it, drag to move, R rotates, click a pad or trace to highlight its net.
  */
-export default function PcbEdit({ model, fitKey, selected, netKey, editable, snap, setSnap, onPick, onMove, onRotate, stale, focus, marks }: {
+export default function PcbEdit({ model, fitKey, selected, netKey, editable, snap, setSnap, onPick, onMove, onRotate, stale, focus, marks, connectMode, onDropItem }: {
   model: Model
   fitKey: string
   selected: string | null
@@ -29,6 +30,8 @@ export default function PcbEdit({ model, fitKey, selected, netKey, editable, sna
   focus?: { x: number; y: number; w: number; h: number; nonce: number } | null
   /** boxes to outline, e.g. the parts an Explain sentence mentions */
   marks?: { x: number; y: number; w: number; h: number }[] | null
+  connectMode?: boolean
+  onDropItem?: (id: string, x: number, y: number) => void
 }) {
   const box = useRef<HTMLDivElement>(null)
   const [size, setSize] = useState({ w: 0, h: 0 })
@@ -125,11 +128,12 @@ export default function PcbEdit({ model, fitKey, selected, netKey, editable, sna
     const port = (tgt.closest("[data-port]") as HTMLElement | null)?.dataset.port || undefined
     const w = toWorld(e.clientX, e.clientY)
     const base = { sx: e.clientX, sy: e.clientY, vx: viewRef.current.cx, vy: viewRef.current.cy, moved: false }
-    if (e.button === 0 && compEl) {
+    if (e.button === 0 && compEl && !connectMode) {
       const c = model.compByName.get(compEl.dataset.comp!)
       drag.current = { ...base, kind: "comp", comp: compEl.dataset.comp, key: netEl?.dataset.net || undefined, port, ox: w.x, oy: w.y }
       void c
     } else if (e.button === 0 && netEl) drag.current = { ...base, kind: "net", key: netEl.dataset.net, port }
+    else if (e.button === 0 && connectMode && port) drag.current = { ...base, kind: "net", key: undefined, port }
     else drag.current = { ...base, kind: "pan" }
     ;(e.currentTarget as Element).setPointerCapture(e.pointerId)
   }
@@ -187,6 +191,7 @@ export default function PcbEdit({ model, fitKey, selected, netKey, editable, sna
       <g key={p.id}>
         {shape}
         {p.hole ? <circle cx={p.x} cy={p.y} r={p.hole / 2} fill="#0b1a12" pointerEvents="none" /> : null}
+        {connectMode && p.port ? <circle className="pad-target" cx={p.x} cy={p.y} r={Math.max(Math.max(p.w, p.h) / 2, 9 / view.s)} data-net={p.key ?? ""} data-port={p.port} /> : null}
       </g>
     )
   }
@@ -215,7 +220,16 @@ export default function PcbEdit({ model, fitKey, selected, netKey, editable, sna
   }
 
   return (
-    <div className="pcbedit" ref={box}>
+    <div className={`pcbedit ${connectMode ? "connect" : ""}`} ref={box}
+      onDragOver={(e) => { if (onDropItem && e.dataTransfer.types.includes(PALETTE_MIME)) { e.preventDefault(); e.stopPropagation() } }}
+      onDrop={(e) => {
+        const id = e.dataTransfer.getData(PALETTE_MIME)
+        if (!id || !onDropItem) return
+        e.preventDefault(); e.stopPropagation()
+        const w = toWorld(e.clientX, e.clientY)
+        const q = snap || 0.5
+        onDropItem(id, Math.round(w.x / q) * q, Math.round(w.y / q) * q)
+      }}>
       <svg width={size.w} height={size.h} viewBox={`${view.cx - vw / 2} ${-view.cy - vh / 2} ${vw} ${vh}`}
         onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp}
         style={{ touchAction: "none", cursor: drag.current?.moved ? "grabbing" : "default", display: "block" }}>
@@ -251,7 +265,7 @@ export default function PcbEdit({ model, fitKey, selected, netKey, editable, sna
         </label>
         <button className="btn" onClick={() => { userView.current = false; fit() }}>Fit</button>
       </div>
-      <div className="pcbedit-hint small muted">Click part to select · drag to move · arrows nudge · R rotates · click pad/trace for net · Esc clears</div>
+      <div className="pcbedit-hint small muted">{connectMode ? "Connect mode: click a pad for pin A, then another for pin B · drag to pan" : "Click part to select · drag to move · arrows nudge · R rotates · click pad/trace for net · Esc clears"}</div>
     </div>
   )
 }

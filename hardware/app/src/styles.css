@@ -366,3 +366,34 @@ h1 { font-size: 22px; margin: 0; letter-spacing: -0.02em; }
 .kbd-list dd { margin: 0; }
 kbd { font-family: var(--mono); font-size: 11.5px; padding: 2px 6px; border-radius: 5px; border: 1px solid var(--border); background: var(--hover); }
 .viewer-layer { position: absolute; inset: 0; }
+
+/* design pass 1: grouped toolbar, ⋯ menu, panel sub-tabs */
+.tb-group { display: inline-flex; align-items: center; gap: 2px; padding-right: 6px; margin-right: 2px; border-right: 1px solid var(--border); }
+.save-state { display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 10px; border: 0; border-radius: 7px; background: transparent; color: var(--muted); font: inherit; font-size: 12.5px; cursor: default; }
+.save-state.dirty { color: var(--text); cursor: pointer; }
+.save-state.dirty:hover:not(:disabled) { background: var(--hover); }
+.dot.warn { background: var(--warn); }
+.build-seg button { font-weight: 500; height: 28px; }
+.build-seg button:last-child { border-right: 0; }
+.build-seg button:disabled { opacity: .45; cursor: default; }
+.menu { min-width: 220px; background: var(--panel); border: 1px solid var(--border); border-radius: 10px; box-shadow: var(--shadow); padding: 5px; z-index: 50; }
+.menu-item { display: flex; align-items: center; gap: 8px; padding: 7px 10px; border-radius: 6px; font-size: 13px; cursor: pointer; outline: none; user-select: none; color: var(--text); }
+.menu-item[data-highlighted] { background: var(--hover); }
+.menu-item[data-disabled] { opacity: .45; cursor: default; }
+.menu-sep { height: 1px; background: var(--border); margin: 4px 2px; }
+.menu-check { width: 14px; color: var(--accent); }
+.menu-kbd { margin-left: auto; font-family: var(--mono); font-size: 11px; color: var(--muted); }
+.seg.subtabs { margin-left: 10px; align-self: center; }
+.seg.subtabs button { height: 24px; font-size: 12px; padding: 0 10px; }
+.seg.subtabs button:last-child { border-right: 0; }
+
+/* design pass 1b: palette rail, read-only fields, connect-mode pad targets */
+.palette.collapsed { width: 40px; align-items: center; padding-top: 8px; gap: 10px; }
+.palette .rail-label { writing-mode: vertical-rl; transform: rotate(180deg); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.pal-top { display: flex; align-items: center; gap: 4px; }
+.pal-top .pal-tabs { flex: 1; }
+.input[readonly], .input:disabled { background: transparent; border-style: dashed; color: var(--muted); cursor: default; }
+.input[readonly]:focus { outline: none; box-shadow: none; }
+.pcbedit .pad-target { fill: transparent; cursor: crosshair; }
+.pcbedit .pad-target:hover { fill: rgba(255, 210, 63, .28); stroke: #ffd23f; stroke-width: 1.5px; vector-effect: non-scaling-stroke; }
+.pcbedit.connect { cursor: crosshair; }

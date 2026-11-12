@@ -28,6 +28,10 @@ export type Canvas = {
   model: Model; fitKey: string; selected: string | null; netKey: string | null
   editable: (name: string) => boolean; snap: number; setSnap: (s: number) => void
   onPick: (p: PcbPick) => void; onMove: (n: string, dx: number, dy: number) => void; onRotate: (n: string, d: number) => void
+  /** Connect mode: pads get large click targets and parts cannot be dragged */
+  connectMode?: boolean
+  /** a palette item dropped on the board, at board coordinates (mm) */
+  onDropItem?: (id: string, x: number, y: number) => void
 }
 
 type Tab = "schematic" | "pcb" | "pcbview" | "3d"

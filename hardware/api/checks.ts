@@ -463,7 +463,7 @@ function checkDecoupling(cj: any[], ctx: Ctx, rules: Rules): CheckIssue[] {
     const supply = keys.find((k) => !isGround(k))
     if (supply) (capsByKey.get(supply) ?? capsByKey.set(supply, []).get(supply)!).push(c)
   }
-  const SUPPLY = /^(vcc|vdd|vdda|vddio|vcca|vin|v\+|3v3|vdd3p3|vdd_?spi|avdd|dvdd|vbat|v3[_.]?3|v5|5v)\w*$/i
+  const SUPPLY = /^(vcc|vs|vdd|vdda|vddio|vcca|vin|v\+|3v3|vdd3p3|vdd_?spi|avdd|dvdd|vbat|v3[_.]?3|v5|5v)\w*$/i
   const padOfPort = new Map<string, any>()
   for (const p of cj) if ((p.type === "pcb_smtpad" || p.type === "pcb_plated_hole") && p.pcb_port_id) padOfPort.set(p.pcb_port_id, p)
   const srcPortToPcb = new Map<string, string>()

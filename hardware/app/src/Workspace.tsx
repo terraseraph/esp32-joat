@@ -9,7 +9,8 @@ import Bom from "./Bom"
 import BuildProgress from "./BuildProgress"
 
 function useSplit(initial: number, min: number, max: number, axis: "x" | "y", invert = false) {
-  const [size, setSize] = useState(initial)
+  // clamp: innerWidth is 0 when the tab first renders in the background
+  const [size, setSize] = useState(() => Math.min(max, Math.max(min, initial)))
   const onPointerDown = (e: React.PointerEvent) => {
     e.preventDefault()
     const start = axis === "x" ? e.clientX : e.clientY

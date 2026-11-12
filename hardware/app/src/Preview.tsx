@@ -1,4 +1,4 @@
-import { Component, useEffect, useRef, useState, type ReactNode } from "react"
+import { Component, useEffect, useMemo, useRef, useState, type ReactNode } from "react"
 
 /** Keeps a crashing tscircuit viewer from unmounting the whole app; resets when a new circuit arrives. */
 class ViewerBoundary extends Component<{ resetKey: unknown; children: ReactNode }, { error: Error | null; key: unknown }> {
@@ -16,6 +16,10 @@ class ViewerBoundary extends Component<{ resetKey: unknown; children: ReactNode 
 }
 import { AnimatePresence, motion } from "motion/react"
 import { SchematicViewer, PcbViewer, CadViewer } from "@tscircuit/runframe/preview"
+
+// The WebGPU PCB renderer throws on element types it cannot draw; they still show in Problems.
+const PCB_UNDRAWABLE = new Set(["pcb_courtyard_overlap_error"])
+const pcbSafe = (cj: any[]) => (cj.some((e) => PCB_UNDRAWABLE.has(e?.type)) ? cj.filter((e) => !PCB_UNDRAWABLE.has(e?.type)) : cj)
 
 type Tab = "schematic" | "pcb" | "3d"
 const TABS: { id: Tab; label: string }[] = [
@@ -42,6 +46,7 @@ export default function Preview({ circuitJson, building }: { circuitJson: any[] 
     try { return (localStorage.getItem("previewTab") as Tab) || "pcb" } catch { return "pcb" }
   })
   const { ref, w, h } = useSize()
+  const pcbJson = useMemo(() => (circuitJson ? pcbSafe(circuitJson) : null), [circuitJson])
   const pick = (t: Tab) => {
     setTab(t)
     try { localStorage.setItem("previewTab", t) } catch {}
@@ -75,7 +80,7 @@ export default function Preview({ circuitJson, building }: { circuitJson: any[] 
             >
               <ViewerBoundary resetKey={circuitJson}>
                 {w > 0 && h > 0 && tab === "schematic" && <SchematicViewer circuitJson={circuitJson as any} containerStyle={{ width: w, height: h }} />}
-                {w > 0 && h > 0 && tab === "pcb" && <PcbViewer circuitJson={circuitJson as any} height={h} />}
+                {w > 0 && h > 0 && tab === "pcb" && <PcbViewer circuitJson={pcbJson as any} height={h} />}
                 {w > 0 && h > 0 && tab === "3d" && (
                   <div style={{ width: w, height: h }}>
                     <CadViewer circuitJson={circuitJson as any} />

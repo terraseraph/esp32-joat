@@ -1,8 +1,16 @@
-export type Meta = { name?: string; description?: string; revision?: string; notes?: string } | null
+export type ChecklistItem = { id: string; text: string; status: "open" | "ok" | "wontfix"; note: string }
+export type Rules = { minTrace: number; minClearance: number; copperOz: number; netCurrents: Record<string, number>; decouplingMaxDistance: number }
+export type Meta = { name?: string; description?: string; revision?: string; notes?: string; checklist?: ChecklistItem[]; rules?: Partial<Rules> } | null
+export type Where = { view: "pcb" | "schematic"; x: number; y: number; w: number; h: number; layer?: string; pcbComponentId?: string }
+export type CheckIssue = {
+  id: string; severity: "error" | "warning" | "info"; source: "build" | "tscircuit-checks" | "custom"; rule: string
+  title: string; message: string; why: string; fix?: string; refs?: string[]; where?: Where; elementId?: string
+}
+export type ChecksResult = { ok: boolean; counts: { error: number; warning: number; info: number }; rules: Rules; issues: CheckIssue[] }
 export type DesignSummary = { name: string; meta: Meta }
 export type Design = { name: string; meta: Meta; files: Record<string, string> }
 export type Issue = { type: string; message: string; stack?: string }
-export type BuildResult = { ok: boolean; circuitJson: any[]; errors: Issue[]; warnings: Issue[]; durationMs: number }
+export type BuildResult = { ok: boolean; circuitJson: any[]; errors: Issue[]; warnings: Issue[]; durationMs: number; checks?: ChecksResult | null }
 export type BomRow = {
   refs: string[]; lcsc: string; mfr: string; package: string; description: string
   qtyPerBoard: number; unitPrice: number; lineCostPerBoard: number; stock: number
@@ -38,6 +46,9 @@ export const api = {
   build: (n: string, files?: Record<string, string>) => post(`/api/designs/${enc(n)}/build`, { files }) as Promise<BuildResult>,
   bom: (n: string, qty: number, refresh = false) =>
     req<Bom>(`/api/designs/${enc(n)}/bom?qty=${qty}${refresh ? "&refresh=1" : ""}`),
+  checks: (n: string) => req<ChecksResult & { checklist: ChecklistItem[] }>(`/api/designs/${enc(n)}/checks`),
+  patchMeta: (n: string, patch: { checklist?: ChecklistItem[]; rules?: Partial<Rules>; notes?: string; splitNotes?: boolean }) =>
+    req<{ text: string; meta: NonNullable<Meta> }>(`/api/designs/${enc(n)}/meta`, { method: "PATCH", body: JSON.stringify(patch) }),
   exportUrl: (n: string) => `/api/designs/${enc(n)}/export`,
   gitStatus: () => req<GitStatus>("/api/git/status"),
   commit: (message: string) => post("/api/git/commit", { message }) as Promise<{ ok: boolean; output: string }>,

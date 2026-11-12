@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { AnimatePresence, motion } from "motion/react"
-import { api, type BuildResult, type Design } from "./api"
+import { api, type BuildResult, type CheckIssue, type Design, type Meta } from "./api"
 import { useToast } from "./toast"
 import Editor from "./Editor"
 import Preview from "./Preview"
 import Problems from "./Problems"
 import Bom from "./Bom"
+import Review from "./Review"
 
 function useSplit(initial: number, min: number, max: number, axis: "x" | "y", invert = false) {
   const [size, setSize] = useState(initial)
@@ -41,9 +42,10 @@ export default function Workspace({ name, onSaved }: { name: string; onSaved: ()
   const [build, setBuild] = useState<BuildState>({ status: "idle" })
   const [result, setResult] = useState<BuildResult | null>(null)
   const [circuit, setCircuit] = useState<any[] | null>(null) // last good
-  const [panel, setPanel] = useState<"problems" | "bom">("problems")
+  const [panel, setPanel] = useState<"problems" | "bom" | "review">("problems")
   const [panelOpen, setPanelOpen] = useState(true)
   const [bomVersion, setBomVersion] = useState(0)
+  const [focus, setFocus] = useState<{ where: NonNullable<CheckIssue["where"]>; nonce: number } | null>(null)
   const buildSeq = useRef(0)
   const filesRef = useRef(files)
   filesRef.current = files
@@ -114,11 +116,20 @@ export default function Workspace({ name, onSaved }: { name: string; onSaved: ()
     return () => removeEventListener("keydown", on)
   }, [save])
 
+  // board.json is the single source for checklist + rules; Review patches it on disk through the API
+  const boardMeta = useMemo<Meta>(() => { try { return JSON.parse(files["board.json"] ?? "null") } catch { return null } }, [files])
+  const onMetaSaved = useCallback((text: string) => {
+    setSaved((s) => ({ ...s, "board.json": text }))
+    setFiles((f) => ({ ...f, "board.json": text }))
+  }, [])
+  const locate = useCallback((i: CheckIssue) => { if (i.where) setFocus({ where: i.where, nonce: Date.now() }) }, [])
+
   if (loadErr) return <div className="empty err">Could not load "{name}": {loadErr}</div>
   if (!design) return <div className="empty">Loading…</div>
 
   const errCount = result?.errors.length ?? 0
-  const warnCount = result?.warnings.length ?? 0
+  const probErr = result?.checks?.counts.error ?? errCount // Problems badge includes design-rule checks
+  const probWarn = result?.checks?.counts.warning ?? (result?.warnings.length ?? 0)
   const hasErrors = build.status === "error"
 
   const doExport = () => {
@@ -168,20 +179,20 @@ export default function Workspace({ name, onSaved }: { name: string; onSaved: ()
         <div className="gutter x" onPointerDown={left.onPointerDown} />
         <div className="right">
           <section className="pane preview-pane">
-            <Preview circuitJson={circuit} building={build.status === "building"} />
+            <Preview circuitJson={circuit} building={build.status === "building"} focus={focus} />
           </section>
           <div className="gutter y" onPointerDown={panelOpen ? bottom.onPointerDown : undefined} />
           <section className="pane bottom" style={{ height: panelOpen ? bottom.size : 38 }}>
             <div className="tabs small">
-              {(["problems", "bom"] as const).map((t) => (
+              {(["problems", "review", "bom"] as const).map((t) => (
                 <button key={t} className={`tab ${panel === t ? "on" : ""}`} onClick={() => { setPanel(t); setPanelOpen(true) }}>
                   {panel === t && <motion.span layoutId="bottab" className="tab-bg" transition={{ type: "spring", visualDuration: 0.2, bounce: 0 }} />}
                   <span className="tab-label">
-                    {t === "problems" ? "Problems" : "BOM & cost"}
-                    {t === "problems" && (errCount > 0 || warnCount > 0) && (
+                    {t === "problems" ? "Problems" : t === "review" ? "Review" : "BOM & cost"}
+                    {t === "problems" && (probErr > 0 || probWarn > 0) && (
                       <span className="counts">
-                        {errCount > 0 && <span className="cnt bad">{errCount}</span>}
-                        {warnCount > 0 && <span className="cnt warn">{warnCount}</span>}
+                        {probErr > 0 && <span className="cnt bad">{probErr}</span>}
+                        {probWarn > 0 && <span className="cnt warn">{probWarn}</span>}
                       </span>
                     )}
                   </span>
@@ -197,7 +208,9 @@ export default function Workspace({ name, onSaved }: { name: string; onSaved: ()
             {panelOpen && (
               <div className="panel-body">
                 {panel === "problems" ? (
-                  <Problems result={result} fatal={build.fatal} />
+                  <Problems result={result} fatal={build.fatal} onLocate={locate} />
+                ) : panel === "review" ? (
+                  <Review name={name} checklist={boardMeta?.checklist ?? []} notes={boardMeta?.notes ?? ""} rules={boardMeta?.rules} onMetaSaved={onMetaSaved} />
                 ) : (
                   <Bom name={name} version={bomVersion} dirty={dirty} />
                 )}

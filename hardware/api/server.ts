@@ -5,6 +5,7 @@ import fs from "node:fs"
 import path from "node:path"
 import { bomCsv, computeBom, cplCsv } from "./bom.js"
 import { buildDesign, NAME_RE, readDesignFiles, readMeta, ROOT, safeDesignPath } from "./build.js"
+import { patchBoardJson, runChecks } from "./checks.js"
 import { gitCommit, gitPush, gitStatus } from "./git.js"
 
 const app = Fastify({ logger: { level: "warn" }, bodyLimit: 20 * 1024 * 1024 })
@@ -62,8 +63,34 @@ app.post<{ Params: { name: string }; Body: { files?: Record<string, string> } }>
   if (!designExists(name) && !files?.["index.tsx"]) return notFound(reply)
   if (files) for (const rel of Object.keys(files)) if (!safeDesignPath(name, rel)) return reply.code(400).send({ error: `invalid file: ${rel}` })
   const { ok, circuitJson, errors, warnings, durationMs } = await buildDesign(name, files)
-  return { ok, circuitJson, errors, warnings, durationMs }
+  // design-rule checks run on every build; board.json (possibly an unsaved override) supplies the rules
+  let rulesSrc = readMeta(name)?.rules
+  if (files?.["board.json"]) try { rulesSrc = JSON.parse(files["board.json"]).rules } catch {}
+  const checks = circuitJson.length ? await runChecks(circuitJson, rulesSrc).catch(() => null) : null
+  return { ok, circuitJson, errors, warnings, durationMs, checks }
 })
+
+// Full design-rule check results (stock @tscircuit/checks + custom rules) with plain-English explanations.
+app.get<{ Params: { name: string } }>("/api/designs/:name/checks", async (req, reply) => {
+  const { name } = req.params
+  if (!designExists(name)) return notFound(reply)
+  const build = await buildDesign(name)
+  if (!build.circuitJson.length) return reply.code(422).send({ error: build.errors[0]?.message ?? "build failed" })
+  const meta = readMeta(name)
+  const checks = await runChecks(build.circuitJson, meta?.rules)
+  return { name, buildOk: build.ok, ...checks, checklist: meta?.checklist ?? [], notes: meta?.notes ?? "" }
+})
+
+// Patch board.json: { checklist?, rules?, notes?, splitNotes? } (other keys are preserved).
+app.patch<{ Params: { name: string }; Body: { checklist?: unknown; rules?: unknown; notes?: string; splitNotes?: boolean } }>(
+  "/api/designs/:name/meta",
+  async (req, reply) => {
+    const { name } = req.params
+    if (!designExists(name)) return notFound(reply)
+    const b = req.body ?? {}
+    return patchBoardJson(name, { checklist: b.checklist, rules: b.rules, notes: b.notes, splitNotes: b.splitNotes })
+  },
+)
 
 app.get<{ Params: { name: string }; Querystring: { qty?: string; refresh?: string } }>("/api/designs/:name/bom", async (req, reply) => {
   const { name } = req.params
@@ -121,4 +148,4 @@ app.setErrorHandler((err: any, _req, reply) => {
 })
 
 await app.listen({ host: "127.0.0.1", port: Number(process.env.HW_API_PORT ?? 3101) })
-console.log("hardware api on http://127.0.0.1:3101")
+console.log(`hardware api on http://127.0.0.1:${app.server.address() && (app.server.address() as any).port}`)

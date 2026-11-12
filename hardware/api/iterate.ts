@@ -63,33 +63,29 @@ export function bumpRevision(rev: string): string {
   return rev + "2"
 }
 
-/** `foo` -> `foo-revb`; `foo-revb` -> `foo-revc`; skips names that already exist. */
-export function nextVariantName(name: string): string {
-  const m = /^(.*)-rev([a-z0-9]+)$/.exec(name)
-  const root = m ? m[1] : name
-  let rev = m ? bumpRevision(m[2]) : "b"
-  for (let i = 0; i < 50; i++, rev = bumpRevision(rev)) {
-    const cand = `${root}-rev${rev.toLowerCase()}`
-    if (!fs.existsSync(path.join(ROOT, "designs", cand))) return cand
-  }
-  return `${root}-rev${Date.now()}`
-}
-
+/** Copies the whole design folder to `<base>-rev<x>` and sets board.json revision to the same <x>. The revision is the
+ *  next one after the source's (A -> B), bumped further until the folder name is free, so folder and revision always agree. */
 export function createVariant(name: string, wanted?: string): { name: string; revision: string } {
-  const target = wanted || nextVariantName(name)
-  if (!NAME_RE.test(target)) throw Object.assign(new Error("invalid variant name"), { statusCode: 400 })
-  if (fs.existsSync(path.join(ROOT, "designs", target))) throw Object.assign(new Error(`"${target}" already exists`), { statusCode: 409 })
-  const files = readDesignFiles(name)
+  const src = path.join(ROOT, "designs", name)
   const meta = readMeta(name) ?? {}
-  const revision = bumpRevision(String(meta.revision ?? "A"))
-  const newMeta = { ...meta, name: !meta.name || meta.name === name ? target : meta.name, revision }
-  files["board.json"] = JSON.stringify(newMeta, null, 2) + "\n"
-  for (const [rel, content] of Object.entries(files)) {
-    const full = safeDesignPath(target, rel)
-    if (!full) continue
-    fs.mkdirSync(path.dirname(full), { recursive: true })
-    fs.writeFileSync(full, content)
+  const m = /^(.*)-rev([a-z0-9]+)$/i.exec(name)
+  const root = m ? m[1] : name
+  let revision = bumpRevision(String(meta.revision ?? (m ? m[2].toUpperCase() : "A")))
+  let target = wanted
+  if (target) {
+    if (!NAME_RE.test(target)) throw Object.assign(new Error("invalid variant name"), { statusCode: 400 })
+    if (fs.existsSync(path.join(ROOT, "designs", target))) throw Object.assign(new Error(`"${target}" already exists`), { statusCode: 409 })
+  } else {
+    for (let n = 0; n < 100; n++, revision = bumpRevision(revision)) {
+      target = `${root}-rev${revision.toLowerCase()}`
+      if (!fs.existsSync(path.join(ROOT, "designs", target))) break
+    }
+    if (!target || fs.existsSync(path.join(ROOT, "designs", target))) throw Object.assign(new Error("no free variant name"), { statusCode: 409 })
   }
+  const dest = path.join(ROOT, "designs", target)
+  fs.cpSync(src, dest, { recursive: true, filter: (p) => path.basename(p) !== ".snapshots" })
+  const newMeta = { ...meta, name: !meta.name || meta.name === name ? target : meta.name, revision }
+  fs.writeFileSync(path.join(dest, "board.json"), JSON.stringify(newMeta, null, 2) + "\n")
   return { name: target, revision }
 }
 
@@ -231,6 +227,7 @@ export function registerIterateRoutes(app: FastifyInstance, designExists: (n: st
     if (!designExists(name)) return bad(reply, "design not found", 404)
     const pick = (ref?: string): Record<string, string> | null =>
       !ref || ref === "current" ? (req.body?.files ?? readDesignFiles(name)) : (readSnapshot(name, ref)?.files ?? null)
+    if (req.body?.files) for (const [k, v] of Object.entries(req.body.files)) if (!safeDesignPath(name, k) || typeof v !== "string") return bad(reply, `invalid file: ${k}`)
     const fa = pick(req.body?.a), fb = pick(req.body?.b)
     if (!fa || !fb) return bad(reply, "snapshot not found", 404)
     const ra = await buildDesign(name, fa)

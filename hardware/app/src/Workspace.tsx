@@ -102,11 +102,11 @@ export default function Workspace({ name, onSaved }: { name: string; onSaved: ()
 
   const savedRef = useRef(saved)
   savedRef.current = saved
-  const save = useCallback(async (quiet = false) => {
+  const save = useCallback(async (quiet = false): Promise<boolean> => {
     try {
       const changed: Record<string, string> = {}
       for (const k of Object.keys(filesRef.current)) if (filesRef.current[k] !== savedRef.current[k]) changed[k] = filesRef.current[k]
-      if (!Object.keys(changed).length) return
+      if (!Object.keys(changed).length) return true
       setSaving(true)
       await api.save(name, changed)
       savedRef.current = { ...savedRef.current, ...changed }
@@ -114,8 +114,10 @@ export default function Workspace({ name, onSaved }: { name: string; onSaved: ()
       setBomVersion((v) => v + 1)
       if (!quiet) toast("ok", "Saved")
       onSaved()
+      return true
     } catch (e: any) {
       toast("err", `Save failed: ${e.message}`)
+      return false
     } finally {
       setSaving(false)
     }
@@ -151,7 +153,7 @@ export default function Workspace({ name, onSaved }: { name: string; onSaved: ()
   }, [hist.push, onSaved])
   const newVariant = async () => {
     try {
-      await save(true)
+      if (!(await save(true))) return toast("err", "Variant not created: save failed")
       const v = await iterApi.variant(name)
       toast("ok", `Created ${v.name} (rev ${v.revision})`)
       onSaved()

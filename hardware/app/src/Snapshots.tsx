@@ -48,6 +48,7 @@ export default function Snapshots({ name, files, version, diff, focus, onFocus, 
     } catch (e: any) { toast("err", e.message) } finally { setBusy(null) }
   }
   const remove = async (s: SnapshotInfo) => {
+    if (!confirm(`Delete snapshot "${s.label || fmt(s.createdAt)}"? This cannot be undone.`)) return
     try { await iterApi.deleteSnapshot(name, s.id); await refresh() } catch (e: any) { toast("err", e.message) }
   }
   const compare = async (a: string, b: string) => {

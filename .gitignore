@@ -20,3 +20,6 @@ tools/flash_state.json
 tools/lan_state.json
 tools/nodered_state.json
 nodered/**/*.tgz
+hardware/node_modules/
+hardware/.cache/
+hardware/app/dist/

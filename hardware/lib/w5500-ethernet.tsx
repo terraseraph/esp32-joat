@@ -61,12 +61,11 @@ export const W5500Ethernet = (props: W5500EthernetProps) => {
         <capacitor key={i} name={`C_ETH${i + 1}`} capacitance="100nF" {...p("C14663")}
           pcbX={x - 6 + i * 4} pcbY={y - 7} connections={{ pin1: V33, pin2: GND }} />
       ))}
-      {/* bulk cap sits right of the 100nF row, clear of C_1V2 (was 0.075 mm away at x + 10) */}
-      <capacitor name="C_ETH_BULK" capacitance="10uF" {...p("C15850", "0805")} pcbX={x + 12} pcbY={y - 7}
+      <capacitor name="C_ETH_BULK" capacitance="10uF" {...p("C15850", "0805")} pcbX={x + 12.5} pcbY={y - 7}
         connections={{ pin1: V33, pin2: GND }} />
-      <capacitor name="C_TOCAP" capacitance="4.7uF" {...p("C19666")} pcbX={x + 7} pcbY={y - 4.5}
+      <capacitor name="C_TOCAP" capacitance="4.7uF" {...p("C19666")} pcbX={x + 7.5} pcbY={y - 4.5}
         pcbRotation={90} connections={{ pin1: "net.ETH_TOCAP", pin2: GND }} />
-      <capacitor name="C_1V2" capacitance="10nF" {...p("C57112")} pcbX={x + 9} pcbY={y - 4.5}
+      <capacitor name="C_1V2" capacitance="10nF" {...p("C57112")} pcbX={x + 9.5} pcbY={y - 4.5}
         pcbRotation={90} connections={{ pin1: "net.ETH_1V2", pin2: GND }} />
       <resistor name="R_EXRES" resistance="12.4k" {...p("C137798")} pcbX={x - 10} pcbY={y - 7}
         pcbRotation={90} connections={{ pin1: "net.ETH_EXRES", pin2: GND }} />

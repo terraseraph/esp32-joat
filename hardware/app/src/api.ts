@@ -21,6 +21,7 @@ export type Cost = {
 export type Swap = {
   from: string; to: string; refs: string[]; kind: string; package: string
   current: { mfr: string; unitPrice: number }; alternative: { mfr: string; unitPrice: number; basic: boolean; preferred: boolean; stock: number | null }
+  designRefs: string[]; libRefs: string[]
   savingPerBoard: number; savingTotal: number; canApply: boolean; hint: string
 }
 export type Swaps = { qty: number; swaps: Swap[]; skipped: { lcsc: string; refs: string[]; reason: string }[] }

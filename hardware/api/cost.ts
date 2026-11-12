@@ -97,11 +97,17 @@ export async function costSummary(circuitJson: any[], qty: number, refresh = fal
 type Swap = {
   from: string
   to: string
+  /** every ref sharing the old part number in the BOM */
   refs: string[]
+  /** refs whose part is written directly in the design files (these change on Apply) */
+  designRefs: string[]
+  /** refs that come from a lib/ block and keep the old part until that block changes */
+  libRefs: string[]
   kind: string
   package: string
   current: { mfr: string; description: string; unitPrice: number; extended: boolean }
   alternative: { mfr: string; description: string; unitPrice: number; basic: boolean; preferred: boolean; stock: number | null }
+  /** savings from the refs Apply would actually change */
   savingPerBoard: number
   savingTotal: number
   /** where the old LCSC number appears in source */
@@ -110,18 +116,9 @@ type Swap = {
   hint: string
 }
 
-const KINDS: Record<string, { endpoint: string; key?: (sc: any) => Record<string, string | number> | null }> = {
-  resistor: {
-    endpoint: "resistors",
-    key: (sc) => (typeof sc.resistance === "number" ? { resistance: sc.resistance } : null),
-  },
-  capacitor: {
-    endpoint: "capacitors",
-    key: (sc) => (typeof sc.capacitance === "number" ? { capacitance: sc.capacitance } : null),
-  },
-  led: { endpoint: "leds" },
-  diode: { endpoint: "diodes" },
-}
+// Only part families where jlcsearch returns structured specs we can compare. Diodes are deliberately
+// excluded: its diode type and ratings are unreliable (zeners come back as "general_purpose", ratings null).
+const ENDPOINT: Record<string, string> = { resistor: "resistors", capacitor: "capacitors", led: "leds" }
 
 const cache = new Map<string, { t: number; data: any }>()
 async function cached(url: string) {
@@ -133,11 +130,13 @@ async function cached(url: string) {
   return data
 }
 
-const sameNumber = (a: unknown, b: unknown) => {
+const same = (a: unknown, b: unknown) => {
   const x = Number(a)
   const y = Number(b)
   return Number.isFinite(x) && Number.isFinite(y) && Math.abs(x - y) <= Math.abs(y) * 1e-6
 }
+const known = (...v: unknown[]) => v.every((x) => x !== null && x !== undefined && x !== "")
+const num = (x: unknown) => Number(x)
 
 /** All places an LCSC number appears in source: design files, then lib blocks. */
 export function findLcscSources(name: string, lcsc: string) {
@@ -151,6 +150,48 @@ export function findLcscSources(name: string, lcsc: string) {
   return out
 }
 
+/** Does this ref appear as a literal name="REF" in a design file that holds the LCSC number? */
+function designOwnsRef(name: string, lcsc: string, ref: string) {
+  const re = new RegExp(`["']${lcsc}["']`, "i")
+  const nm = new RegExp(`name=(["'])${ref.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\1`)
+  return Object.values(readDesignFiles(name)).some((c) => re.test(c) && nm.test(c))
+}
+
+/** Is `c` a safe drop-in for `o` (the part ordered today)? Unknown specs on either side reject it. */
+function compatible(kind: string, o: any, c: any): boolean {
+  if (c.package !== o.package) return false
+  if (kind === "resistor") {
+    return (
+      known(o.resistance, c.resistance, o.tolerance_fraction, c.tolerance_fraction, o.power_watts, c.power_watts) &&
+      same(c.resistance, o.resistance) &&
+      num(c.tolerance_fraction) <= num(o.tolerance_fraction) + 1e-9 &&
+      num(c.power_watts) >= num(o.power_watts) &&
+      !c.is_potentiometer && !c.is_multi_resistor_chip && !o.is_potentiometer && !o.is_multi_resistor_chip
+    )
+  }
+  if (kind === "capacitor") {
+    return (
+      known(o.capacitance_farads, c.capacitance_farads, o.voltage_rating, c.voltage_rating, o.temperature_coefficient, c.temperature_coefficient, o.tolerance_fraction, c.tolerance_fraction) &&
+      same(c.capacitance_farads, o.capacitance_farads) &&
+      num(c.voltage_rating) >= num(o.voltage_rating) &&
+      String(c.temperature_coefficient).toUpperCase() === String(o.temperature_coefficient).toUpperCase() &&
+      num(c.tolerance_fraction) <= num(o.tolerance_fraction) + 1e-9 &&
+      !!c.is_polarized === !!o.is_polarized &&
+      (c.capacitor_type ?? "") === (o.capacitor_type ?? "")
+    )
+  }
+  if (kind === "led") {
+    return (
+      known(o.color, c.color) &&
+      c.color === o.color &&
+      !!c.is_rgb === !!o.is_rgb &&
+      (!known(o.luminous_intensity_mcd, c.luminous_intensity_mcd) || num(c.luminous_intensity_mcd) >= num(o.luminous_intensity_mcd)) &&
+      (!known(o.wavelength_nm, c.wavelength_nm) || Math.abs(num(c.wavelength_nm) - num(o.wavelength_nm)) <= 5)
+    )
+  }
+  return false
+}
+
 export async function swapSuggestions(name: string, circuitJson: any[], qty: number): Promise<{ qty: number; swaps: Swap[]; skipped: { lcsc: string; refs: string[]; reason: string }[] }> {
   const groups = groupComponents(circuitJson).filter((g) => g.lcsc)
   const parts = await lookupParts(groups.map((g) => g.lcsc!))
@@ -162,82 +203,65 @@ export async function swapSuggestions(name: string, circuitJson: any[], qty: num
   for (const g of groups) {
     const part = parts.get(g.lcsc!)
     if (!part || part.basic || part.preferred) continue
-    const sc = scByName.get(g.refs[0])
-    const kind = String(sc?.ftype ?? "").replace(/^simple_/, "")
-    const spec = KINDS[kind]
-    if (!spec || !part.package) {
-      skipped.push({ lcsc: g.lcsc!, refs: g.refs, reason: spec ? "no package known" : `no automatic matching for ${kind || "this part type"}` })
-      continue
-    }
+    const kind = String(scByName.get(g.refs[0])?.ftype ?? "").replace(/^simple_/, "")
+    const endpoint = ENDPOINT[kind]
+    if (!endpoint) { skipped.push({ lcsc: g.lcsc!, refs: g.refs, reason: `no automatic matching for ${kind || "this part type"}` }); continue }
     try {
-      const params = new URLSearchParams({ package: part.package, limit: "60" })
-      const keyed = spec.key?.(sc)
-      if (spec.key && !keyed) { skipped.push({ lcsc: g.lcsc!, refs: g.refs, reason: "value not readable" }); continue }
-      for (const [k, v] of Object.entries(keyed ?? {})) params.set(k, String(v))
-      params.set("is_basic", "true")
-      const basicList = (await cached(`${BASE}/${spec.endpoint}/list.json?${params}`))[spec.endpoint] ?? []
-      params.delete("is_basic")
-      params.set("is_preferred", "true")
-      const prefList = (await cached(`${BASE}/${spec.endpoint}/list.json?${params}`))[spec.endpoint] ?? []
-
-      let cands: any[] = [...basicList, ...prefList]
-      cands = cands.filter((c) => c.package === part.package && c.lcsc !== Number(g.lcsc!.slice(1)) && (c.is_basic || c.is_preferred))
-      if (keyed) for (const [k, v] of Object.entries(keyed)) cands = cands.filter((c) => sameNumber(c[k], v))
-      if (kind === "led") cands = cands.filter((c) => c.color === ledColor(part.description))
-      if (kind === "diode") {
-        const t = diodeType(part.description)
-        cands = cands.filter((c) => t === "" || (c.diode_type ?? "") === t)
+      const id = Number(g.lcsc!.slice(1))
+      // The part ordered today, with structured specs. jlcsearch cannot filter by LCSC number, so look it up
+      // among the (max 100) parts with the same package and value taken from the design.
+      const sc = scByName.get(g.refs[0])
+      const find = new URLSearchParams({ package: part.package, limit: "100" })
+      if (kind === "resistor" && typeof sc?.resistance === "number") find.set("resistance", String(sc.resistance))
+      if (kind === "capacitor" && typeof sc?.capacitance === "number") find.set("capacitance", String(sc.capacitance))
+      const orig = part.package ? ((await cached(`${BASE}/${endpoint}/list.json?${find}`))[endpoint] ?? []).find((x: any) => x.lcsc === id) : null
+      if (!orig || !orig.package) { skipped.push({ lcsc: g.lcsc!, refs: g.refs, reason: "original part's specs could not be read from jlcsearch" }); continue }
+      const params = new URLSearchParams({ package: orig.package, limit: "60" })
+      if (kind === "resistor") params.set("resistance", String(orig.resistance))
+      if (kind === "capacitor") params.set("capacitance", String(orig.capacitance_farads))
+      if (kind === "led") params.set("color", String(orig.color))
+      let cands: any[] = []
+      for (const flag of ["is_basic", "is_preferred"]) {
+        params.set(flag, "true")
+        cands.push(...((await cached(`${BASE}/${endpoint}/list.json?${params}`))[endpoint] ?? []))
+        params.delete(flag)
       }
-      if (kind === "capacitor") {
-        // keep voltage rating and dielectric at least as good as the original
-        const volt = voltage(part.description)
-        cands = cands.filter((c) => {
-          const v = voltage(c.description ?? "")
-          return volt === null || (v !== null && v >= volt)
-        })
-        const diel = dielectric(part.description)
-        if (diel) cands = cands.filter((c) => dielectric(c.description ?? "") === diel)
-      }
-      if (kind === "resistor") {
-        const ptol = tolOf(part.description)
-        cands = cands.filter((c) => (ptol === null || c.tolerance_fraction === null || c.tolerance_fraction <= ptol + 1e-9) && !c.is_potentiometer && !c.is_multi_resistor_chip)
-      }
-      cands = cands.filter((c) => c.stock !== 0)
-      if (!cands.length) { skipped.push({ lcsc: g.lcsc!, refs: g.refs, reason: "no Basic/Preferred part with the same package and value" }); continue }
+      const needed = qty * g.refs.length
+      cands = cands.filter(
+        (c) => c.lcsc !== id && (c.is_basic || c.is_preferred) && c.in_stock === true && (c.stock === null || c.stock === undefined || c.stock >= needed) && compatible(kind, orig, c),
+      )
+      if (!cands.length) { skipped.push({ lcsc: g.lcsc!, refs: g.refs, reason: "no in-stock Basic/Preferred part with matching package and specs" }); continue }
       cands.sort((a, b) => Number(!!b.is_basic) - Number(!!a.is_basic) || (a.price1 ?? 9) - (b.price1 ?? 9) || (b.stock ?? 0) - (a.stock ?? 0))
       const best = cands[0]
       const toId = `C${best.lcsc}`
       const altPart = (await lookupParts([toId])).get(toId) as Part | null
+
+      const designRefs = g.refs.filter((r) => designOwnsRef(name, g.lcsc!, r))
+      const libRefs = g.refs.filter((r) => !designRefs.includes(r))
+      const where = findLcscSources(name, g.lcsc!)
       const altUnit = altPart ? unitPriceAt(altPart.breaks, g.refs.length * qty) : (best.price1 ?? 0)
       const curUnit = unitPriceAt(part.breaks, g.refs.length * qty)
-      const savingPerBoard = round(g.refs.length * (curUnit - altUnit) + SETUP_FEE_PER_TYPE / qty, 4)
-      const where = findLcscSources(name, g.lcsc!)
+      // the $3 extended fee only disappears once no ref uses the old part
+      const fee = libRefs.length === 0 ? SETUP_FEE_PER_TYPE / qty : 0
+      const savingPerBoard = round(designRefs.length * (curUnit - altUnit) + fee, 4)
+      const libFiles = where.filter((w) => !w.inDesign).map((w) => w.file)
       swaps.push({
-        from: g.lcsc!, to: toId, refs: g.refs, kind, package: part.package,
+        from: g.lcsc!, to: toId, refs: g.refs, designRefs, libRefs, kind, package: orig.package,
         current: { mfr: part.mfr, description: part.description, unitPrice: curUnit, extended: true },
         alternative: { mfr: best.mfr ?? "", description: best.description ?? "", unitPrice: altUnit, basic: !!best.is_basic, preferred: !!best.is_preferred, stock: best.stock ?? null },
         savingPerBoard, savingTotal: round(savingPerBoard * qty), where,
-        canApply: where.some((w) => w.inDesign),
-        hint: where.some((w) => w.inDesign) ? "" : where.length ? `Change the LCSC number in ${where.map((w) => w.file).join(", ")} (shared block, affects every design using it)` : "LCSC number not found in source",
+        canApply: designRefs.length > 0,
+        hint: designRefs.length === 0
+          ? `Change the LCSC number in ${libFiles.join(", ") || "its source"} (shared block, affects every design using it)`
+          : libRefs.length
+            ? `${libRefs.join(", ")} come from ${libFiles.join(", ") || "a lib block"} and keep the old part; change it there too (shared block). Savings shown cover ${designRefs.join(", ")} only.`
+            : "",
       })
     } catch (e: any) {
       skipped.push({ lcsc: g.lcsc!, refs: g.refs, reason: `lookup failed: ${e.message}` })
     }
   }
   return { qty, swaps: swaps.sort((a, b) => b.savingTotal - a.savingTotal), skipped }
-}
-
-// helpers parsing the supplier description string
-const ledColor = (d: string) => (/(red|green|blue|yellow|white|orange|amber)/i.exec(d)?.[1] ?? "").toLowerCase()
-const diodeType = (d: string) => (/schottky/i.test(d) ? "schottky" : /zener/i.test(d) ? "zener" : /tvs/i.test(d) ? "tvs" : "")
-const voltage = (d: string): number | null => {
-  const m = /(\d+(?:\.\d+)?)\s*V\b/.exec(d)
-  return m ? Number(m[1]) : null
-}
-const dielectric = (d: string) => /\b(X7R|X5R|C0G|NP0|X7S|Y5V)\b/i.exec(d)?.[1]?.toUpperCase().replace("NP0", "C0G") ?? null
-const tolOf = (d: string): number | null => {
-  const m = /±\s*(\d+(?:\.\d+)?)\s*%/.exec(d)
-  return m ? Number(m[1]) / 100 : null
 }
 
 /** Rewrite one LCSC number to another in every design file (lib files are reported, never edited). */

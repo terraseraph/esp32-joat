@@ -26,7 +26,8 @@ export default function Swaps({ name, qty, version, dirty, onChanged }: {
     try {
       const r = await api.applySwap(name, from, to)
       onChanged(r.changed)
-      toast("ok", `Swapped ${from} → ${to}`)
+      if (r.libFiles.length) toast("info", `Design parts swapped, but ${r.libFiles.join(", ")} still use ${from}: change it there too`)
+      else toast("ok", `Swapped ${from} → ${to}`)
     } catch (e: any) {
       toast("err", e.message)
     } finally {
@@ -56,11 +57,11 @@ export default function Swaps({ name, qty, version, dirty, onChanged }: {
       {data.swaps.map((s) => (
         <div className="swap-row" key={s.from}>
           <div className="grow">
-            <div><span className="mono">{s.refs.join(", ")}</span> <span className="muted small">{s.package}</span></div>
+            <div><span className="mono">{(s.canApply ? s.designRefs : s.refs).join(", ")}</span> <span className="muted small">{s.package}</span></div>
             <div className="small muted">
               <span className="mono">{s.from}</span> {s.current.mfr} ({usd(s.current.unitPrice, 4)}) → <span className="mono">{s.to}</span> {s.alternative.mfr} ({usd(s.alternative.unitPrice, 4)}, {s.alternative.basic ? "Basic" : "Preferred"})
             </div>
-            {!s.canApply && <div className="small" style={{ color: "var(--warn)" }}>{s.hint}</div>}
+            {s.hint && <div className="small" style={{ color: "var(--warn)" }}>{s.hint}</div>}
           </div>
           <span className="save-tag">−{usd(s.savingTotal)}</span>
           <button className="btn" disabled={!s.canApply || dirty || busy === s.from} onClick={() => apply(s.from, s.to)}>

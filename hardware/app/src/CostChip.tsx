@@ -36,7 +36,7 @@ export default function CostChip({ name, qty, version, onOpen }: { name: string;
           <div className="row"><span>Extended fees ({cost.extendedTypes} × $3 ÷ {qty})</span><span className="mono">{usd(cost.extendedFeesPerBoard)}</span></div>
           <div className="row"><span>PCB fab (est.)</span><span className="mono">{usd(cost.fab.fabPerBoard)}</span></div>
           <div className="row"><span>Assembly (est.)</span><span className="mono">{usd(cost.fab.assemblyPerBoard)}</span></div>
-          <div className="row total"><span>Total @ {qty}</span><span className="mono">{usd(cost.estimatedTotal)}</span></div>
+          <div className="row total"><span>Total @ {qty} <span className="muted small">est.</span></span><span className="mono">{usd(cost.estimatedTotal)}</span></div>
           <div className="muted small" style={{ marginTop: 4 }}>
             Parts and fees come from jlcsearch; fab and assembly are a rough {cost.fab.layers}-layer list-price estimate (no shipping or tax).
             {cost.missingCount > 0 && ` ${cost.missingCount} part(s) unpriced.`}

@@ -206,7 +206,13 @@ export default function Workspace({ name, onSaved }: { name: string; onSaved: ()
                 ) : panel === "explain" ? (
                   <Explain name={name} version={bomVersion} onHighlight={setHighlight} />
                 ) : (
-                  <Changes name={name} onAccepted={() => location.reload()} />
+                  <Changes name={name} dirty={dirty} onAccepted={(f) => {
+                    setSaved(f); setFiles(f); filesRef.current = f
+                    setActive((a) => (a in f ? a : f["index.tsx"] !== undefined ? "index.tsx" : Object.keys(f)[0]))
+                    setBomVersion((v) => v + 1)
+                    runBuild()
+                    onSaved()
+                  }} />
                 )}
               </div>
             )}

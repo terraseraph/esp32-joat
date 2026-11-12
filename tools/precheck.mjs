@@ -50,7 +50,7 @@ console.log("\nFeature docs (lockstep)");
 step("docs", () => {
   const dirs = { firmware: join(ROOT, "docs", "features"), "node-red": join(NODERED, "docs"), manager: join(MANAGER, "docs"),
     hardware: join(ROOT, "hardware", "docs") };
-  const names = (d) => (existsSync(d) ? readdirSync(d).filter((f) => f.endsWith(".md") && !["designer.md", "api.md"].includes(f)) : []);   // designer.md documents the tool, not a feature
+  const names = (d) => (existsSync(d) ? readdirSync(d).filter((f) => f.endsWith(".md") && !["designer.md", "api.md"].includes(f)) : []);   // designer.md and api.md document the tool, not a feature
   const all = new Set(Object.values(dirs).flatMap(names));
   let missing = 0;
   for (const f of [...all].sort()) {

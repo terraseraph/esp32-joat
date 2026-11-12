@@ -60,6 +60,11 @@ export function lineDiff(a: string, b: string, ctx = 3): { lines: DiffLine[]; ad
   let t = 0
   while (t < n - h && t < m - h && x[n - 1 - t] === y[m - 1 - t]) t++
   const xa = x.slice(h, n - t), ya = y.slice(h, m - t)
+  if (xa.length * ya.length > 4_000_000) {
+    // too big for an LCS table: show the differing middle as a whole-block replace
+    const lines: DiffLine[] = [...xa.slice(0, 300).map((s) => ({ t: "-" as const, s })), ...ya.slice(0, 300).map((s) => ({ t: "+" as const, s })), { t: " ", s: "… (large change shown as a block replace, truncated)" }]
+    return { lines, added: ya.length, removed: xa.length }
+  }
   const w = ya.length + 1
   const dp = new Uint32Array((xa.length + 1) * w)
   for (let i = xa.length - 1; i >= 0; i--)
@@ -87,13 +92,36 @@ export function lineDiff(a: string, b: string, ctx = 3): { lines: DiffLine[]; ad
   return { lines, added: all.filter((l) => l.t === "+").length, removed: all.filter((l) => l.t === "-").length }
 }
 
+/** Designs whose source imports the lib block (lib/<x>.tsx). */
+function designsUsing(key: string): string[] {
+  const base = key.replace(/^lib//, "").replace(/.tsx$/, "")
+  const re = new RegExp(`from\s+["'][./]*lib/${base}["']`)
+  const dir = path.join(ROOT, "designs")
+  if (!fs.existsSync(dir)) return []
+  return fs.readdirSync(dir, { withFileTypes: true }).filter((e) => e.isDirectory() && NAME_RE.test(e.name)).map((e) => e.name)
+    .filter((d) => Object.values(readDesignFiles(d)).some((t) => re.test(t)))
+}
+
+// Diffing is O(n*m); compute once per (proposal, current file state) instead of on every UI poll.
+const diffCache = new Map<string, any>()
 function withDiffs(name: string, p: Proposal) {
+  const cur = Object.keys(p.files).map((f) => sha(currentContent(name, f) ?? ""))
+  const ck = `${name}:${p.id}:${p.status}:${cur.join(",")}`
+  const hit = diffCache.get(ck)
+  if (hit) return hit
+  const r = computeWithDiffs(name, p)
+  if (diffCache.size > 200) diffCache.clear()
+  diffCache.set(ck, r)
+  return r
+}
+function computeWithDiffs(name: string, p: Proposal) {
   const diffs = Object.entries(p.files).map(([file, next]) => {
     const prev = p.status === "pending" ? currentContent(name, file) : null
     const status = next === null ? "delete" : prev === null ? "add" : "modify"
     // for decided proposals we no longer have the old text, so show the new text only
     const d = p.status === "pending" ? lineDiff(prev ?? "", next ?? "") : { lines: (next ?? "").split("\n").slice(0, 200).map((s) => ({ t: "+" as const, s })), added: 0, removed: 0 }
-    return { file, status, added: d.added, removed: d.removed, lines: d.lines }
+    const shared = LIB_RE.test(file) ? designsUsing(file) : null
+    return { file, status, added: d.added, removed: d.removed, lines: d.lines, shared }
   })
   const stale = p.status === "pending" && Object.keys(p.files).filter((f) => sha(currentContent(name, f) ?? "") !== p.base[f])
   return { ...p, diffs, stale: stale || [] }
@@ -157,6 +185,7 @@ export function registerProposalRoutes(app: any, designExists: (n: string) => bo
     const base: Record<string, string> = {}
     for (const [key, content] of Object.entries(files)) {
       if (!resolveKey(name, key)) return reply.code(400).send({ error: `invalid file: ${key}` })
+      if (LIB_RE.test(key) && content === null) return reply.code(400).send({ error: `deleting shared block ${key} is not allowed` })
       if (content !== null && typeof content !== "string") return reply.code(400).send({ error: `invalid content for ${key}` })
       base[key] = sha(currentContent(name, key) ?? "")
     }

@@ -18,7 +18,7 @@ export type GitStatus = { branch: string; dirty: boolean; files: { status: strin
 export type PartInfo = { ref: string; type: string; value: string | null; mpn: string | null; footprint: string | null; lcsc: string | null; x: number | null; y: number | null; rotation: number | null; width: number | null; height: number | null; source: { file: string; line: number } | null }
 export type Explain = { title: string; summary: string; groups: { id: string; title: string; sentences: { text: string; refs: string[] }[] }[] }
 export type DesignRequest = { id: string; text: string; createdAt: string; status: "open" | "resolved" | "dismissed"; proposalIds: string[] }
-export type ProposalDiff = { file: string; status: "add" | "modify" | "delete"; added: number; removed: number; lines: { t: " " | "+" | "-"; s: string }[] }
+export type ProposalDiff = { file: string; status: "add" | "modify" | "delete"; added: number; removed: number; shared: string[] | null; lines: { t: " " | "+" | "-"; s: string }[] }
 export type Proposal = { id: string; summary: string; requestId: string | null; createdAt: string; status: "pending" | "accepted" | "rejected"; diffs: ProposalDiff[]; stale: string[] }
 
 async function req<T>(url: string, init?: RequestInit): Promise<T> {

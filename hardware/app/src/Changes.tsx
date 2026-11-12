@@ -3,7 +3,7 @@ import { api, type DesignRequest, type Proposal } from "./api"
 import { useToast } from "./toast"
 
 /** "Describe a change": the user files a request; Claude answers through the API with a proposal the user accepts or rejects. */
-export default function Changes({ name, onAccepted }: { name: string; onAccepted: () => void }) {
+export default function Changes({ name, dirty, onAccepted }: { name: string; dirty: boolean; onAccepted: (files: Record<string, string>) => void }) {
   const toast = useToast()
   const [text, setText] = useState("")
   const [reqs, setReqs] = useState<DesignRequest[]>([])
@@ -27,7 +27,8 @@ export default function Changes({ name, onAccepted }: { name: string; onAccepted
     try { await api.addRequest(name, text.trim()); setText(""); toast("ok", "Request saved. Ask Claude to look at pending requests."); load() } catch (e: any) { toast("err", e.message) }
   }
   const accept = async (p: Proposal, force = false): Promise<void> => {
-    try { await api.acceptProposal(name, p.id, force); toast("ok", "Change applied; reloading files"); onAccepted() }
+    if (dirty) return toast("err", "Save or discard your editor changes first, then accept")
+    try { const r = await api.acceptProposal(name, p.id, force); toast("ok", "Change applied"); onAccepted(r.files); load() }
     catch (e: any) {
       if (/changed since/.test(e.message) && confirm(`${e.message}\n\nApply anyway and overwrite?`)) return accept(p, true)
       toast("err", e.message)
@@ -51,11 +52,12 @@ export default function Changes({ name, onAccepted }: { name: string; onAccepted
         <div className="card" key={p.id}>
           <div className="row between">
             <strong>{p.summary}</strong>
-            <span className="row"><button className="btn ghost" onClick={() => reject(p)}>Reject</button><button className="btn primary" onClick={() => accept(p)}>Accept</button></span>
+            <span className="row"><button className="btn ghost" onClick={() => reject(p)}>Reject</button><button className="btn primary" onClick={() => accept(p)} disabled={dirty} title={dirty ? "Save your editor changes first" : undefined}>Accept</button></span>
           </div>
           {p.stale.length > 0 && <div className="small" style={{ color: "var(--warn)" }}>Files changed since this was proposed: {p.stale.join(", ")}</div>}
           {p.diffs.map((d) => (
             <div key={d.file}>
+              {d.shared && <div className="shared-warn">Shared block: this affects every design that imports it ({d.shared.length ? d.shared.join(", ") : "none found"}).</div>}
               <div className="diff-file">{d.file} <span className="muted">({d.status}, +{d.added} −{d.removed})</span></div>
               <div className="diff">{d.lines.map((l, i) => <div key={i} className={l.t === "+" ? "add" : l.t === "-" ? "del" : ""}>{l.t} {l.s}</div>)}</div>
             </div>

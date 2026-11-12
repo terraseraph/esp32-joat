@@ -1,6 +1,6 @@
 # Identity (Manager)
 
-Firmware: [docs/features/identity.md](../../docs/features/identity.md) · Node-RED: [nodered/.../docs/identity.md](../../nodered/node-red-contrib-de-esp32/docs/identity.md)
+Firmware: [docs/features/identity.md](../../docs/features/identity.md) · Node-RED: [nodered/.../docs/identity.md](../../nodered/node-red-contrib-de-esp32/docs/identity.md) · Hardware: [hardware/docs/identity.md](../../hardware/docs/identity.md)
 
 ## What the Manager does with it
 - The device `id` (MAC hex) is the registry key everywhere.

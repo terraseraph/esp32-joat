@@ -1,6 +1,6 @@
 # Touch (Manager)
 
-Firmware: [docs/features/touch.md](../../docs/features/touch.md) · Node-RED: [nodered/.../docs/touch.md](../../nodered/node-red-contrib-de-esp32/docs/touch.md)
+Firmware: [docs/features/touch.md](../../docs/features/touch.md) · Node-RED: [nodered/.../docs/touch.md](../../nodered/node-red-contrib-de-esp32/docs/touch.md) · Hardware: [hardware/docs/touch.md](../../hardware/docs/touch.md)
 
 ## What the Manager does with it
 Types and the server link know touch; no screen shows or changes it. A touch pin is invisible on the Live tab and looks like a free pin on the Pins tab.

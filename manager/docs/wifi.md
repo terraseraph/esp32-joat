@@ -1,6 +1,6 @@
 # Wi-Fi, SoftAP, mDNS (Manager)
 
-Firmware: [docs/features/wifi.md](../../docs/features/wifi.md) · Node-RED: [nodered/.../docs/wifi.md](../../nodered/node-red-contrib-de-esp32/docs/wifi.md)
+Firmware: [docs/features/wifi.md](../../docs/features/wifi.md) · Node-RED: [nodered/.../docs/wifi.md](../../nodered/node-red-contrib-de-esp32/docs/wifi.md) · Hardware: [hardware/docs/wifi.md](../../hardware/docs/wifi.md)
 
 ## What the Manager does with it
 | Area | What it does |

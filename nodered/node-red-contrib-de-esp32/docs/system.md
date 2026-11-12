@@ -1,6 +1,6 @@
 # System: reboot, factory reset, safe mode, password, LED (Node-RED)
 
-Firmware: [docs/features/system.md](../../../docs/features/system.md) · Manager: [manager/docs/system.md](../../../manager/docs/system.md)
+Firmware: [docs/features/system.md](../../../docs/features/system.md) · Manager: [manager/docs/system.md](../../../manager/docs/system.md) · Hardware: [hardware/docs/system.md](../../../hardware/docs/system.md)
 
 ## What Node-RED does with it
 Not used by Node-RED. No node sends `system.reboot`, `system.factory_reset` or `network.ap.set_password`. None reads `safe_mode`, `safe_reason` or `boot_count`.

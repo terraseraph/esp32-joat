@@ -1,6 +1,6 @@
 # Serial (Manager)
 
-Firmware: [docs/features/serial.md](../../docs/features/serial.md) · Node-RED: [nodered/.../docs/serial.md](../../nodered/node-red-contrib-de-esp32/docs/serial.md)
+Firmware: [docs/features/serial.md](../../docs/features/serial.md) · Node-RED: [nodered/.../docs/serial.md](../../nodered/node-red-contrib-de-esp32/docs/serial.md) · Hardware: [hardware/docs/serial.md](../../hardware/docs/serial.md)
 
 ## What the Manager does with it
 Not used by the Manager. It reaches devices over HTTP and the device WebSocket only, and never sends `serial.hello` or `serial.bye`. Its own `io.hydrate` (`server/src/device/link.ts`, `corr: "mgr-hydrate"`) goes over WebSocket and does not start the UART session.

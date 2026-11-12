@@ -1,6 +1,6 @@
 # Wi-Fi, SoftAP, mDNS (Node-RED)
 
-Firmware: [docs/features/wifi.md](../../../docs/features/wifi.md) · Manager: [manager/docs/wifi.md](../../../manager/docs/wifi.md)
+Firmware: [docs/features/wifi.md](../../../docs/features/wifi.md) · Manager: [manager/docs/wifi.md](../../../manager/docs/wifi.md) · Hardware: [hardware/docs/wifi.md](../../../hardware/docs/wifi.md)
 
 ## What Node-RED does with it
 Node-RED only finds boards that are already on the LAN, through mDNS, an HTTP fingerprint and MQTT retained topics. It does not send `network.*` commands. It cannot provision Wi-Fi, scan, use the SoftAP, or change the AP password.

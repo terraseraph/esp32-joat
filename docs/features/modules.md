@@ -1,6 +1,6 @@
 # Modules (firmware)
 
-Sister docs: [Node-RED](../../nodered/node-red-contrib-de-esp32/docs/modules.md) · [Manager](../../manager/docs/modules.md)
+Sister docs: [Node-RED](../../nodered/node-red-contrib-de-esp32/docs/modules.md) · [Manager](../../manager/docs/modules.md) · [Hardware](../../hardware/docs/modules.md)
 
 Per-type docs: [rfid.md](rfid.md) (MFRC522), [bme280.md](bme280.md).
 

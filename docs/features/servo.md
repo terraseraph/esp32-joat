@@ -1,6 +1,6 @@
 # Servo (firmware)
 
-Sister docs: [Node-RED](../../nodered/node-red-contrib-de-esp32/docs/servo.md) · [Manager](../../manager/docs/servo.md)
+Sister docs: [Node-RED](../../nodered/node-red-contrib-de-esp32/docs/servo.md) · [Manager](../../manager/docs/servo.md) · [Hardware](../../hardware/docs/servo.md)
 
 ## What it does
 Drives hobby servos with 50 Hz pulses. An angle 0-180 maps linearly onto a pulse window (default 500-2500 µs). Up to 8 servos, independent of [PWM](pwm.md).

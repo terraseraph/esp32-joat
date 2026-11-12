@@ -1,6 +1,6 @@
 # Rules (firmware)
 
-Sister docs: [Node-RED](../../nodered/node-red-contrib-de-esp32/docs/rules.md) · [Manager](../../manager/docs/rules.md)
+Sister docs: [Node-RED](../../nodered/node-red-contrib-de-esp32/docs/rules.md) · [Manager](../../manager/docs/rules.md) · [Hardware](../../hardware/docs/rules.md)
 
 ## What it does
 On-device if-this-then-that for pins, so a box drives an output from an input with no host connected. Example: if GPIO 32 (ADC) is above 1000 mV then GPIO 18 = 1, else GPIO 18 = 0. Rules are saved and run after reboot.

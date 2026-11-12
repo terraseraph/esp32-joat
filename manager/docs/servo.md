@@ -1,6 +1,6 @@
 # Servo (Manager)
 
-Firmware: [docs/features/servo.md](../../docs/features/servo.md) · Node-RED: [nodered/.../docs/servo.md](../../nodered/node-red-contrib-de-esp32/docs/servo.md)
+Firmware: [docs/features/servo.md](../../docs/features/servo.md) · Node-RED: [nodered/.../docs/servo.md](../../nodered/node-red-contrib-de-esp32/docs/servo.md) · Hardware: [hardware/docs/servo.md](../../hardware/docs/servo.md)
 
 ## What the Manager does with it
 - **Pins & add-ons tab**: the pin sheet sets a pin to Servo (same pins as PWM) and sends `pin.configure`. On a `servo_` owned pin every other mode is disabled with the hint "This pin is a servo. Turn it Off first to use another mode."

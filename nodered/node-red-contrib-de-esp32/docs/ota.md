@@ -1,6 +1,6 @@
 # OTA (Node-RED)
 
-Firmware: [docs/features/ota.md](../../../docs/features/ota.md) · Manager: [manager/docs/ota.md](../../../manager/docs/ota.md)
+Firmware: [docs/features/ota.md](../../../docs/features/ota.md) · Manager: [manager/docs/ota.md](../../../manager/docs/ota.md) · Hardware: [hardware/docs/ota.md](../../../hardware/docs/ota.md)
 
 ## What Node-RED does with it
 Not used for updates: no node uploads images or sends `ota.apply` / `ota.rollback`. Two `ota` status fields are read to recognise and describe a device.

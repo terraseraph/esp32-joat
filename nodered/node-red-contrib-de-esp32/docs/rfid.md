@@ -1,6 +1,6 @@
 # RFID MFRC522 (Node-RED)
 
-Firmware: [docs/features/rfid.md](../../../docs/features/rfid.md) · Manager: [manager/docs/rfid.md](../../../manager/docs/rfid.md)
+Firmware: [docs/features/rfid.md](../../../docs/features/rfid.md) · Manager: [manager/docs/rfid.md](../../../manager/docs/rfid.md) · Hardware: [hardware/docs/rfid.md](../../../hardware/docs/rfid.md)
 
 ## What Node-RED does with it
 The generic `de-esp32-module` node ([modules.md](modules.md)) with `modType` `mfrc522`. Picker shows "RFID MFRC522 · VSPI" and "· HSPI".

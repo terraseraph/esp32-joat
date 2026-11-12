@@ -1,6 +1,6 @@
 # PWM (Node-RED)
 
-Firmware: [docs/features/pwm.md](../../../docs/features/pwm.md) · Manager: [manager/docs/pwm.md](../../../manager/docs/pwm.md)
+Firmware: [docs/features/pwm.md](../../../docs/features/pwm.md) · Manager: [manager/docs/pwm.md](../../../manager/docs/pwm.md) · Hardware: [hardware/docs/pwm.md](../../../hardware/docs/pwm.md)
 
 ## What Node-RED does with it
 `gpio out` with Mode `PWM` configures a PWM pin on deploy and sends the duty for each message. `gpio in` does not offer PWM. Transport is as in [gpio.md](gpio.md#commands-sent--events-used).

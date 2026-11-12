@@ -1,6 +1,6 @@
 # ADC (Manager)
 
-Firmware: [docs/features/adc.md](../../docs/features/adc.md) · Node-RED: [nodered/.../docs/adc.md](../../nodered/node-red-contrib-de-esp32/docs/adc.md)
+Firmware: [docs/features/adc.md](../../docs/features/adc.md) · Node-RED: [nodered/.../docs/adc.md](../../nodered/node-red-contrib-de-esp32/docs/adc.md) · Hardware: [hardware/docs/adc.md](../../hardware/docs/adc.md)
 
 ## What the Manager does with it
 - **Pins & add-ons tab**: the pin sheet sets an ADC1 pin to Analog and sends `pin.configure`. ADC2 pins show Analog disabled with "ADC2 cannot be used while Wi-Fi is on" (`ADC2_HINT`).

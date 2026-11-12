@@ -1,6 +1,6 @@
 # System: reboot, factory reset, safe mode, password, LED (firmware)
 
-Sister docs: [Node-RED](../../nodered/node-red-contrib-de-esp32/docs/system.md) · [Manager](../../manager/docs/system.md)
+Sister docs: [Node-RED](../../nodered/node-red-contrib-de-esp32/docs/system.md) · [Manager](../../manager/docs/system.md) · [Hardware](../../hardware/docs/system.md)
 
 ## What it does
 Reboot and factory reset on command, from the UART, or with a BOOT-button hold. A crash loop puts the board in safe mode, where saved I/O is not applied. The only password is an optional WPA2 password for the recovery SoftAP. The onboard LED shows the boot and network state.
@@ -17,7 +17,7 @@ Reboot and factory reset on command, from the UART, or with a BOOT-button hold. 
 - In safe mode:
   - saved pins, modules and rules are not applied;
   - the recovery AP and captive DNS start;
-  - a pending OTA image is not confirmed (`ota_mark_valid(true)`).
+  - a pending OTA image is marked invalid and the device reboots into the previous slot (`ota_mark_valid(true)`).
 - `healthy_clear_task` does not clear the counter while in safe mode, and every software reset raises it again.
 - So safe mode survives `system.reboot`, `factory_reset` and OTA reboots. It is left only by a power-on reset, which sets the counter back to 1.
 - Six software reboots in a row, each within 30 s of the previous boot, also trigger safe mode.

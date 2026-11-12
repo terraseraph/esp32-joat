@@ -1,6 +1,6 @@
 # OTA (firmware)
 
-Sister docs: [Node-RED](../../nodered/node-red-contrib-de-esp32/docs/ota.md) · [Manager](../../manager/docs/ota.md)
+Sister docs: [Node-RED](../../nodered/node-red-contrib-de-esp32/docs/ota.md) · [Manager](../../manager/docs/ota.md) · [Hardware](../../hardware/docs/ota.md)
 
 ## What it does
 A/B firmware updates. A new app image is written into the inactive slot (HTTP upload or URL pull), the device reboots into it as `pending_verify`, and confirms it once the runtime is healthy. A crash before that, or landing in safe mode, returns to the previous slot.

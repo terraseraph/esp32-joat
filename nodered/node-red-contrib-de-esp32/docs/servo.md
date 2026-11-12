@@ -1,6 +1,6 @@
 # Servo (Node-RED)
 
-Firmware: [docs/features/servo.md](../../../docs/features/servo.md) · Manager: [manager/docs/servo.md](../../../manager/docs/servo.md)
+Firmware: [docs/features/servo.md](../../../docs/features/servo.md) · Manager: [manager/docs/servo.md](../../../manager/docs/servo.md) · Hardware: [hardware/docs/servo.md](../../../hardware/docs/servo.md)
 
 ## What Node-RED does with it
 `gpio out` with Mode `Servo` configures a servo on deploy and sends an angle for each message. The palette advertises it via `GET /de-esp32/palette` (`servo: true`). Transport is as in [gpio.md](gpio.md#commands-sent--events-used).

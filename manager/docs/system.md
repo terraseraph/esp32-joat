@@ -1,6 +1,6 @@
 # System: reboot, factory reset, safe mode, password, LED (Manager)
 
-Firmware: [docs/features/system.md](../../docs/features/system.md) · Node-RED: [nodered/.../docs/system.md](../../nodered/node-red-contrib-de-esp32/docs/system.md)
+Firmware: [docs/features/system.md](../../docs/features/system.md) · Node-RED: [nodered/.../docs/system.md](../../nodered/node-red-contrib-de-esp32/docs/system.md) · Hardware: [hardware/docs/system.md](../../hardware/docs/system.md)
 
 ## What the Manager does with it
 - **Reboot**: device page and fleet bulk action.

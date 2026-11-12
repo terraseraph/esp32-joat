@@ -1,6 +1,6 @@
 # UDP (Manager)
 
-Firmware: [docs/features/udp.md](../../docs/features/udp.md) · Node-RED: [nodered/.../docs/udp.md](../../nodered/node-red-contrib-de-esp32/docs/udp.md)
+Firmware: [docs/features/udp.md](../../docs/features/udp.md) · Node-RED: [nodered/.../docs/udp.md](../../nodered/node-red-contrib-de-esp32/docs/udp.md) · Hardware: [hardware/docs/udp.md](../../hardware/docs/udp.md)
 
 ## What the Manager does with it
 Not used by the Manager. Its live view comes from the device WebSocket (`server/src/device/link.ts`) and discovery uses mDNS and an HTTP sweep (`server/src/discovery/`), not the UDP announce.

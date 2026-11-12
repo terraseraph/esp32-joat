@@ -1,6 +1,6 @@
 # Touch (firmware)
 
-Sister docs: [Node-RED](../../nodered/node-red-contrib-de-esp32/docs/touch.md) · [Manager](../../manager/docs/touch.md)
+Sister docs: [Node-RED](../../nodered/node-red-contrib-de-esp32/docs/touch.md) · [Manager](../../manager/docs/touch.md) · [Hardware](../../hardware/docs/touch.md)
 
 ## What it does
 Turns a touch-capable GPIO into a capacitive touch input. A bare wire, copper tape or a PCB pad is enough. The pin reports `level` 1 while touched and 0 when released, like a digital input.

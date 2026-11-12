@@ -1,6 +1,6 @@
 # Status and live data (firmware)
 
-Sister docs: [Node-RED](../../nodered/node-red-contrib-de-esp32/docs/status.md) · [Manager](../../manager/docs/status.md)
+Sister docs: [Node-RED](../../nodered/node-red-contrib-de-esp32/docs/status.md) · [Manager](../../manager/docs/status.md) · [Hardware](../../hardware/docs/status.md)
 
 ## What it does
 `GET /api/v1/status` is one JSON snapshot of the device: identity, heap, uptime, network, MQTT, OTA and every live I/O value. Live changes are pushed as `{topic, data}` frames over WebSocket `/api/v1/ws`, MQTT `{prefix}/io`, the UART session and UDP. `io.hydrate` re-sends every current value.

@@ -1,6 +1,6 @@
 # MQTT (firmware)
 
-Sister docs: [Node-RED](../../nodered/node-red-contrib-de-esp32/docs/mqtt.md) · [Manager](../../manager/docs/mqtt.md)
+Sister docs: [Node-RED](../../nodered/node-red-contrib-de-esp32/docs/mqtt.md) · [Manager](../../manager/docs/mqtt.md) · [Hardware](../../hardware/docs/mqtt.md)
 
 ## What it does
 Optional MQTT client. Commands arrive on `{prefix}/system/command` and go through `command_router`, replies go to `{prefix}/events`, live I/O goes out on `{prefix}/io`. The device works without it; there is no broker in the firmware.

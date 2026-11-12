@@ -1,6 +1,6 @@
 # MQTT (Manager)
 
-Firmware: [docs/features/mqtt.md](../../docs/features/mqtt.md) · Node-RED: [nodered/.../docs/mqtt.md](../../nodered/node-red-contrib-de-esp32/docs/mqtt.md)
+Firmware: [docs/features/mqtt.md](../../docs/features/mqtt.md) · Node-RED: [nodered/.../docs/mqtt.md](../../nodered/node-red-contrib-de-esp32/docs/mqtt.md) · Hardware: [hardware/docs/mqtt.md](../../hardware/docs/mqtt.md)
 
 ## What the Manager does with it
 The Manager does not speak MQTT (no MQTT client; it talks HTTP and WebSocket only). It shows the device's MQTT status and sends `mqtt.configure`: Device · Network tab (MQTT card + Configure sheet), MQTT chips on Device · Live and Fleet, the `mqtt_disconnected` attention flag, and the MQTT step of backup restore.

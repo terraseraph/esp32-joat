@@ -1,6 +1,6 @@
 # Modules (Node-RED)
 
-Firmware: [docs/features/modules.md](../../../docs/features/modules.md) · Manager: [manager/docs/modules.md](../../../manager/docs/modules.md)
+Firmware: [docs/features/modules.md](../../../docs/features/modules.md) · Manager: [manager/docs/modules.md](../../../manager/docs/modules.md) · Hardware: [hardware/docs/modules.md](../../../hardware/docs/modules.md)
 
 ## What Node-RED does with it
 One node, `de-esp32-module` (palette label "module"), outputs live events for one module instance. It can install the instance on deploy (`module.add`) or only listen to one already on the device. Per-type output: [rfid.md](rfid.md), [bme280.md](bme280.md).

@@ -1,6 +1,6 @@
 # ADC (firmware)
 
-Sister docs: [Node-RED](../../nodered/node-red-contrib-de-esp32/docs/adc.md) · [Manager](../../manager/docs/adc.md)
+Sister docs: [Node-RED](../../nodered/node-red-contrib-de-esp32/docs/adc.md) · [Manager](../../manager/docs/adc.md) · [Hardware](../../hardware/docs/adc.md)
 
 ## What it does
 Reads analog voltage on ADC1 pins (GPIO 32-39), smooths it, and publishes millivolts only when the value moves past a threshold. ADC2 is refused because Wi-Fi is always on.

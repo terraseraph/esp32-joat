@@ -1,6 +1,6 @@
 # Identity (firmware)
 
-Sister docs: [Node-RED](../../nodered/node-red-contrib-de-esp32/docs/identity.md) · [Manager](../../manager/docs/identity.md)
+Sister docs: [Node-RED](../../nodered/node-red-contrib-de-esp32/docs/identity.md) · [Manager](../../manager/docs/identity.md) · [Hardware](../../hardware/docs/identity.md)
 
 ## What it does
 Gives every board a stable id from its Wi-Fi MAC and a hostname derived from it, plus an optional human name stored in NVS. The name also sets the MQTT topic slug (`topic_id`) and the mDNS instance name.

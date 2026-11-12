@@ -1,6 +1,6 @@
 # Wi-Fi, SoftAP, mDNS (firmware)
 
-Sister docs: [Node-RED](../../nodered/node-red-contrib-de-esp32/docs/wifi.md) · [Manager](../../manager/docs/wifi.md)
+Sister docs: [Node-RED](../../nodered/node-red-contrib-de-esp32/docs/wifi.md) · [Manager](../../manager/docs/wifi.md) · [Hardware](../../hardware/docs/wifi.md)
 
 ## What it does
 The board joins one saved Wi-Fi network as a station (STA). With no saved network, it opens its own SoftAP `esp32-<last6>`. The SoftAP has a captive portal, so a phone can scan and save Wi-Fi. New credentials are tested before they are saved. The board advertises itself over mDNS once it has a STA address.

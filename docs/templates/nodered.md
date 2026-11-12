@@ -1,6 +1,6 @@
 # <Feature> (Node-RED)
 
-Firmware: [docs/features/<name>.md](../../../docs/features/<name>.md) · Manager: [manager/docs/<name>.md](../../../manager/docs/<name>.md)
+Firmware: [docs/features/<name>.md](../../../docs/features/<name>.md) · Manager: [manager/docs/<name>.md](../../../manager/docs/<name>.md) · Hardware: [hardware/docs/<name>.md](../../../hardware/docs/<name>.md)
 
 ## What Node-RED does with it
 Which node(s) use it, or "Not used by Node-RED" and why.

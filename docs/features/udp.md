@@ -1,6 +1,6 @@
 # UDP (firmware)
 
-Sister docs: [Node-RED](../../nodered/node-red-contrib-de-esp32/docs/udp.md) · [Manager](../../manager/docs/udp.md)
+Sister docs: [Node-RED](../../nodered/node-red-contrib-de-esp32/docs/udp.md) · [Manager](../../manager/docs/udp.md) · [Hardware](../../hardware/docs/udp.md)
 
 ## What it does
 Sends every live io event as one UDP datagram to up to two IPv4 targets, with no broker or WebSocket needed. Optionally it also sends a periodic announce datagram so listeners can find the device without mDNS. Output only: nothing is received, acknowledged or retried.

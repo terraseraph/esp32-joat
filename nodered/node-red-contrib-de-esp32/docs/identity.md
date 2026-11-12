@@ -1,6 +1,6 @@
 # Identity (Node-RED)
 
-Firmware: [docs/features/identity.md](../../../docs/features/identity.md) · Manager: [manager/docs/identity.md](../../../manager/docs/identity.md)
+Firmware: [docs/features/identity.md](../../../docs/features/identity.md) · Manager: [manager/docs/identity.md](../../../manager/docs/identity.md) · Hardware: [hardware/docs/identity.md](../../../hardware/docs/identity.md)
 
 ## What Node-RED does with it
 The `de-esp32-device` config node stores the board's identity. It uses `topicId` (or `deviceId`) to build the MQTT prefix. Its editor can rename the board with `identity.set_name`.

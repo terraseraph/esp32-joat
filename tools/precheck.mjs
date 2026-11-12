@@ -45,11 +45,12 @@ function untracked(dir) {
 }
 
 // ---------------------------------------------------------------------------------------------------------------
-// Every feature has three docs with the same name: docs/features, nodered/.../docs, manager/docs.
+// Every feature has four docs with the same name: docs/features, nodered/.../docs, manager/docs, hardware/docs.
 console.log("\nFeature docs (lockstep)");
 step("docs", () => {
-  const dirs = { firmware: join(ROOT, "docs", "features"), "node-red": join(NODERED, "docs"), manager: join(MANAGER, "docs") };
-  const names = (d) => (existsSync(d) ? readdirSync(d).filter((f) => f.endsWith(".md")) : []);
+  const dirs = { firmware: join(ROOT, "docs", "features"), "node-red": join(NODERED, "docs"), manager: join(MANAGER, "docs"),
+    hardware: join(ROOT, "hardware", "docs") };
+  const names = (d) => (existsSync(d) ? readdirSync(d).filter((f) => f.endsWith(".md") && f !== "designer.md") : []);   // designer.md documents the tool, not a feature
   const all = new Set(Object.values(dirs).flatMap(names));
   let missing = 0;
   for (const f of [...all].sort()) {
@@ -58,7 +59,7 @@ step("docs", () => {
   }
   const index = readFileSync(join(ROOT, "docs", "FEATURES_README.md"), "utf8");
   for (const f of all) if (!index.includes(`features/${f}`)) fail(`${f}: no row in docs/FEATURES_README.md`);
-  if (!missing) ok(`${all.size} features, each with firmware, Node-RED and Manager docs`);
+  if (!missing) ok(`${all.size} features, each with firmware, Node-RED, Manager and hardware docs`);
 });
 
 // ---------------------------------------------------------------------------------------------------------------

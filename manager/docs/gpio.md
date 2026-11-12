@@ -1,6 +1,6 @@
 # GPIO (Manager)
 
-Firmware: [docs/features/gpio.md](../../docs/features/gpio.md) · Node-RED: [nodered/.../docs/gpio.md](../../nodered/node-red-contrib-de-esp32/docs/gpio.md)
+Firmware: [docs/features/gpio.md](../../docs/features/gpio.md) · Node-RED: [nodered/.../docs/gpio.md](../../nodered/node-red-contrib-de-esp32/docs/gpio.md) · Hardware: [hardware/docs/gpio.md](../../hardware/docs/gpio.md)
 
 ## What the Manager does with it
 - **Pins & add-ons tab**: pinout + pin list from `GET /hardware`; the pin sheet sets a pin to Output / Input / Off and sends `pin.configure`.

@@ -1,6 +1,6 @@
 # GPIO (firmware)
 
-Sister docs: [Node-RED](../../nodered/node-red-contrib-de-esp32/docs/gpio.md) · [Manager](../../manager/docs/gpio.md)
+Sister docs: [Node-RED](../../nodered/node-red-contrib-de-esp32/docs/gpio.md) · [Manager](../../manager/docs/gpio.md) · [Hardware](../../hardware/docs/gpio.md)
 
 ## What it does
 Digital input and output on single pins, with optional invert, internal pull-up/pull-down, any-edge interrupts and software debounce for inputs. `capability_manager` decides which pins may be used for which mode before any hardware is touched.

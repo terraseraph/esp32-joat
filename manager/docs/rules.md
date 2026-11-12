@@ -1,6 +1,6 @@
 # Rules (Manager)
 
-Firmware: [docs/features/rules.md](../../docs/features/rules.md) · Node-RED: [nodered/.../docs/rules.md](../../nodered/node-red-contrib-de-esp32/docs/rules.md)
+Firmware: [docs/features/rules.md](../../docs/features/rules.md) · Node-RED: [nodered/.../docs/rules.md](../../nodered/node-red-contrib-de-esp32/docs/rules.md) · Hardware: [hardware/docs/rules.md](../../hardware/docs/rules.md)
 
 ## What the Manager does with it
 Lists, adds, edits, enables/disables and deletes rules on the Pins tab (Rules section), shows rule hints on Live tiles, and saves/restores rules in backups.

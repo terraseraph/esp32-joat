@@ -1,6 +1,6 @@
 # RFID MFRC522 (Manager)
 
-Firmware: [docs/features/rfid.md](../../docs/features/rfid.md) · Node-RED: [nodered/.../docs/rfid.md](../../nodered/node-red-contrib-de-esp32/docs/rfid.md)
+Firmware: [docs/features/rfid.md](../../docs/features/rfid.md) · Node-RED: [nodered/.../docs/rfid.md](../../nodered/node-red-contrib-de-esp32/docs/rfid.md) · Hardware: [hardware/docs/rfid.md](../../hardware/docs/rfid.md)
 
 ## What the Manager does with it
 Added, edited and removed through the generic Add-ons wizard ([modules.md](modules.md)); shown on the Add-ons card and as an RC522 tile on the Live tab.

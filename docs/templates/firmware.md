@@ -1,6 +1,6 @@
 # <Feature> (firmware)
 
-Sister docs: [Node-RED](../../nodered/node-red-contrib-de-esp32/docs/<name>.md) · [Manager](../../manager/docs/<name>.md)
+Sister docs: [Node-RED](../../nodered/node-red-contrib-de-esp32/docs/<name>.md) · [Manager](../../manager/docs/<name>.md) · [Hardware](../../hardware/docs/<name>.md)
 
 ## What it does
 Two or three sentences, plain words.

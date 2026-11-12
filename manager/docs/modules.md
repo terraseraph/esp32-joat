@@ -1,6 +1,6 @@
 # Modules (Manager)
 
-Firmware: [docs/features/modules.md](../../docs/features/modules.md) · Node-RED: [nodered/.../docs/modules.md](../../nodered/node-red-contrib-de-esp32/docs/modules.md)
+Firmware: [docs/features/modules.md](../../docs/features/modules.md) · Node-RED: [nodered/.../docs/modules.md](../../nodered/node-red-contrib-de-esp32/docs/modules.md) · Hardware: [hardware/docs/modules.md](../../hardware/docs/modules.md)
 
 ## What the Manager does with it
 - Device → "Pins & add-ons" tab → **Add-ons** section (`AddonsSection.tsx`): one card per instance, enable switch, Edit, Remove, and the **Add add-on** wizard (`AddonWizard.tsx`, steps Type → Pins → Settings → Review; Edit skips Type). Everything is generated from `module.catalog`; no type is hard-coded in the wizard.

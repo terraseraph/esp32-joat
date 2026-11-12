@@ -1,6 +1,6 @@
 # ADC (Node-RED)
 
-Firmware: [docs/features/adc.md](../../../docs/features/adc.md) · Manager: [manager/docs/adc.md](../../../manager/docs/adc.md)
+Firmware: [docs/features/adc.md](../../../docs/features/adc.md) · Manager: [manager/docs/adc.md](../../../manager/docs/adc.md) · Hardware: [hardware/docs/adc.md](../../../hardware/docs/adc.md)
 
 ## What Node-RED does with it
 `gpio in` with Mode `ADC` configures an ADC1 pin on deploy and outputs millivolts on each `io/adc` event. Transport is as in [gpio.md](gpio.md#commands-sent--events-used).

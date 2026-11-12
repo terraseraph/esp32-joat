@@ -1,6 +1,6 @@
 # Serial (Node-RED)
 
-Firmware: [docs/features/serial.md](../../../docs/features/serial.md) · Manager: [manager/docs/serial.md](../../../manager/docs/serial.md)
+Firmware: [docs/features/serial.md](../../../docs/features/serial.md) · Manager: [manager/docs/serial.md](../../../manager/docs/serial.md) · Hardware: [hardware/docs/serial.md](../../../hardware/docs/serial.md)
 
 ## What Node-RED does with it
 Not used by Node-RED. The palette talks to devices over HTTP, WebSocket and MQTT only (`nodes/de-esp32-device.js`, `lib/http.js`). It never sends `serial.hello` or `serial.bye`.

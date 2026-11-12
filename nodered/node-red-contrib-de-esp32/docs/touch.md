@@ -1,6 +1,6 @@
 # Touch (Node-RED)
 
-Firmware: [docs/features/touch.md](../../../docs/features/touch.md) · Manager: [manager/docs/touch.md](../../../manager/docs/touch.md)
+Firmware: [docs/features/touch.md](../../../docs/features/touch.md) · Manager: [manager/docs/touch.md](../../../manager/docs/touch.md) · Hardware: [hardware/docs/touch.md](../../../hardware/docs/touch.md)
 
 ## What Node-RED does with it
 Not used by Node-RED. No node can configure a touch pin or output its events. The only touch awareness is the pinout badge.

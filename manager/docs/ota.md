@@ -1,6 +1,6 @@
 # OTA (Manager)
 
-Firmware: [docs/features/ota.md](../../docs/features/ota.md) · Node-RED: [nodered/.../docs/ota.md](../../nodered/node-red-contrib-de-esp32/docs/ota.md)
+Firmware: [docs/features/ota.md](../../docs/features/ota.md) · Node-RED: [nodered/.../docs/ota.md](../../nodered/node-red-contrib-de-esp32/docs/ota.md) · Hardware: [hardware/docs/ota.md](../../hardware/docs/ota.md)
 
 ## What the Manager does with it
 Keeps a firmware library, pushes an image to one device or many with `POST /api/v1/ota` (as jobs), rolls a device back with `ota.rollback`, and checks the result from `GET /api/v1/status`. Screens: Firmware page (library, target, bulk update), Device · System · Firmware card (status, Update sheet, Roll back).

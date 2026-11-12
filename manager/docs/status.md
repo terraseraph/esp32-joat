@@ -1,6 +1,6 @@
 # Status and live data (Manager)
 
-Firmware: [docs/features/status.md](../../docs/features/status.md) · Node-RED: [nodered/.../docs/status.md](../../nodered/node-red-contrib-de-esp32/docs/status.md)
+Firmware: [docs/features/status.md](../../docs/features/status.md) · Node-RED: [nodered/.../docs/status.md](../../nodered/node-red-contrib-de-esp32/docs/status.md) · Hardware: [hardware/docs/status.md](../../hardware/docs/status.md)
 
 ## What the Manager does with it
 - Health poller: `GET /api/v1/status` for every registered device, cached in the registry as `last`, turned into the device summary (Fleet, headers) and attention flags.

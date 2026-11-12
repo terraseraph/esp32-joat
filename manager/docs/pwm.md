@@ -1,6 +1,6 @@
 # PWM (Manager)
 
-Firmware: [docs/features/pwm.md](../../docs/features/pwm.md) · Node-RED: [nodered/.../docs/pwm.md](../../nodered/node-red-contrib-de-esp32/docs/pwm.md)
+Firmware: [docs/features/pwm.md](../../docs/features/pwm.md) · Node-RED: [nodered/.../docs/pwm.md](../../nodered/node-red-contrib-de-esp32/docs/pwm.md) · Hardware: [hardware/docs/pwm.md](../../hardware/docs/pwm.md)
 
 ## What the Manager does with it
 - **Pins & add-ons tab**: the pin sheet sets a pin to PWM (needs `output`, `pwm`, not `input_only`) and sends `pin.configure`. A banner lists the other `pwm_` owned pins whose frequency changes with it (`otherPwmPins`).

@@ -1,6 +1,6 @@
 # UDP (Node-RED)
 
-Firmware: [docs/features/udp.md](../../../docs/features/udp.md) · Manager: [manager/docs/udp.md](../../../manager/docs/udp.md)
+Firmware: [docs/features/udp.md](../../../docs/features/udp.md) · Manager: [manager/docs/udp.md](../../../manager/docs/udp.md) · Hardware: [hardware/docs/udp.md](../../../hardware/docs/udp.md)
 
 ## What Node-RED does with it
 Not used by Node-RED. Live io comes over WebSocket `/api/v1/ws` or MQTT `<root>/<topic_id>/io` (`nodes/de-esp32-device.js`). Discovery uses mDNS, MQTT and HTTP probes (`lib/discover.js`), not the UDP announce.

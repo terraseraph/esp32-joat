@@ -1,6 +1,6 @@
 # Status and live data (Node-RED)
 
-Firmware: [docs/features/status.md](../../../docs/features/status.md) · Manager: [manager/docs/status.md](../../../manager/docs/status.md)
+Firmware: [docs/features/status.md](../../../docs/features/status.md) · Manager: [manager/docs/status.md](../../../manager/docs/status.md) · Hardware: [hardware/docs/status.md](../../../hardware/docs/status.md)
 
 ## What Node-RED does with it
 - `GET /api/v1/status` is used by Scan and Probe in the `de-esp32-device` editor to recognise a device and fill its fields.

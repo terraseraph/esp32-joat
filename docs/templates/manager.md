@@ -1,6 +1,6 @@
 # <Feature> (Manager)
 
-Firmware: [docs/features/<name>.md](../../docs/features/<name>.md) · Node-RED: [nodered/.../docs/<name>.md](../../nodered/node-red-contrib-de-esp32/docs/<name>.md)
+Firmware: [docs/features/<name>.md](../../docs/features/<name>.md) · Node-RED: [nodered/.../docs/<name>.md](../../nodered/node-red-contrib-de-esp32/docs/<name>.md) · Hardware: [hardware/docs/<name>.md](../../hardware/docs/<name>.md)
 
 ## What the Manager does with it
 Which screens show or change it, or "Not used by the Manager" and why.

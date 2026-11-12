@@ -1,6 +1,6 @@
 # GPIO (Node-RED)
 
-Firmware: [docs/features/gpio.md](../../../docs/features/gpio.md) · Manager: [manager/docs/gpio.md](../../../manager/docs/gpio.md)
+Firmware: [docs/features/gpio.md](../../../docs/features/gpio.md) · Manager: [manager/docs/gpio.md](../../../manager/docs/gpio.md) · Hardware: [hardware/docs/gpio.md](../../../hardware/docs/gpio.md)
 
 ## What Node-RED does with it
 `gpio in` (Mode `In`) listens to a digital input; `gpio out` (Mode `Out`) drives a digital output. Both use the `de-esp32-device` config node for transport. The editor's pad picker reads `GET /api/v1/hardware` (or the DevKitC fallback in `lib/devkitc-hardware.js`) to decide which pads are selectable.

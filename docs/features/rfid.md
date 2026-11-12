@@ -1,6 +1,6 @@
 # RFID MFRC522 (firmware)
 
-Sister docs: [Node-RED](../../nodered/node-red-contrib-de-esp32/docs/rfid.md) · [Manager](../../manager/docs/rfid.md)
+Sister docs: [Node-RED](../../nodered/node-red-contrib-de-esp32/docs/rfid.md) · [Manager](../../manager/docs/rfid.md) · [Hardware](../../hardware/docs/rfid.md)
 
 Framework (add/remove, NVS, validation): [modules.md](modules.md).
 

@@ -2,6 +2,8 @@
 
 Board designs as [tscircuit](https://docs.tscircuit.com) code, with a local tool to view, cost and export them.
 
+What each feature needs from the hardware, and what is missing, is in [docs/](docs/) (start with [designer.md](docs/designer.md)).
+
 ## Run
 
 ```bash

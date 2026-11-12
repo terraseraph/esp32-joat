@@ -1,6 +1,6 @@
 # Serial (firmware)
 
-Sister docs: [Node-RED](../../nodered/node-red-contrib-de-esp32/docs/serial.md) · [Manager](../../manager/docs/serial.md)
+Sister docs: [Node-RED](../../nodered/node-red-contrib-de-esp32/docs/serial.md) · [Manager](../../manager/docs/serial.md) · [Hardware](../../hardware/docs/serial.md)
 
 ## What it does
 The USB serial port (UART0) is a text console (REPL) and can carry a live io session: after `hello`, every io event is printed as one JSON line (NDJSON). JSON command lines go to the same command router as HTTP, WebSocket and MQTT, so the device can be driven without Wi-Fi.

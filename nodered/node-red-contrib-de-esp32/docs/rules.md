@@ -1,6 +1,6 @@
 # Rules (Node-RED)
 
-Firmware: [docs/features/rules.md](../../../docs/features/rules.md) · Manager: [manager/docs/rules.md](../../../manager/docs/rules.md)
+Firmware: [docs/features/rules.md](../../../docs/features/rules.md) · Manager: [manager/docs/rules.md](../../../manager/docs/rules.md) · Hardware: [hardware/docs/rules.md](../../../hardware/docs/rules.md)
 
 ## What Node-RED does with it
 Not used by Node-RED. No node sends `rule.set`, `rule.remove` or `rule.list`. Flows that need logic do it in Node-RED itself.

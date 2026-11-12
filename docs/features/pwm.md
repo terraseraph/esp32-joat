@@ -1,6 +1,6 @@
 # PWM (firmware)
 
-Sister docs: [Node-RED](../../nodered/node-red-contrib-de-esp32/docs/pwm.md) · [Manager](../../manager/docs/pwm.md)
+Sister docs: [Node-RED](../../nodered/node-red-contrib-de-esp32/docs/pwm.md) · [Manager](../../manager/docs/pwm.md) · [Hardware](../../hardware/docs/pwm.md)
 
 ## What it does
 Drives a square wave on an output pin with a duty cycle given in permille (0-1000). Up to 8 pins. All PWM pins share one frequency.

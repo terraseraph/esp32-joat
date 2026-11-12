@@ -1,6 +1,6 @@
 # MQTT (Node-RED)
 
-Firmware: [docs/features/mqtt.md](../../../docs/features/mqtt.md) · Manager: [manager/docs/mqtt.md](../../../manager/docs/mqtt.md)
+Firmware: [docs/features/mqtt.md](../../../docs/features/mqtt.md) · Manager: [manager/docs/mqtt.md](../../../manager/docs/mqtt.md) · Hardware: [hardware/docs/mqtt.md](../../../hardware/docs/mqtt.md)
 
 ## What Node-RED does with it
 The `de-esp32-device` config node can use a Node-RED `mqtt-broker` node. With a broker it sends commands to `{prefix}/system/command` and listens to `{prefix}/io`; without one it uses HTTP + WebSocket. Scan can also find devices from retained MQTT topics. Node-RED never sends `mqtt.configure`: the broker must be set on the device elsewhere.

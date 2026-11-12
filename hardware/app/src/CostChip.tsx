@@ -25,6 +25,7 @@ export default function CostChip({ name, qty, version, onOpen }: { name: string;
             <b className="mono">{usd(cost.estimatedPerBoard)}</b>
             <span className="muted small">/board @ {qty}</span>
             <span className="est">est.</span>
+            {cost.missingCount > 0 && <span className="est" title="These parts had no price from jlcsearch, so the total is too low">+{cost.missingCount} unpriced</span>}
           </>
         ) : (
           <span className="muted small">{err ? "Cost unavailable" : "Cost…"}</span>

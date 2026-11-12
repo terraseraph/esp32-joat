@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { AnimatePresence, motion } from "motion/react"
-import { api, type BuildMode, type BuildResult, type BuildStatus, type Design } from "./api"
+import { api, type BuildMode, type BuildResult, type BuildStatus, type Design, type PropValue, type SrcComponent } from "./api"
+import { buildModel } from "./pcbModel"
+import Properties from "./Properties"
+import type { PcbPick } from "./PcbEdit"
 import { useToast } from "./toast"
 import Editor from "./Editor"
 import Preview from "./Preview"
@@ -55,6 +58,81 @@ export default function Workspace({ name, onSaved }: { name: string; onSaved: ()
 
   const dirty = useMemo(() => Object.keys(files).some((k) => files[k] !== saved[k]), [files, saved])
 
+  // --- click-on-board editing: selection, source components, code toggle ---
+  const [codeOpen, setCodeOpen] = useState(() => { try { return localStorage.getItem("hw.codeOpen") === "1" } catch { return false } })
+  const toggleCode = (open: boolean) => { setCodeOpen(open); try { localStorage.setItem("hw.codeOpen", open ? "1" : "0") } catch {} }
+  const [snap, setSnapState] = useState(() => { try { return Number(localStorage.getItem("hw.snap") ?? 0.5) } catch { return 0.5 } })
+  const setSnap = (s: number) => { setSnapState(s); try { localStorage.setItem("hw.snap", String(s)) } catch {} }
+  const [selected, setSelected] = useState<string | null>(null)
+  const [netKey, setNetKey] = useState<string | null>(null)
+  const [srcComps, setSrcComps] = useState<SrcComponent[]>([])
+  const model = useMemo(() => (circuit ? buildModel(circuit) : null), [circuit])
+  const editChain = useRef<Promise<unknown>>(Promise.resolve())
+
+  useEffect(() => {
+    if (!design) return
+    const t = setTimeout(() => api.components(name, filesRef.current).then(setSrcComps).catch(() => {}), 300)
+    return () => clearTimeout(t)
+  }, [files, design, name])
+
+  const srcOf = (n: string) => (model?.dupNames.has(n) ? undefined : srcComps.find((c) => c.name === n))
+  /** Part can be moved/rotated from the board: it has its own line, isn't in a loop, and has literal pcbX/pcbY. */
+  const whyReadOnly = (n: string): string | null => {
+    if (model?.dupNames.has(n)) return `${n} is ambiguous (the same name is used by a lib/ block part and a design element)`
+    const s = srcComps.find((c) => c.name === n)
+    if (!s) return `${n} comes from a shared lib/ block, so it can't be moved from here`
+    if (s.inLoop) return `${n} is made by a loop in the code; edit it there`
+    if (typeof s.props.pcbX !== "number" || typeof s.props.pcbY !== "number") return `${n} has no plain pcbX/pcbY number in the code (it is positioned by its group or an expression); edit it in the code`
+    return null
+  }
+  const isEditable = useCallback((n: string) => whyReadOnly(n) === null, [srcComps, model]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  /**
+   * Rewrite the source for one component. Serialised, and relative `delta`s are resolved by the server against the
+   * text it patches, so quick repeated nudges/rotations never act on a stale value. If the user typed in the code
+   * pane while the request was in flight, the patch is redone on the new text instead of overwriting it.
+   */
+  const applyProps = useCallback((comp: string, props: Record<string, PropValue>, delta?: Record<string, number>) => {
+    editChain.current = editChain.current.then(async () => {
+      try {
+        for (let i = 0; i < 3; i++) {
+          const snap = filesRef.current
+          const r = await api.patchComponent(name, comp, props, snap, delta)
+          if (filesRef.current[r.file] !== snap[r.file]) continue
+          filesRef.current = { ...filesRef.current, [r.file]: r.content }
+          setFiles(filesRef.current)
+          if (typeof props.name === "string") setSelected(props.name)
+          for (const w of r.warnings ?? []) toast("info", w)
+          return
+        }
+        toast("err", "The code kept changing while applying the edit; try again")
+      } catch (e: any) {
+        toast("err", e.message)
+      }
+    })
+  }, [name, toast])
+
+  const guard = (n: string) => {
+    const why = whyReadOnly(n)
+    if (why) toast("info", why)
+    return !why
+  }
+  const onMove = useCallback((n: string, dx: number, dy: number) => {
+    if (!guard(n)) return
+    applyProps(n, {}, { pcbX: dx, pcbY: dy })
+  }, [srcComps, model, applyProps]) // eslint-disable-line react-hooks/exhaustive-deps
+  const onRotate = useCallback((n: string, d: number) => {
+    if (!guard(n)) return
+    if (d) applyProps(n, {}, { pcbRotation: d })
+  }, [srcComps, model, applyProps]) // eslint-disable-line react-hooks/exhaustive-deps
+  const onPick = useCallback((p: PcbPick) => {
+    if (p.clear) { setSelected(null); setNetKey(null); return }
+    if (p.comp !== undefined) setSelected(p.comp)
+    if (p.key !== undefined) setNetKey(p.key)
+    else if (p.comp) setNetKey(null)
+  }, [])
+  useEffect(() => { setSelected(null); setNetKey(null) }, [name])
+
   const runBuild = useCallback(async (mode: BuildMode = "quick") => {
     const id = ++buildSeq.current
     setBuild((b) => ({ ...b, status: "building", fatal: undefined, mode }))
@@ -63,8 +141,8 @@ export default function Workspace({ name, onSaved }: { name: string; onSaved: ()
       if (id !== buildSeq.current) return
       if (r.cancelled) { setBuild((b) => ({ ...b, status: "idle" })); return }
       setResult(r)
-      if (r.circuitJson?.length && r.errors.length === 0) setCircuit(r.circuitJson)
-      else if (r.circuitJson?.length) setCircuit((c) => c ?? r.circuitJson)
+      // design-rule errors still produce a board: show it; keep the last board only when nothing was produced
+      if (r.circuitJson?.length) setCircuit(r.circuitJson)
       setBuild({ status: r.errors.length ? "error" : "ok", durationMs: r.durationMs, mode: r.mode ?? mode, cached: r.cached })
     } catch (e: any) {
       if (id !== buildSeq.current) return
@@ -160,12 +238,13 @@ export default function Workspace({ name, onSaved }: { name: string; onSaved: ()
               {build.status === "ok" && `${build.mode === "full" ? "Routed" : "Quick preview"} in ${((build.durationMs ?? 0) / 1000).toFixed(1)}s${build.cached ? " (cached)" : ""}`}
               {build.status === "error" && (build.fatal ? `Build failed` : `${errCount} error${errCount === 1 ? "" : "s"}`)}
               {build.status === "idle" && "Idle"}
-              {build.status === "error" && circuit && <span className="muted"> · showing last good</span>}
+              {build.status === "error" && circuit && !result?.circuitJson?.length && <span className="muted"> · showing last good</span>}
             </motion.span>
           </AnimatePresence>
         </div>
         <div className="grow" />
         {dirty && <span className="muted small">Unsaved changes</span>}
+        <button className={`btn ${codeOpen ? "on" : ""}`} onClick={() => toggleCode(!codeOpen)} aria-pressed={codeOpen} title="Show or hide the source code">{"</>"} Code</button>
         <button className="btn" onClick={() => runBuild("quick")} disabled={build.status === "building"} title="Fast build: placement + ratsnest, no autorouting">Build</button>
         <button className="btn" onClick={() => runBuild("full")} disabled={build.status === "building"} title="Full build with autorouting (slow on big boards)">Route</button>
         <button className="btn" onClick={save} disabled={!dirty}>Save</button>
@@ -175,13 +254,27 @@ export default function Workspace({ name, onSaved }: { name: string; onSaved: ()
       </div>
 
       <div className="panes">
-        <section className="pane editor-pane" style={{ width: left.size }}>
-          <Editor files={files} saved={saved} active={active} setActive={setActive} onChange={(k, v) => setFiles((f) => ({ ...f, [k]: v }))} />
-        </section>
-        <div className="gutter x" onPointerDown={left.onPointerDown} />
+        {codeOpen && (
+          <>
+            <section className="pane editor-pane" style={{ width: left.size }}>
+              <Editor files={files} saved={saved} active={active} setActive={setActive} onChange={(k, v) => setFiles((f) => ({ ...f, [k]: v }))} />
+            </section>
+            <div className="gutter x" onPointerDown={left.onPointerDown} />
+          </>
+        )}
         <div className="right">
           <section className="pane preview-pane">
-            <Preview circuitJson={circuit} building={build.status === "building"} />
+            <Preview circuitJson={circuit} building={build.status === "building"}
+              canvas={model ? { model, fitKey: name, selected, netKey, editable: isEditable, snap, setSnap, onPick, onMove, onRotate } : undefined}
+              overlay={model && selected && model.compByName.get(selected) ? (
+                <Properties comp={model.compByName.get(selected)!} src={srcOf(selected)} model={model} netKey={netKey}
+                  onChange={(p) => applyProps(selected, p)} onClose={() => { setSelected(null); setNetKey(null) }}
+                  onClearNet={() => setNetKey(null)} onOpenCode={() => toggleCode(true)} />
+              ) : model && netKey ? (
+                <aside className="props"><div className="row between"><strong>Net {model.netName(netKey) ?? ""}</strong><button className="link small" onClick={() => setNetKey(null)}>clear</button></div>
+                  <div className="small muted">{model.members(netKey).length} pins</div>
+                  <div className="chips">{model.members(netKey).slice(0, 40).map((m) => <span key={m} className="chip mono">{m}</span>)}</div></aside>
+              ) : null} />
           </section>
           <div className="gutter y" onPointerDown={panelOpen ? bottom.onPointerDown : undefined} />
           <section className="pane bottom" style={{ height: panelOpen ? bottom.size : 38 }}>

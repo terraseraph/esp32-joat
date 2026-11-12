@@ -16,15 +16,26 @@ class ViewerBoundary extends Component<{ resetKey: unknown; children: ReactNode 
 }
 import { AnimatePresence, motion } from "motion/react"
 import { SchematicViewer, PcbViewer, CadViewer } from "@tscircuit/runframe/preview"
+import PcbEdit, { type PcbPick } from "./PcbEdit"
+import type { Model } from "./pcbModel"
 
 // The WebGPU PCB renderer throws on element types it cannot draw; they still show in Problems.
 const PCB_UNDRAWABLE = new Set(["pcb_courtyard_overlap_error"])
 const pcbSafe = (cj: any[]) => (cj.some((e) => PCB_UNDRAWABLE.has(e?.type)) ? cj.filter((e) => !PCB_UNDRAWABLE.has(e?.type)) : cj)
 
-type Tab = "schematic" | "pcb" | "3d"
+/** Selection/editing bridge from Workspace: the interactive PCB view and schematic highlighting use it. */
+export type Canvas = {
+  model: Model; fitKey: string; selected: string | null; netKey: string | null
+  editable: (name: string) => boolean; snap: number; setSnap: (s: number) => void
+  onPick: (p: PcbPick) => void; onMove: (n: string, dx: number, dy: number) => void; onRotate: (n: string, d: number) => void
+}
+
+type Tab = "schematic" | "pcb" | "pcbview" | "3d"
+
 const TABS: { id: Tab; label: string }[] = [
   { id: "schematic", label: "Schematic" },
   { id: "pcb", label: "PCB" },
+  { id: "pcbview", label: "PCB (viewer)" },
   { id: "3d", label: "3D" },
 ]
 
@@ -41,7 +52,7 @@ function useSize() {
   return { ref, ...size }
 }
 
-export default function Preview({ circuitJson, building }: { circuitJson: any[] | null; building: boolean }) {
+export default function Preview({ circuitJson, building, canvas, overlay }: { circuitJson: any[] | null; building: boolean; canvas?: Canvas; overlay?: ReactNode }) {
   const [tab, setTab] = useState<Tab>(() => {
     try { return (localStorage.getItem("previewTab") as Tab) || "pcb" } catch { return "pcb" }
   })
@@ -79,8 +90,20 @@ export default function Preview({ circuitJson, building }: { circuitJson: any[] 
               transition={{ duration: 0.15 }}
             >
               <ViewerBoundary resetKey={circuitJson}>
-                {w > 0 && h > 0 && tab === "schematic" && <SchematicViewer circuitJson={circuitJson as any} containerStyle={{ width: w, height: h }} />}
-                {w > 0 && h > 0 && tab === "pcb" && <PcbViewer circuitJson={pcbJson as any} height={h} />}
+                {w > 0 && h > 0 && tab === "schematic" && (
+                  <div style={{ width: w, height: h }} onClickCapture={(e) => {
+                    const t = (e.target as Element).closest?.("[data-schematic-trace-id]")
+                    const tr = t && circuitJson.find((x) => x.type === "schematic_trace" && x.schematic_trace_id === t.getAttribute("data-schematic-trace-id"))
+                    if (tr?.subcircuit_connectivity_map_key) canvas?.onPick({ key: tr.subcircuit_connectivity_map_key })
+                  }}>
+                    <SchematicViewer circuitJson={circuitJson as any} containerStyle={{ width: w, height: h }}
+                      css={canvas?.netKey ? `${canvas.model.schTraceIds(canvas.netKey).map((id) => `[data-schematic-trace-id="${id}"]`).join(",")}{stroke:#ffb400 !important;stroke-width:3px !important}` : undefined}
+                      highlightedSchematicComponentIds={canvas?.selected ? [...canvas.model.compBySchId].filter(([, c]) => c.name === canvas.selected).map(([id]) => id) : undefined}
+                      onSchematicComponentClicked={canvas ? ({ schematicComponentId }) => canvas.onPick({ comp: canvas.model.compBySchId.get(schematicComponentId)?.name ?? null }) : undefined} />
+                  </div>
+                )}
+                {w > 0 && h > 0 && tab === "pcb" && (canvas ? <PcbEdit {...canvas} stale={building} /> : <PcbViewer circuitJson={pcbJson as any} height={h} />)}
+                {w > 0 && h > 0 && tab === "pcbview" && <PcbViewer circuitJson={pcbJson as any} height={h} />}
                 {w > 0 && h > 0 && tab === "3d" && (
                   <div style={{ width: w, height: h }}>
                     <CadViewer circuitJson={circuitJson as any} />
@@ -90,6 +113,7 @@ export default function Preview({ circuitJson, building }: { circuitJson: any[] 
             </motion.div>
           </AnimatePresence>
         )}
+        {overlay}
       </div>
     </div>
   )

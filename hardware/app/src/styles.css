@@ -194,3 +194,18 @@ h1 { font-size: 22px; margin: 0; letter-spacing: -0.02em; }
 .build-progress .btn.small { padding: 1px 8px; font-size: 11px }
 .build-progress { white-space: nowrap; flex-wrap: nowrap }
 .build-progress .bp-phase { max-width: 200px; overflow: hidden; text-overflow: ellipsis }
+/* --- click-on-board editing (PcbEdit, Properties) --- */
+.pcbedit { position: absolute; inset: 0; overflow: hidden; background: #0f2a1d; }
+.pcbedit-tools { position: absolute; left: 10px; top: 10px; display: flex; gap: 8px; align-items: center; background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 4px 6px; }
+.pcbedit-tools select { height: 26px; margin-left: 6px; background: var(--panel); color: var(--text); border: 1px solid var(--border); border-radius: 6px; font: inherit; }
+.pcbedit-hint { position: absolute; left: 12px; bottom: 8px; color: #b9c7bf; pointer-events: none; }
+.props { position: absolute; right: 10px; top: 10px; width: 250px; max-height: calc(100% - 20px); overflow: auto; background: var(--panel); border: 1px solid var(--border); border-radius: 10px; box-shadow: var(--shadow); padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; z-index: 5; }
+.pf { display: flex; flex-direction: column; gap: 3px; }
+.pf .input, .pf select.input { width: 100%; }
+.pf2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.props .note { background: var(--ext-bg); border-radius: 7px; padding: 6px 8px; }
+.link { background: none; border: 0; color: var(--accent); cursor: pointer; padding: 0; font: inherit; }
+.netbox { border-top: 1px solid var(--border); padding-top: 8px; }
+.chips { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+.chip { background: var(--panel2); border-radius: 5px; padding: 1px 6px; font-size: 11px; }
+.btn.on { background: var(--hover); border-color: var(--accent); }

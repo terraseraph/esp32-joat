@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react"
 import type { Comp, Model, Pad } from "./pcbModel"
 
-export type PcbPick = { comp?: string | null; key?: string | null; clear?: boolean }
+export type PcbPick = { comp?: string | null; key?: string | null; clear?: boolean; port?: string }
 type Pending = { dx: number; dy: number; rot: number }
 
 const SNAPS = [0, 0.1, 0.25, 0.5, 1]
@@ -31,7 +31,7 @@ export default function PcbEdit({ model, fitKey, selected, netKey, editable, sna
   const [view, setView] = useState({ cx: 0, cy: 0, s: 8 })
   const [pending, setPending] = useState<Record<string, Pending>>({})
   const [hover, setHover] = useState<string | null>(null)
-  const drag = useRef<null | { kind: "comp" | "net" | "pan"; comp?: string; key?: string; sx: number; sy: number; vx: number; vy: number; moved: boolean; ox?: number; oy?: number }>(null)
+  const drag = useRef<null | { kind: "comp" | "net" | "pan"; comp?: string; key?: string; port?: string; sx: number; sy: number; vx: number; vy: number; moved: boolean; ox?: number; oy?: number }>(null)
   const fitted = useRef("")
   const viewRef = useRef(view)
   viewRef.current = view
@@ -104,13 +104,14 @@ export default function PcbEdit({ model, fitKey, selected, netKey, editable, sna
     const tgt = e.target as Element
     const compEl = tgt.closest("[data-comp]") as HTMLElement | null
     const netEl = tgt.closest("[data-net]") as HTMLElement | null
+    const port = (tgt.closest("[data-port]") as HTMLElement | null)?.dataset.port || undefined
     const w = toWorld(e.clientX, e.clientY)
     const base = { sx: e.clientX, sy: e.clientY, vx: viewRef.current.cx, vy: viewRef.current.cy, moved: false }
     if (e.button === 0 && compEl) {
       const c = model.compByName.get(compEl.dataset.comp!)
-      drag.current = { ...base, kind: "comp", comp: compEl.dataset.comp, key: netEl?.dataset.net || undefined, ox: w.x, oy: w.y }
+      drag.current = { ...base, kind: "comp", comp: compEl.dataset.comp, key: netEl?.dataset.net || undefined, port, ox: w.x, oy: w.y }
       void c
-    } else if (e.button === 0 && netEl) drag.current = { ...base, kind: "net", key: netEl.dataset.net }
+    } else if (e.button === 0 && netEl) drag.current = { ...base, kind: "net", key: netEl.dataset.net, port }
     else drag.current = { ...base, kind: "pan" }
     ;(e.currentTarget as Element).setPointerCapture(e.pointerId)
   }
@@ -142,9 +143,9 @@ export default function PcbEdit({ model, fitKey, selected, netKey, editable, sna
         if (!editable(d.comp)) { onMove(d.comp, 0, 0); setPending({}) }
         else if (p && (p.dx || p.dy)) onMove(d.comp, p.dx, p.dy)
         else setPending({})
-      } else onPick({ comp: d.comp, key: d.key ?? null })
+      } else onPick({ comp: d.comp, key: d.key ?? null, port: d.port })
     } else if (!d.moved) {
-      if (d.kind === "net") onPick({ key: d.key })
+      if (d.kind === "net") onPick({ key: d.key, port: d.port })
       else onPick({ clear: true })
     }
   }
@@ -157,7 +158,7 @@ export default function PcbEdit({ model, fitKey, selected, netKey, editable, sna
   const rot = (c: Comp) => pending[c.name]
 
   const renderPad = (p: Pad) => {
-    const common = { fill: padFill(p), opacity: op(p.key), "data-net": p.key ?? "" } as any
+    const common = { fill: padFill(p), opacity: op(p.key), "data-net": p.key ?? "", "data-port": p.port ?? "" } as any
     const tf = p.rot ? `rotate(${p.rot} ${p.x} ${p.y})` : undefined
     const shape =
       p.kind === "circle" ? <circle cx={p.x} cy={p.y} r={p.w / 2} {...common} />

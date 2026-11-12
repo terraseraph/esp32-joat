@@ -11,6 +11,9 @@ import Problems from "./Problems"
 import Bom from "./Bom"
 import BuildProgress from "./BuildProgress"
 import Palette, { PALETTE_MIME } from "./Palette"
+import Connect, { NO_CONNECT, type ConnectState } from "./Connect"
+import Gpio from "./Gpio"
+import { indexCircuit } from "../../shared/nets"
 
 function useSplit(initial: number, min: number, max: number, axis: "x" | "y", invert = false) {
   // clamp: innerWidth is 0 when the tab first renders in the background
@@ -47,11 +50,15 @@ export default function Workspace({ name, onSaved }: { name: string; onSaved: ()
   const [build, setBuild] = useState<BuildState>({ status: "idle" })
   const [result, setResult] = useState<BuildResult | null>(null)
   const [circuit, setCircuit] = useState<any[] | null>(null) // last good
-  const [panel, setPanel] = useState<"problems" | "bom">("problems")
+  const [panel, setPanel] = useState<"problems" | "bom" | "nets" | "gpio">("problems")
   const [panelOpen, setPanelOpen] = useState(true)
   const [bomVersion, setBomVersion] = useState(0)
   const [dropId, setDropId] = useState<{ id: string; n: number } | null>(null)
   const knownNames = useMemo(() => (circuit ?? []).filter((e) => e.type === "source_component" && e.name).map((e) => String(e.name)), [circuit])
+  const [conn, setConn] = useState<ConnectState>(NO_CONNECT)
+  // read by the PCB view pick handler: in Connect mode a pad click picks that pin
+  const connectRef = useRef<{ on: boolean; onPort: (portId: string) => void }>({ on: false, onPort: () => {} })
+  const circuitIndex = useMemo(() => (circuit ? indexCircuit(circuit) : null), [circuit])
   const buildSeq = useRef(0)
   const filesRef = useRef(files)
   filesRef.current = files
@@ -129,6 +136,7 @@ export default function Workspace({ name, onSaved }: { name: string; onSaved: ()
     if (d) applyProps(n, {}, { pcbRotation: d })
   }, [srcComps, model, applyProps]) // eslint-disable-line react-hooks/exhaustive-deps
   const onPick = useCallback((p: PcbPick) => {
+    if (connectRef.current.on && p.port) { connectRef.current.onPort(p.port); return }
     if (p.clear) { setSelected(null); setNetKey(null); return }
     if (p.comp !== undefined) setSelected(p.comp)
     if (p.key !== undefined) setNetKey(p.key)
@@ -202,6 +210,19 @@ export default function Workspace({ name, onSaved }: { name: string; onSaved: ()
     return () => removeEventListener("keydown", on)
   }, [save])
 
+  const onPort = (schematicPortId: string) => {
+    // the viewer reports either a schematic_port id or a source_port id
+    const port = circuitIndex?.ports[circuitIndex.portBySchematic[schematicPortId] ?? schematicPortId]
+    if (!port) return
+    setConn((s) => ({ ...s, picks: s.picks.length >= 2 ? [{ ref: port.ref, pin: port.pin }] : [...s.picks, { ref: port.ref, pin: port.pin }] }))
+  }
+  connectRef.current = { on: conn.on, onPort }
+  const highlightIds = (() => {
+    const net = circuitIndex?.nets.find((n) => n.name === conn.highlightNet)
+    return net ? net.pins.map((p) => circuitIndex!.ports[p.sourcePortId].schematicComponentId).filter((x): x is string => !!x) : []
+  })()
+  const setIndexSource = (src: string) => setFiles((f) => ({ ...f, "index.tsx": src }))
+
   if (loadErr) return <div className="empty err">Could not load "{name}": {loadErr}</div>
   if (!design) return <div className="empty">Loading…</div>
 
@@ -271,7 +292,7 @@ export default function Workspace({ name, onSaved }: { name: string; onSaved: ()
           <section className="pane preview-pane"
             onDragOver={(e) => { if (e.dataTransfer.types.includes(PALETTE_MIME)) e.preventDefault() }}
             onDrop={(e) => { const id = e.dataTransfer.getData(PALETTE_MIME); if (id) { e.preventDefault(); setDropId({ id, n: Date.now() }) } }}>
-            <Preview circuitJson={circuit} building={build.status === "building"}
+            <Preview circuitJson={circuit} building={build.status === "building"} connect={{ on: conn.on, onPort, highlightIds }}
               canvas={model ? { model, fitKey: name, selected, netKey, editable: isEditable, snap, setSnap, onPick, onMove, onRotate } : undefined}
               overlay={model && selected && model.compByName.get(selected) ? (
                 <Properties comp={model.compByName.get(selected)!} src={srcOf(selected)} model={model} netKey={netKey}
@@ -286,11 +307,11 @@ export default function Workspace({ name, onSaved }: { name: string; onSaved: ()
           <div className="gutter y" onPointerDown={panelOpen ? bottom.onPointerDown : undefined} />
           <section className="pane bottom" style={{ height: panelOpen ? bottom.size : 38 }}>
             <div className="tabs small">
-              {(["problems", "bom"] as const).map((t) => (
+              {(["problems", "bom", "nets", "gpio"] as const).map((t) => (
                 <button key={t} className={`tab ${panel === t ? "on" : ""}`} onClick={() => { setPanel(t); setPanelOpen(true) }}>
                   {panel === t && <motion.span layoutId="bottab" className="tab-bg" transition={{ type: "spring", visualDuration: 0.2, bounce: 0 }} />}
                   <span className="tab-label">
-                    {t === "problems" ? "Problems" : "BOM & cost"}
+                    {{ problems: "Problems", bom: "BOM & cost", nets: "Nets & connect", gpio: "GPIO map" }[t]}
                     {t === "problems" && (errCount > 0 || warnCount > 0) && (
                       <span className="counts">
                         {errCount > 0 && <span className="cnt bad">{errCount}</span>}
@@ -311,6 +332,10 @@ export default function Workspace({ name, onSaved }: { name: string; onSaved: ()
               <div className="panel-body">
                 {panel === "problems" ? (
                   <Problems result={result} fatal={build.fatal} />
+                ) : panel === "nets" ? (
+                  <Connect name={name} index={circuitIndex} source={files["index.tsx"] ?? ""} onSource={setIndexSource} onFiles={(f) => setFiles((x) => ({ ...x, ...f }))} state={conn} setState={setConn} />
+                ) : panel === "gpio" ? (
+                  <Gpio name={name} source={files["index.tsx"] ?? ""} onSource={setIndexSource} />
                 ) : (
                   <Bom name={name} version={bomVersion} dirty={dirty} />
                 )}

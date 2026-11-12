@@ -6,6 +6,7 @@ import path from "node:path"
 import { bomCsv, computeBom, cplCsv } from "./bom.js"
 import { buildDesign, buildStatus, cancelBuild, readDiskBuild, NAME_RE, readDesignFiles, readMeta, ROOT, safeDesignPath } from "./build.js"
 import { countNameRefs, EditError, listComponents, patchComponent, type PropValue } from "./source-edit.js"
+import { registerConnectRoutes } from "./connect-routes.js"
 import { gitCommit, gitPush, gitStatus } from "./git.js"
 import { registerPalette } from "./palette.js"
 
@@ -169,6 +170,7 @@ app.patch<{ Params: { name: string; component: string }; Body: { props?: Record<
     }
   },
 )
+registerConnectRoutes(app, { designExists, notFound })
 
 app.get("/api/git/status", async () => gitStatus())
 

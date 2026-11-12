@@ -52,7 +52,9 @@ function useSize() {
   return { ref, ...size }
 }
 
-export default function Preview({ circuitJson, building, canvas, overlay }: { circuitJson: any[] | null; building: boolean; canvas?: Canvas; overlay?: ReactNode }) {
+export type PreviewConnect = { on: boolean; onPort: (schematicPortId: string) => void; highlightIds: string[] }
+
+export default function Preview({ circuitJson, building, canvas, overlay, connect }: { circuitJson: any[] | null; building: boolean; canvas?: Canvas; overlay?: ReactNode; connect?: PreviewConnect }) {
   const [tab, setTab] = useState<Tab>(() => {
     try { return (localStorage.getItem("previewTab") as Tab) || "pcb" } catch { return "pcb" }
   })
@@ -73,6 +75,7 @@ export default function Preview({ circuitJson, building, canvas, overlay }: { ci
           </button>
         ))}
         <div className="grow" />
+        {connect?.on && <span className="small pad-r connect-banner">Connect mode: click pin A, then pin B (PCB pads, or schematic pins after a Route build)</span>}
         {building && <span className="muted small pad-r">updating…</span>}
       </div>
       <div className="viewport" ref={ref}>
@@ -92,14 +95,16 @@ export default function Preview({ circuitJson, building, canvas, overlay }: { ci
               <ViewerBoundary resetKey={circuitJson}>
                 {w > 0 && h > 0 && tab === "schematic" && (
                   <div style={{ width: w, height: h }} onClickCapture={(e) => {
+                    if (connect?.on) return
                     const t = (e.target as Element).closest?.("[data-schematic-trace-id]")
                     const tr = t && circuitJson.find((x) => x.type === "schematic_trace" && x.schematic_trace_id === t.getAttribute("data-schematic-trace-id"))
                     if (tr?.subcircuit_connectivity_map_key) canvas?.onPick({ key: tr.subcircuit_connectivity_map_key })
                   }}>
                     <SchematicViewer circuitJson={circuitJson as any} containerStyle={{ width: w, height: h }}
+                      {...(connect?.on ? { showSchematicPorts: true, onSchematicPortClicked: ({ schematicPortId }: { schematicPortId: string }) => connect.onPort(schematicPortId) } : {})}
                       css={canvas?.netKey ? `${canvas.model.schTraceIds(canvas.netKey).map((id) => `[data-schematic-trace-id="${id}"]`).join(",")}{stroke:#ffb400 !important;stroke-width:3px !important}` : undefined}
-                      highlightedSchematicComponentIds={canvas?.selected ? [...canvas.model.compBySchId].filter(([, c]) => c.name === canvas.selected).map(([id]) => id) : undefined}
-                      onSchematicComponentClicked={canvas ? ({ schematicComponentId }) => canvas.onPick({ comp: canvas.model.compBySchId.get(schematicComponentId)?.name ?? null }) : undefined} />
+                      highlightedSchematicComponentIds={connect?.highlightIds?.length ? connect.highlightIds : canvas?.selected ? [...canvas.model.compBySchId].filter(([, c]) => c.name === canvas.selected).map(([id]) => id) : undefined}
+                      onSchematicComponentClicked={canvas && !connect?.on ? ({ schematicComponentId }) => canvas.onPick({ comp: canvas.model.compBySchId.get(schematicComponentId)?.name ?? null }) : undefined} />
                   </div>
                 )}
                 {w > 0 && h > 0 && tab === "pcb" && (canvas ? <PcbEdit {...canvas} stale={building} /> : <PcbViewer circuitJson={pcbJson as any} height={h} />)}

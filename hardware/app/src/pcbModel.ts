@@ -10,6 +10,7 @@ export type Pad = {
   hole?: number // drill diameter
   layer: "top" | "bottom" | "both"
   label?: string // port name, e.g. "SDA"
+  port?: string // source_port_id (Connect mode picks pins by it)
 }
 export type Comp = {
   id: string; srcId: string; name: string; ftype: string
@@ -51,10 +52,10 @@ export function buildModel(cj: any[]): Model {
     else if (e.type === "pcb_port") pcbPort.set(e.pcb_port_id, e)
     else if (e.type === "source_net" && e.subcircuit_connectivity_map_key && !keyNames.has(e.subcircuit_connectivity_map_key)) keyNames.set(e.subcircuit_connectivity_map_key, e.name)
   }
-  const keyOfPort = (pcbPortId?: string): { key?: string; label?: string } => {
+  const keyOfPort = (pcbPortId?: string): { key?: string; label?: string; port?: string } => {
     const pp = pcbPort.get(pcbPortId ?? "")
     const sp = pp && srcPort.get(pp.source_port_id)
-    return { key: sp?.subcircuit_connectivity_map_key, label: sp?.name }
+    return { key: sp?.subcircuit_connectivity_map_key, label: sp?.name, port: sp?.source_port_id }
   }
 
   const comps: Comp[] = []
@@ -84,14 +85,14 @@ export function buildModel(cj: any[]): Model {
   const pads: Pad[] = []
   for (const e of cj) {
     if (e.type === "pcb_smtpad") {
-      const { key, label } = keyOfPort(e.pcb_port_id)
+      const { key, label, port } = keyOfPort(e.pcb_port_id)
       const layer = e.layer === "bottom" ? "bottom" : "top"
-      if (e.shape === "circle") pads.push({ id: e.pcb_smtpad_id, comp: e.pcb_component_id, key, label, kind: "circle", x: e.x, y: e.y, w: e.radius * 2, h: e.radius * 2, rot: 0, layer })
-      else pads.push({ id: e.pcb_smtpad_id, comp: e.pcb_component_id, key, label, kind: e.shape === "pill" || e.shape === "rotated_pill" ? "pill" : "rect", x: e.x, y: e.y, w: num(e.width), h: num(e.height), rot: num(e.ccw_rotation), layer })
+      if (e.shape === "circle") pads.push({ id: e.pcb_smtpad_id, comp: e.pcb_component_id, key, label, port, kind: "circle", x: e.x, y: e.y, w: e.radius * 2, h: e.radius * 2, rot: 0, layer })
+      else pads.push({ id: e.pcb_smtpad_id, comp: e.pcb_component_id, key, label, port, kind: e.shape === "pill" || e.shape === "rotated_pill" ? "pill" : "rect", x: e.x, y: e.y, w: num(e.width), h: num(e.height), rot: num(e.ccw_rotation), layer })
     } else if (e.type === "pcb_plated_hole") {
-      const { key, label } = keyOfPort(e.pcb_port_id)
+      const { key, label, port } = keyOfPort(e.pcb_port_id)
       const hole = num(e.hole_diameter, num(e.hole_width, 0.8))
-      const base = { id: e.pcb_plated_hole_id, comp: e.pcb_component_id, key, label, x: e.x, y: e.y, hole, layer: "both" as const }
+      const base = { id: e.pcb_plated_hole_id, comp: e.pcb_component_id, key, label, port, x: e.x, y: e.y, hole, layer: "both" as const }
       if (e.shape === "circle") pads.push({ ...base, kind: "circle", w: num(e.outer_diameter), h: num(e.outer_diameter), rot: 0 })
       else if (e.shape === "circular_hole_with_rect_pad") pads.push({ ...base, kind: "rect", w: num(e.rect_pad_width), h: num(e.rect_pad_height), rot: num(e.rect_ccw_rotation) })
       else if (e.shape === "pill" || e.shape === "oval") pads.push({ ...base, kind: "pill", w: num(e.outer_width), h: num(e.outer_height), rot: num(e.ccw_rotation) })

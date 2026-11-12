@@ -99,3 +99,26 @@ export const NEW_INDEX = `export default () => (
 `
 export const newBoardJson = (name: string) =>
   JSON.stringify({ name, description: "", revision: "A", notes: "" }, null, 2) + "\n"
+
+// ---- iterate safely: snapshots, variants, revision diff ----
+export type SnapshotInfo = { id: string; label: string; createdAt: string; auto: boolean; fileCount: number }
+export type DiffItem = {
+  name: string; kind: "added" | "removed" | "moved" | "changed"; detail: string
+  x?: number; y?: number; w?: number; h?: number; rot?: number; fromX?: number; fromY?: number
+}
+export type DiffResult = {
+  items: DiffItem[]
+  unchanged: { name: string; x?: number; y?: number; w?: number; h?: number; rot?: number }[]
+  board: { x: number; y: number; w: number; h: number } | null
+  boardChange: string | null
+  counts: Record<DiffItem["kind"], number>
+  errors: { from: number; to: number }
+}
+export const iterApi = {
+  snapshots: (n: string) => req<SnapshotInfo[]>(`/api/designs/${enc(n)}/snapshots`),
+  snapshot: (n: string, label: string, files?: Record<string, string>) => post(`/api/designs/${enc(n)}/snapshots`, { label, files }) as Promise<SnapshotInfo>,
+  deleteSnapshot: (n: string, id: string) => req<any>(`/api/designs/${enc(n)}/snapshots/${enc(id)}`, { method: "DELETE" }),
+  restore: (n: string, id: string) => post(`/api/designs/${enc(n)}/snapshots/${enc(id)}/restore`) as Promise<{ ok: boolean; files: Record<string, string>; backup: SnapshotInfo }>,
+  variant: (n: string, name?: string) => post(`/api/designs/${enc(n)}/variant`, { name }) as Promise<{ name: string; revision: string }>,
+  diff: (n: string, a: string, b: string, files?: Record<string, string>) => post(`/api/designs/${enc(n)}/diff`, { a, b, files }) as Promise<DiffResult>,
+}

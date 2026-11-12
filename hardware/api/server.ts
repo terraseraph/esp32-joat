@@ -7,6 +7,7 @@ import { bomCsv, computeBom, cplCsv } from "./bom.js"
 import { buildDesign, buildStatus, cancelBuild, readDiskBuild, NAME_RE, readDesignFiles, readMeta, ROOT, safeDesignPath } from "./build.js"
 import { countNameRefs, EditError, listComponents, patchComponent, type PropValue } from "./source-edit.js"
 import { registerConnectRoutes } from "./connect-routes.js"
+import { registerIterateRoutes } from "./iterate.js"
 import { gitCommit, gitPush, gitStatus } from "./git.js"
 import { registerPalette } from "./palette.js"
 
@@ -187,6 +188,7 @@ app.post("/api/git/push", async (_req, reply) => {
 })
 
 registerPalette(app)
+registerIterateRoutes(app, designExists)
 
 app.setErrorHandler((err: any, _req, reply) => {
   reply.code(err.statusCode ?? 500).send({ error: err.message ?? String(err) })

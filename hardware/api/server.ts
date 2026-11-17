@@ -19,6 +19,7 @@ import { registerPalette } from "./palette.js"
 import { registerAiRoutes } from "./ai.js"
 import { registerOrderRoutes } from "./order.js"
 import { registerAgentRoutes } from "./agent-routes.js"
+import { registerChangeFeed } from "./watch.js"
 
 const app = Fastify({ logger: { level: "warn" }, bodyLimit: 20 * 1024 * 1024 })
 
@@ -306,6 +307,7 @@ registerInspectRoutes(app, designExists)
 registerProposalRoutes(app, designExists)
 registerAiRoutes(app, designExists)
 registerOrderRoutes(app, designExists)
+registerChangeFeed(app)
 registerAgentRoutes(app, designExists)
 
 app.get("/api/git/status", async () => gitStatus())

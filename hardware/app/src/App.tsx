@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import { AnimatePresence, motion } from "motion/react"
 import { api, type GitStatus } from "./api"
 import { ToastProvider } from "./toast"
@@ -10,6 +10,7 @@ import Settings from "./Settings"
 import { BoardOrder, OrdersAll } from "./OrdersPage"
 import { link, needs, useBoards, useRoute, type Route } from "./boards"
 import { Icon, StatusChip } from "./ui"
+import { useChangeFeed, useFeedStatus } from "./useChangeFeed"
 
 function useTheme() {
   const [theme, setTheme] = useState<string | null>(() => {
@@ -57,6 +58,16 @@ export default function App() {
   // the workspace loads its own data; every other page reads the derived board list, so refresh it when you arrive
   useEffect(() => { if (route.page !== "design") reload() }, [route.page, name, reload])
 
+  // keep the project list current when designs, shared blocks or orders change on disk (the workspace handles its own design)
+  const feed = useFeedStatus()
+  const reloadTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const pageRef = useRef(route.page)
+  pageRef.current = route.page
+  useChangeFeed((e) => {
+    if (e.type === "hello" || pageRef.current === "design") return
+    if (reloadTimer.current) clearTimeout(reloadTimer.current)
+    reloadTimer.current = setTimeout(() => reload(), 900)
+  })
   const board = name ? boards?.find((b) => b.name === name) : undefined
   const attention = boards ? needs(boards).filter((n) => n.tone !== "info").length : 0
 
@@ -109,6 +120,7 @@ export default function App() {
             </nav>
             {board && name && <StatusChip status={board.status} />}
             <div className="grow" />
+            <span className={`feed-dot ${feed}`} role="img" aria-label={feed === "live" ? "Live updates connected" : "Live updates offline"} title={feed === "live" ? "Live updates: connected. Changes on disk show up here." : feed === "connecting" ? "Live updates: connecting…" : "Live updates: offline. Reload the page if something looks stale."} />
             <GitControl git={git} design={name} onChange={refreshGit} />
             <button className="icon-btn" onClick={toggle} title="Toggle theme" aria-label="Toggle theme">{Icon.sun}</button>
           </header>

@@ -24,6 +24,7 @@ import ExportPanel from "./ExportPanel"
 import Explain, { type Highlight } from "./Explain"
 import Changes from "./Changes"
 import Shortcuts from "./Shortcuts"
+import { useChangeFeed } from "./useChangeFeed"
 import * as Menu from "@radix-ui/react-dropdown-menu"
 
 function useSplit(initial: number, min: number, max: number, axis: "x" | "y", invert = false) {
@@ -291,12 +292,15 @@ export default function Workspace({ name, onSaved, initialPanel }: { name: strin
 
   const savedRef = useRef(saved)
   savedRef.current = saved
+  // when this page last wrote the design itself, so its own writes are not reported back as outside changes
+  const ownWriteAt = useRef(0)
   const save = useCallback(async (quiet = false): Promise<boolean> => {
     try {
       const changed: Record<string, string> = {}
       for (const k of Object.keys(filesRef.current)) if (filesRef.current[k] !== savedRef.current[k]) changed[k] = filesRef.current[k]
       if (!Object.keys(changed).length) return true
       setSaving(true)
+      ownWriteAt.current = Date.now()
       await api.save(name, changed)
       savedRef.current = { ...savedRef.current, ...changed }
       setSaved(savedRef.current)
@@ -312,18 +316,91 @@ export default function Workspace({ name, onSaved, initialPanel }: { name: strin
     }
   }, [name, toast, onSaved])
 
-  // autosave: debounced after the last change
+  // ---- the design changed on disk under us (an agent in chat, another session, a text editor) ----
+  // The API pushes a change event over a WebSocket; we compare the disk with what this page last saved or loaded and,
+  // if they differ, ask before replacing anything. Our own saves match `saved`, so they never ask.
+  type External = { files: Record<string, string> | null; changed: string[]; lib: string[]; gone?: boolean }
+  const [external, setExternal] = useState<External | null>(null)
+  const conflictRef = useRef(false)
+  conflictRef.current = !!external?.files && external.changed.length > 0
+  const libTouched = useRef<string[]>([])
+  const ignoredDisk = useRef<Record<string, string> | null>(null)
+  const checkTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const savingRef = useRef(false)
+  savingRef.current = saving
+  const sameFiles = (a: Record<string, string>, b: Record<string, string>) => Object.keys({ ...a, ...b }).every((k) => a[k] === b[k])
+  const checkDisk = useCallback(async (tries = 0) => {
+    // a save of ours may still be landing: look again shortly instead of reporting it as a foreign change
+    if ((savingRef.current || Date.now() - ownWriteAt.current < 1200) && tries < 6) { checkTimer.current = setTimeout(() => checkDisk(tries + 1), 600); return }
+    try {
+      const d = await api.design(name)
+      const cur = savedRef.current
+      const changed = Object.keys({ ...d.files, ...cur }).filter((k) => d.files[k] !== cur[k]).sort()
+      const keepMine = ignoredDisk.current && sameFiles(ignoredDisk.current, d.files)
+      const lib = libTouched.current
+      if ((changed.length && !keepMine) || lib.length) setExternal({ files: changed.length && !keepMine ? d.files : null, changed: keepMine ? [] : changed, lib })
+      else setExternal(null)
+    } catch (e: any) {
+      if (/not found/i.test(e?.message ?? "")) setExternal({ files: null, changed: [], lib: [], gone: true })
+    }
+  }, [name])
+  useChangeFeed((e) => {
+    const mine = e.type === "design" && e.name === name
+    const lib = e.type === "lib" && Date.now() - ownWriteAt.current > 4000
+    if (!(mine || lib || e.type === "designs" || e.type === "resync")) return
+    if (e.type === "lib") libTouched.current = [...new Set([...libTouched.current, ...e.files])]
+    if (!design) return
+    if (checkTimer.current) clearTimeout(checkTimer.current)
+    checkTimer.current = setTimeout(() => checkDisk(), 300)
+  })
+  useEffect(() => () => { if (checkTimer.current) clearTimeout(checkTimer.current) }, [])
+  useEffect(() => { setExternal(null); libTouched.current = []; ignoredDisk.current = null }, [name])
+  // once this page's saved copy matches the disk again (we saved, or the assistant's edits were absorbed), there is nothing to ask
   useEffect(() => {
-    if (!autosave || !dirty || !design) return
+    setExternal((x) => {
+      if (!x?.files) return x
+      const changed = Object.keys({ ...x.files, ...saved }).filter((k) => x.files![k] !== saved[k]).sort()
+      return changed.length || x.lib.length ? { ...x, changed } : null
+    })
+  }, [saved])
+  const reloadFromDisk = useCallback(() => {
+    const x = external
+    if (!x) return
+    if (x.gone) { location.hash = "#/"; return }
+    if (x.files) {
+      const f = x.files
+      savedRef.current = f
+      setSaved(f)
+      hist.push(() => f) // goes through history, so Undo brings your version back
+      filesRef.current = f
+      setActive((a) => (a in f ? a : f["index.tsx"] !== undefined ? "index.tsx" : Object.keys(f)[0]))
+    }
+    libTouched.current = []
+    ignoredDisk.current = null
+    setExternal(null)
+    setBomVersion((v) => v + 1)
+    setSnapVersion((v) => v + 1)
+    runBuild(previewViewRef.current === "schematic" ? "schematic-preview" : "quick")
+    onSaved()
+  }, [external, hist.push, runBuild, onSaved])
+  const keepMine = useCallback(() => {
+    ignoredDisk.current = external?.files ?? null
+    libTouched.current = []
+    setExternal(null)
+  }, [external])
+
+  // autosave: debounced after the last change (paused while the disk and this page disagree, so it cannot overwrite the other change)
+  useEffect(() => {
+    if (!autosave || !dirty || !design || conflictRef.current) return
     const t = setTimeout(() => save(true), 1500)
     return () => clearTimeout(t)
-  }, [autosave, dirty, files, design, save])
+  }, [autosave, dirty, files, design, save, external])
   const saveRef = useRef(save)
   saveRef.current = save
   const autosaveRef = useRef(autosave)
   autosaveRef.current = autosave
   // flush pending edits when leaving the design; warn when closing the tab with unsaved edits
-  useEffect(() => () => { if (autosaveRef.current) saveRef.current(true) }, [])
+  useEffect(() => () => { if (autosaveRef.current && !conflictRef.current) saveRef.current(true) }, [])
   useEffect(() => {
     const on = (e: BeforeUnloadEvent) => { if (Object.keys(filesRef.current).some((k) => filesRef.current[k] !== savedRef.current[k])) e.preventDefault() }
     addEventListener("beforeunload", on)
@@ -495,6 +572,18 @@ export default function Workspace({ name, onSaved, initialPanel }: { name: strin
         </Menu.Root>
       </div>
 
+      {external && (
+        <div className="ext-banner" role="alert">
+          <span className="ext-text">
+            {external.gone ? "This design was removed or renamed on disk."
+              : external.files ? <>This design changed on disk{external.changed.length > 0 && <> (<span className="mono">{external.changed.join(", ")}</span>)</>}. {dirty ? "Reloading replaces your unsaved edits; Undo brings them back." : "You have no unsaved edits."}</>
+              : <>A shared block changed: <span className="mono">{external.lib.join(", ")}</span>. Rebuild to see it.</>}
+          </span>
+          <span className="grow" />
+          <button className="btn primary small-btn" onClick={reloadFromDisk}>{external.gone ? "Go to projects" : external.files ? "Reload" : "Rebuild"}</button>
+          {!external.gone && <button className="btn small-btn" onClick={keepMine}>{external.files ? "Keep mine" : "Dismiss"}</button>}
+        </div>
+      )}
       <div className="panes">
         <Palette name={name} getSource={() => filesRef.current["index.tsx"] ?? ""} knownNames={knownNames} dropId={dropId} onInsert={(src) => { setFiles((f) => ({ ...f, "index.tsx": src })); setActive("index.tsx") }} />
         <div className="gutter x" />
@@ -580,7 +669,7 @@ export default function Workspace({ name, onSaved, initialPanel }: { name: strin
                   <Explain name={name} version={bomVersion} onHighlight={setHighlight} />
                 ) : panel === "changes" ? (
                   <Changes name={name} dirty={dirty} selected={selected} selection={aiSelection} onSelection={editSelection} onAccepted={(f) => {
-                    setSaved(f); setFiles(f); filesRef.current = f
+                    ownWriteAt.current = Date.now(); setSaved(f); setFiles(f); filesRef.current = f
                     setActive((a) => (a in f ? a : f["index.tsx"] !== undefined ? "index.tsx" : Object.keys(f)[0]))
                     setBomVersion((v) => v + 1)
                     runBuild("quick")

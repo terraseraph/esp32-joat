@@ -32,6 +32,9 @@ Nothing is written to the design until the user presses **Accept** in the *Descr
 - `POST .../proposals/:id/accept` `{force?}` writes the files; 409 if the files changed since (retry with `force:true` to overwrite). Marks the linked request resolved.
 - `POST .../proposals/:id/reject`
 
+## Live change feed
+`GET /api/ws` upgrades to a WebSocket that only sends, JSON text frames of `ChangeEvent` (`hardware/shared/changes.ts`): `{type:"hello"}` on connect; `{type:"design", name, files:[...]}` when files inside one design changed (design-relative paths); `{type:"lib", files}` for a shared block; `{type:"designs"}` when a design folder was added, removed or renamed; `{type:"orders"}`. Bursts of writes are merged into one event per design after 250 ms of quiet; editor temp files are ignored. Same local-only rules as the HTTP API (host and origin must be localhost, else 403). Nothing sent by a client is read. The Vite dev proxy forwards it (`ws: true`).
+
 ## MCP server
 `hardware/mcp/server.ts` is a dependency-free stdio MCP server (hand-written JSON-RPC, so `@modelcontextprotocol/sdk` is not needed). The repo's `.mcp.json` registers it as `hardware-designer`, so Claude Code sessions in the repo see these tools once the designer is running (`npm run dev` in `hardware/`). Set `HW_API_PORT` (or `HW_API_URL`) in `.mcp.json` if the API is not on 3101.
 

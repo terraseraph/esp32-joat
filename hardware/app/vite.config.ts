@@ -22,7 +22,8 @@ export default defineConfig({
   },
   server: {
     port: Number(process.env.HW_APP_PORT ?? 5173),
-    proxy: { "/api": `http://127.0.0.1:${process.env.HW_API_PORT ?? 3101}` },
+    // ws: true so the live change feed (/api/ws) is proxied too
+    proxy: { "/api": { target: `http://127.0.0.1:${process.env.HW_API_PORT ?? 3101}`, ws: true } },
   },
   build: { outDir: "dist", emptyOutDir: true, chunkSizeWarningLimit: 6000 },
 })

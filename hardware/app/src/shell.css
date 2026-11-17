@@ -315,3 +315,10 @@ a { color: var(--accent-text); }
 .send-btn { gap: 6px; }
 .ai-error { margin: 0; }
 .ai-selbar .sel-snap { margin-left: auto; }
+
+/* ---- live change feed ---- */
+.feed-dot { width: 8px; height: 8px; border-radius: 50%; flex: none; background: var(--muted); opacity: .6; }
+.feed-dot.live { background: var(--good); opacity: 1; }
+.feed-dot.connecting { background: var(--warn); opacity: 1; animation: pulse 1s ease-in-out infinite; }
+.ext-banner { flex: none; display: flex; align-items: center; gap: 10px; padding: 8px 14px; background: var(--ext-bg); border-bottom: 1px solid var(--warn); color: var(--text); }
+.ext-text { min-width: 0; overflow-wrap: anywhere; }

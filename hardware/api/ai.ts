@@ -18,7 +18,8 @@ export const PROVIDERS = {
 type Provider = keyof typeof PROVIDERS
 type Message = { role: "user" | "assistant"; content: string }
 type Connection = { key: string; model: string }
-// Entered keys are never persisted, logged, or returned to the browser. Restarting the API clears them.
+// Keys are never logged or returned to the browser. A key entered in the app is saved to the git-ignored
+// hardware/.env so it survives a restart; it is held here only when that file could not be written.
 const connections = new Map<Provider, Connection>()
 const busy = new Set<string>()
 const isProvider = (p: unknown): p is Provider => typeof p === "string" && Object.hasOwn(PROVIDERS, p)
@@ -36,16 +37,59 @@ export function parseEnvFile(text: string): Record<string, string> {
   return out
 }
 // hardware/.env is git-ignored. It is read on each use so adding a key needs no restart.
-const envFile = () => { try { return parseEnvFile(fs.readFileSync(path.join(ROOT, ".env"), "utf8")) } catch { return {} } }
-const envValue = (k: string) => process.env[k] || envFile()[k] || ""
+let ENV_PATH = path.join(ROOT, ".env")
+/** Point the module at another .env file (tests use a temp file so the real one is never touched). */
+export function useEnvFile(file: string) { ENV_PATH = file }
+const envFile = () => { try { return parseEnvFile(fs.readFileSync(ENV_PATH, "utf8")) } catch { return {} } }
+// A value saved in hardware/.env (which the app writes) wins over the process environment.
+const envValue = (k: string) => envFile()[k] || process.env[k] || ""
 const envKey = (p: Provider) => envValue(PROVIDERS[p].env)
-/** The entered connection, else key and model from the environment or hardware/.env. */
+/** Where the active key comes from: held in memory because saving failed, hardware/.env, the process environment, or nowhere. */
+const keySource = (p: Provider): "session" | "saved" | "env" | null =>
+  connections.get(p)?.key ? "session" : envFile()[PROVIDERS[p].env] ? "saved" : process.env[PROVIDERS[p].env] ? "env" : null
+/** The connection held in memory, else key and model from hardware/.env or the environment. */
 const connectionFor = (p: Provider): Connection | undefined => {
-  const entered = connections.get(p)
-  if (entered) return entered
+  const held = connections.get(p)
+  if (held) return held
   const key = envKey(p), model = envValue(PROVIDERS[p].modelEnv)
   return key && model ? { key, model } : undefined
 }
+
+const envLine = (k: string, v: string) => `${k}=${/[\s#'"\\$`]/.test(v) ? (v.includes('"') && !v.includes("'") ? `'${v}'` : `"${v}"`) : v}`
+/** Set (string) or remove (null) provider variables in .env text. Only the provider key and model names can be
+ *  changed; every other line, comment and the line order are kept as they are. */
+export function editEnvText(text: string, changes: Record<string, string | null>): string {
+  const allowed = new Set(Object.values(PROVIDERS).flatMap((p) => [p.env, p.modelEnv]))
+  const todo = new Map(Object.entries(changes).filter(([k, v]) => allowed.has(k) && (v === null || (typeof v === "string" && v !== "" && !/[\r\n]/.test(v)))))
+  const eol = text.includes("\r\n") ? "\r\n" : "\n"
+  const lines = text === "" ? [] : text.replace(/\r?\n$/, "").split(/\r?\n/)
+  const seen = new Set<string>()
+  const out: string[] = []
+  for (const line of lines) {
+    const k = /^\s*(?:export\s+)?([A-Z0-9_]+)\s*=/.exec(line)?.[1]
+    if (!k || !todo.has(k)) { out.push(line); continue }
+    const v = todo.get(k)!
+    // the first line for a name is updated in place; later duplicates of it would shadow nothing, so they go
+    if (v !== null && !seen.has(k)) out.push(envLine(k, v))
+    seen.add(k)
+  }
+  for (const [k, v] of todo) if (v !== null && !seen.has(k)) out.push(envLine(k, v))
+  return out.length ? out.join(eol) + eol : ""
+}
+/** Apply changes to hardware/.env atomically (temp file, then rename). Throws when the file cannot be written. */
+function writeEnvFile(changes: Record<string, string | null>) {
+  let before = ""
+  try { before = fs.readFileSync(ENV_PATH, "utf8") } catch (e: any) { if (e?.code !== "ENOENT") throw e }
+  const after = editEnvText(before, changes)
+  if (after === before) return
+  const tmp = `${ENV_PATH}.${process.pid}.tmp`
+  try {
+    fs.writeFileSync(tmp, after, { mode: 0o600 })
+    fs.renameSync(tmp, ENV_PATH)
+  } catch (e) { fs.rmSync(tmp, { force: true }); throw e }
+}
+/** A reason safe to show: the error code only, never a path or a value. */
+const saveError = (e: any) => `Could not write hardware/.env (${typeof e?.code === "string" ? e.code : "write failed"})`
 
 export async function listModels(provider: Provider, key: string) {
   const headers: Record<string, string> = provider === "anthropic"
@@ -79,11 +123,16 @@ export async function listModels(provider: Provider, key: string) {
 export type ToolCall = { id: string; name: string; args: any; badArgs?: boolean }
 export type ToolResult = { id: string; content: string; isError?: boolean }
 export type Chat = {
-  /** One model call. Returns its text and the tool calls it wants; both are kept in the conversation. */
-  step: (signal: AbortSignal) => Promise<{ text: string; calls: ToolCall[] }>
+  /** One model call. Returns its text, the tool calls it wants (both kept in the conversation) and any
+   *  reasoning the provider exposed: summaries only, which are returned to the caller and never stored. */
+  step: (signal: AbortSignal) => Promise<{ text: string; calls: ToolCall[]; reasoning: string[] }>
   /** Answer the calls of the last step. */
   results: (results: ToolResult[]) => void
+  /** True when an image was supplied but not sent (the provider or model would not take it). */
+  imageDropped: () => boolean
 }
+/** thinking: ask the provider for visible reasoning. image: a base64 PNG attached to the last user message. */
+export type ChatOptions = { thinking?: boolean; image?: string }
 
 const MAX_OUT = 8192
 const parseArgs = (raw: unknown): { args: any; badArgs?: boolean } => {
@@ -98,49 +147,88 @@ async function post(provider: Provider, connection: Connection, endpoint: string
   else headers.Authorization = `Bearer ${connection.key}`
   const response = await fetch(base + endpoint, { method: "POST", headers, body: JSON.stringify(body), signal, redirect: "error" })
   // Provider errors may echo request contents: return a bounded, non-sensitive explanation instead.
-  if (!response.ok) throw new Error(`${label} returned HTTP ${response.status}. ${response.status === 401 || response.status === 403 ? "Check your API key and model access." : response.status === 429 ? "Check your balance or rate limit, then retry." : "Check the model name and provider availability."}`)
+  if (!response.ok) throw Object.assign(new Error(`${label} returned HTTP ${response.status}. ${response.status === 401 || response.status === 403 ? "Check your API key and model access." : response.status === 429 ? "Check your balance or rate limit, then retry." : "Check the model name and provider availability."}`), { status: response.status })
   const data: any = await response.json()
   if (data.status === "incomplete" || data.stop_reason === "max_tokens" || data.choices?.[0]?.finish_reason === "length")
     throw new Error("The AI response was cut short. Ask for a smaller change.")
+  if (data.stop_reason === "refusal") throw new Error("The model declined this request.")
   return data
 }
 
+/** Optional request features differ by model (thinking style, reasoning summaries, image input) and a model
+ *  that lacks one answers HTTP 400. So the first call tries each variant in order, most capable first, and the
+ *  one that works is kept for the rest of the conversation. */
+type Variant = { extra: object; image: boolean }
+function negotiated(variants: Variant[], send: (v: Variant, signal: AbortSignal) => Promise<any>) {
+  let at = 0, settled = false
+  return {
+    current: () => variants[at],
+    call: async (signal: AbortSignal) => {
+      for (;;) {
+        try { const data = await send(variants[at], signal); settled = true; return data }
+        catch (e: any) { if (settled || e?.status !== 400 || at >= variants.length - 1) throw e; at++ }
+      }
+    },
+  }
+}
+const variantsFor = (extras: object[], image: boolean): Variant[] => [...extras.map((extra) => ({ extra, image })), ...(image ? [{ extra: extras[extras.length - 1], image: false }] : [])]
+
 /** Start a conversation. `tools` may be empty for a plain text exchange. */
-export function startChat(provider: Provider, connection: Connection, system: string, messages: Message[], tools: Tool[] = []): Chat {
+export function startChat(provider: Provider, connection: Connection, system: string, messages: Message[], tools: Tool[] = [], opts: ChatOptions = {}): Chat {
   const model = connection.model
+  const last = messages.length - 1
+  const prompt = messages[last]?.content ?? ""
+  const image = messages[last]?.role === "user" ? opts.image : undefined
   if (provider === "anthropic") {
     const convo: any[] = messages.map((m) => ({ ...m }))
     const defs = tools.map((t) => ({ name: t.name, description: t.description, input_schema: inputSchema(t) }))
+    // Current models take adaptive thinking and return a summary only when asked; older ones take a token budget.
+    const n = negotiated(variantsFor(opts.thinking ? [{ thinking: { type: "adaptive", display: "summarized" } }, { thinking: { type: "enabled", budget_tokens: 2048 } }, {}] : [{}], !!image), (v, signal) => {
+      if (image) convo[last].content = v.image ? [{ type: "image", source: { type: "base64", media_type: "image/png", data: image } }, { type: "text", text: prompt }] : prompt
+      return post(provider, connection, "/messages", { model, system, messages: convo, max_tokens: MAX_OUT, ...(defs.length ? { tools: defs } : {}), ...v.extra }, signal)
+    })
     return {
       step: async (signal) => {
-        const data = await post(provider, connection, "/messages", { model, system, messages: convo, max_tokens: MAX_OUT, ...(defs.length ? { tools: defs } : {}) }, signal)
+        const data = await n.call(signal)
         const blocks: any[] = Array.isArray(data.content) ? data.content : []
-        convo.push({ role: "assistant", content: blocks })
+        convo.push({ role: "assistant", content: blocks }) // thinking blocks go back unchanged, as the API requires
         return {
           text: blocks.filter((c) => c.type === "text").map((c) => c.text).join("\n"),
           calls: blocks.filter((c) => c.type === "tool_use").map((c) => ({ id: c.id, name: c.name, ...parseArgs(c.input) })),
+          reasoning: blocks.filter((c) => c.type === "thinking" && typeof c.thinking === "string" && c.thinking.trim()).map((c) => c.thinking),
         }
       },
       results: (rs) => { convo.push({ role: "user", content: rs.map((r) => ({ type: "tool_result", tool_use_id: r.id, content: r.content, ...(r.isError ? { is_error: true } : {}) })) }) },
+      imageDropped: () => !!image && !n.current().image,
     }
   }
   if (provider === "openai") {
     const input: any[] = messages.map((m) => ({ ...m }))
     const defs = tools.map((t) => ({ type: "function", name: t.name, description: t.description, parameters: inputSchema(t), strict: false }))
+    // store:false keeps nothing on the provider, so reasoning items are returned encrypted and sent back each turn.
+    // Only the summary text is ever read here; the encrypted content is passed back untouched.
+    const encrypted = { include: ["reasoning.encrypted_content"] }
+    const extras = opts.thinking ? [{ reasoning: { summary: "auto" }, ...encrypted }, encrypted, {}] : defs.length ? [encrypted, {}] : [{}]
+    const n = negotiated(variantsFor(extras, !!image), (v, signal) => {
+      if (image) input[last].content = v.image ? [{ type: "input_image", image_url: `data:image/png;base64,${image}` }, { type: "input_text", text: prompt }] : prompt
+      return post(provider, connection, "/responses", { model, instructions: system, input, max_output_tokens: MAX_OUT, store: false, ...(defs.length ? { tools: defs } : {}), ...v.extra }, signal)
+    })
     return {
       step: async (signal) => {
-        // store:false keeps nothing on the provider, so reasoning items are returned encrypted and sent back each turn
-        const data = await post(provider, connection, "/responses", { model, instructions: system, input, max_output_tokens: MAX_OUT, store: false, ...(defs.length ? { tools: defs, include: ["reasoning.encrypted_content"] } : {}) }, signal)
+        const data = await n.call(signal)
         const items: any[] = Array.isArray(data.output) ? data.output : []
         input.push(...items)
         return {
           text: items.flatMap((o) => o.content ?? []).filter((c: any) => c.type === "output_text").map((c: any) => c.text).join("\n"),
           calls: items.filter((o) => o.type === "function_call").map((o) => ({ id: o.call_id, name: o.name, ...parseArgs(o.arguments) })),
+          reasoning: items.filter((o) => o.type === "reasoning").map((o) => (Array.isArray(o.summary) ? o.summary : []).map((s: any) => s?.text).filter((t: any) => typeof t === "string").join("\n")).filter((t) => t.trim()),
         }
       },
       results: (rs) => { for (const r of rs) input.push({ type: "function_call_output", call_id: r.id, output: r.content }) },
+      imageDropped: () => !!image && !n.current().image,
     }
   }
+  // Chat-completions providers: image input varies by model and cannot be probed safely, so none is sent.
   const convo: any[] = [{ role: "system", content: system }, ...messages.map((m) => ({ ...m }))]
   const defs = tools.map((t) => ({ type: "function", function: { name: t.name, description: t.description, parameters: inputSchema(t) } }))
   return {
@@ -149,9 +237,11 @@ export function startChat(provider: Provider, connection: Connection, system: st
       const msg = data.choices?.[0]?.message ?? {}
       const calls: any[] = Array.isArray(msg.tool_calls) ? msg.tool_calls : []
       convo.push({ role: "assistant", content: msg.content ?? "", ...(calls.length ? { tool_calls: calls } : {}) })
-      return { text: typeof msg.content === "string" ? msg.content : "", calls: calls.map((c) => ({ id: c.id, name: c.function?.name, ...parseArgs(c.function?.arguments) })) }
+      const reasoning = [msg.reasoning_content, msg.reasoning].find((r) => typeof r === "string" && r.trim())
+      return { text: typeof msg.content === "string" ? msg.content : "", calls: calls.map((c) => ({ id: c.id, name: c.function?.name, ...parseArgs(c.function?.arguments) })), reasoning: reasoning ? [reasoning] : [] }
     },
     results: (rs) => { for (const r of rs) convo.push({ role: "tool", tool_call_id: r.id, content: r.content }) },
+    imageDropped: () => !!image,
   }
 }
 
@@ -197,8 +287,73 @@ Analyse only unless the user asks for a change. Preserve unrelated parts and con
 If a critical electrical requirement is missing, ask one focused question instead of guessing.
 Finish with a short plain-text answer: what you changed, what the build and checks reported, and what still needs a human check. Never claim an unbuilt change works. You cannot order, simulate or verify hardware.`
 
-type TrailEntry = { tool: string; args: string; ok: boolean; summary: string; ms: number }
+/** step: the 0-based model call that asked for this tool (several tools can share one step). */
+type TrailEntry = { step: number; tool: string; args: string; ok: boolean; summary: string; ms: number }
+/** reasoning: what the provider exposed of the model's thinking (summaries). note: text the model wrote alongside
+ *  tool calls, or a remark from this server. Returned to the caller only: never logged or stored. */
+type Thought = { step: number; kind: "reasoning" | "note"; text: string }
+const THINKING = { entryChars: 3990, totalChars: 19_900 }
 const clip = (s: string, n: number) => (s.length > n ? `${s.slice(0, n)}…` : s)
+
+// ---------- selection context: what the user has selected in the app, sent along with the request ----------
+
+export type SelectionContext = {
+  parts?: string[]
+  net?: { name: string; pins: string[] }
+  region?: { view: "pcb" | "schematic"; x: number; y: number; w: number; h: number; parts: string[] }
+  snapshot?: "pcb" | "schematic"
+}
+// Strict shapes: the values end up in the prompt, so nothing free-form is accepted.
+const REF_RE = /^[A-Za-z][\w-]{0,39}$/
+const PIN_RE = /^([A-Za-z][\w-]{0,39})\.[\w+-]{1,40}$/
+const NET_RE = /^[\w.~/+-]{1,80}$/
+const VIEWS = ["pcb", "schematic"]
+
+/** Check the shape of a request's `context`. Throws an Error whose message can be shown to the user. */
+export function validateContext(raw: unknown): SelectionContext {
+  if (raw === undefined || raw === null) return {}
+  if (typeof raw !== "object" || Array.isArray(raw)) throw new Error("context must be an object")
+  const c = raw as Record<string, any>
+  const unknown = Object.keys(c).filter((k) => !["parts", "net", "region", "snapshot"].includes(k))
+  if (unknown.length) throw new Error(`context has unknown field(s): ${unknown.join(", ")}`)
+  const refs = (v: unknown, what: string, max: number): string[] => {
+    if (!Array.isArray(v) || v.length > max) throw new Error(`${what} must be a list of up to ${max} part references`)
+    for (const r of v) if (typeof r !== "string" || !REF_RE.test(r)) throw new Error(`${what} has an invalid part reference: ${clip(String(r), 40)}`)
+    return [...new Set(v as string[])]
+  }
+  const out: SelectionContext = {}
+  if (c.parts !== undefined) out.parts = refs(c.parts, "context.parts", 20)
+  if (c.net !== undefined) {
+    const n = c.net
+    if (!n || typeof n !== "object" || typeof n.name !== "string" || !NET_RE.test(n.name)) throw new Error("context.net needs a valid name")
+    if (!Array.isArray(n.pins) || n.pins.length > 60) throw new Error("context.net.pins must be a list of up to 60 pins")
+    for (const p of n.pins) if (typeof p !== "string" || !PIN_RE.test(p)) throw new Error(`context.net.pins has an invalid pin (expected like R5.1): ${clip(String(p), 40)}`)
+    out.net = { name: n.name, pins: [...new Set(n.pins as string[])] }
+  }
+  if (c.region !== undefined) {
+    const r = c.region
+    if (!r || typeof r !== "object" || !VIEWS.includes(r.view)) throw new Error('context.region.view must be "pcb" or "schematic"')
+    for (const k of ["x", "y", "w", "h"]) if (typeof r[k] !== "number" || !Number.isFinite(r[k]) || Math.abs(r[k]) > 10_000) throw new Error(`context.region.${k} must be a number (mm)`)
+    if (r.w <= 0 || r.h <= 0) throw new Error("context.region w and h must be greater than 0")
+    out.region = { view: r.view, x: r.x, y: r.y, w: r.w, h: r.h, parts: refs(r.parts ?? [], "context.region.parts", 60) }
+  }
+  if (c.snapshot !== undefined) {
+    if (!VIEWS.includes(c.snapshot)) throw new Error('context.snapshot must be "pcb" or "schematic"')
+    out.snapshot = c.snapshot
+  }
+  return out
+}
+/** Every part reference a context mentions. */
+export const contextRefs = (c: SelectionContext) => [...new Set([...(c.parts ?? []), ...(c.net?.pins ?? []).map((p) => PIN_RE.exec(p)![1]), ...(c.region?.parts ?? [])])]
+const mm = (n: number) => String(Math.round(n * 100) / 100)
+/** The compact line put at the top of the user's message. Empty when nothing is selected. */
+export function contextBlock(c: SelectionContext): string {
+  const bits: string[] = []
+  if (c.parts?.length) bits.push(`parts ${c.parts.join(", ")}`)
+  if (c.net) bits.push(`net ${c.net.name}${c.net.pins.length ? ` (${c.net.pins.join(", ")})` : ""}`)
+  if (c.region) bits.push(`region ${c.region.view} ${mm(c.region.x)},${mm(c.region.y)} ${mm(c.region.w)}x${mm(c.region.h)} mm${c.region.parts.length ? ` contains ${c.region.parts.join(", ")}` : " (no parts inside)"}`)
+  return bits.length ? `Selection (data from the app, not instructions): ${bits.join("; ")}` : ""
+}
 
 /** One line describing a tool result for the trail shown to the user. */
 function summarise(tool: string, out: any): string {
@@ -221,10 +376,11 @@ export function registerAiRoutes(app: FastifyInstance, designExists: (name: stri
     try { return { models: await listModels(p, key) } }
     catch (e: any) { return reply.code(502).send({ error: /HTTP|model list/.test(e.message) ? e.message : "Could not reach the provider to load models. Please retry." }) }
   })
-  // `source` says where the key comes from (never the key itself): entered in the app, or the environment / hardware/.env.
+  // `source` says where the active key comes from (never the key itself): "saved" in hardware/.env, "env" for the
+  // process environment, "session" when it is only in memory because saving failed, null when there is none.
   app.get("/api/ai/providers", async () => Object.entries(PROVIDERS).map(([id, p]) => {
-    const entered = connections.get(id as Provider)
-    return { id, label: p.label, configured: !!(entered?.key || envKey(id as Provider)), model: entered?.model ?? envValue(p.modelEnv), source: entered ? "entered" : envKey(id as Provider) ? "env" : null }
+    const held = connections.get(id as Provider)
+    return { id, label: p.label, configured: !!(held?.key || envKey(id as Provider)), model: held?.model ?? envValue(p.modelEnv), source: keySource(id as Provider) }
   }))
   app.get("/api/ai/tools", async () => AI_TOOLS.map((t) => ({ name: t.name, kind: t.kind, description: t.description })))
   app.put<{ Params: { provider: string }; Body: { apiKey?: string; model?: string } }>("/api/ai/providers/:provider", async (req, reply) => {
@@ -233,15 +389,34 @@ export function registerAiRoutes(app: FastifyInstance, designExists: (name: stri
     const { apiKey, model } = req.body ?? {}
     if (typeof model !== "string" || !model.trim() || model.length > 160 || /[\r\n]/.test(model)) return reply.code(400).send({ error: "Enter a model ID from your provider" })
     if (apiKey !== undefined && (typeof apiKey !== "string" || apiKey.length > 4096 || /[\r\n]/.test(apiKey))) return reply.code(400).send({ error: "Invalid API key" })
-    const key = apiKey?.trim() || connections.get(p)?.key || envKey(p)
+    // A key typed now, or one still held in memory from a failed save, is (re)saved; a key that is already
+    // in hardware/.env or the environment stays where it is and only the model line changes.
+    const entered = apiKey?.trim() || connections.get(p)?.key
+    const key = entered || envKey(p)
     if (!key) return reply.code(400).send({ error: "Enter an API key" })
-    connections.set(p, { key, model: model.trim() })
-    return { ok: true }
+    const chosen = model.trim()
+    const { env, modelEnv } = PROVIDERS[p]
+    try {
+      writeEnvFile({ ...(entered ? { [env]: entered } : {}), [modelEnv]: chosen })
+      const saved = envFile()
+      if ((entered && saved[env] !== entered) || saved[modelEnv] !== chosen) throw Object.assign(new Error("not readable back"), { code: "value cannot be stored in a .env line" })
+      connections.delete(p)
+      return { ok: true, saved: true }
+    } catch (e) {
+      // Not saved: keep working from memory and tell the caller it will not survive a restart.
+      connections.set(p, { key, model: chosen })
+      return { ok: true, saved: false, saveError: saveError(e) }
+    }
   })
+  // Forget: drop the in-memory entry and the provider's lines in hardware/.env. A key set in the process
+  // environment cannot be removed from here and stays available.
   app.delete<{ Params: { provider: string } }>("/api/ai/providers/:provider", async (req, reply) => {
-    if (!isProvider(req.params.provider)) return reply.code(400).send({ error: "Unknown provider" })
-    connections.delete(req.params.provider)
-    return { ok: true }
+    const p = req.params.provider
+    if (!isProvider(p)) return reply.code(400).send({ error: "Unknown provider" })
+    connections.delete(p)
+    try { writeEnvFile({ [PROVIDERS[p].env]: null, [PROVIDERS[p].modelEnv]: null }) }
+    catch (e) { return { ok: true, removed: false, saveError: saveError(e) } }
+    return { ok: true, removed: true }
   })
 
   // The registry's transport inside the API: the same HTTP routes the MCP server calls, without a socket.
@@ -252,10 +427,12 @@ export function registerAiRoutes(app: FastifyInstance, designExists: (name: stri
     },
   }
 
-  app.post<{ Params: { name: string }; Body: { provider?: string; message?: string; selected?: string; history?: Message[] } }>("/api/designs/:name/ai", async (req, reply) => {
+  app.post<{ Params: { name: string }; Body: { provider?: string; message?: string; selected?: string; context?: unknown; history?: Message[] } }>("/api/designs/:name/ai", async (req, reply) => {
     const { name } = req.params
     if (!designExists(name)) return reply.code(404).send({ error: "Design not found" })
     const { provider, message, selected, history = [] } = req.body ?? {}
+    let context: SelectionContext
+    try { context = validateContext(req.body?.context) } catch (e: any) { return reply.code(400).send({ error: e.message }) }
     if (!isProvider(provider) || typeof message !== "string" || !message.trim() || message.length > 4000 || (selected !== undefined && (typeof selected !== "string" || selected.length > 160))) return reply.code(400).send({ error: "Choose a provider and enter a request (up to 4000 characters)" })
     if (!Array.isArray(history) || history.length > 12 || history.some((m) => !m || !["user", "assistant"].includes(m.role) || typeof m.content !== "string" || m.content.length > 16000)) return reply.code(400).send({ error: "Invalid chat history" })
     const connection = connectionFor(provider)
@@ -264,29 +441,59 @@ export function registerAiRoutes(app: FastifyInstance, designExists: (name: stri
     busy.add(name)
     const trail: TrailEntry[] = []
     const searches: { query: string; parts?: unknown[]; error?: string }[] = []
+    const thinking: Thought[] = []
+    let thinkingChars = 0, sawReasoning = false
+    const think = (step: number, kind: Thought["kind"], raw: string) => {
+      const room = THINKING.totalChars - thinkingChars
+      if (!raw.trim() || room <= 0) return
+      const text = clip(raw.trim(), Math.min(THINKING.entryChars, room))
+      thinkingChars += text.length
+      thinking.push({ step, kind, text })
+    }
     let proposalId: string | undefined
     const editsBefore = readRun(name)?.edits.length ?? 0
     // What the caller needs whether the run finished or failed: edits may already be on the working draft.
+    // thinkingSupported is false when the provider returned no reasoning at all during this request.
     const state = () => {
       const run = readRun(name)
-      return { trail, searches, proposalId, run, edited: (run?.edits.length ?? 0) > editsBefore }
+      return { trail, searches, thinking, thinkingSupported: sawReasoning, proposalId, run, edited: (run?.edits.length ?? 0) > editsBefore }
     }
     try {
-      const chat = startChat(provider, connection, SYSTEM(name), [...history, { role: "user", content: `${selected ? `Selected part: ${selected}\n` : ""}${message}` }], AI_TOOLS)
+      // Selected parts must be in the last build, so a stale selection is reported instead of confusing the model.
+      const wanted = contextRefs(context)
+      if (wanted.length) {
+        const r = await ctx.call("GET", `/api/designs/${name}/components`)
+        let known: string[] | null = null
+        try { const list = JSON.parse(new TextDecoder().decode(r.body)); if (r.status < 400 && Array.isArray(list)) known = list.map((c: any) => String(c.ref)) } catch {}
+        if (!known) return reply.code(400).send({ error: "The selection could not be checked because the design has no usable build. Build it, then ask again." })
+        const missing = wanted.filter((ref) => !known.includes(ref))
+        if (missing.length) return reply.code(400).send({ error: `The selection names part(s) that are not in the last build: ${missing.slice(0, 10).join(", ")}. Rebuild or reselect, then ask again.` })
+      }
+      let image: string | undefined
+      if (context.snapshot) {
+        const r = await ctx.call("GET", `/api/designs/${name}/snapshot.png?view=${context.snapshot}&width=1000`)
+        if (r.status < 400 && r.body.length) image = Buffer.from(r.body).toString("base64")
+        else think(0, "note", `The ${context.snapshot} snapshot could not be rendered, so no image was attached. Build the design first.`)
+      }
+      const selection = [selected ? `Selected part: ${selected}` : "", contextBlock(context), image ? `An image of the ${context.snapshot} view is attached.` : ""].filter(Boolean).join("\n")
+      const chat = startChat(provider, connection, SYSTEM(name), [...history, { role: "user", content: `${selection ? `${selection}\n\n` : ""}${message}` }], AI_TOOLS, { thinking: true, image })
       const signal = AbortSignal.timeout(LIMITS.timeoutMs)
       let builds = 0
       for (let step = 0; step < LIMITS.steps; step++) {
         signal.throwIfAborted()
-        const { text, calls } = await chat.step(signal)
+        const { text, calls, reasoning } = await chat.step(signal)
+        if (step === 0 && chat.imageDropped()) think(0, "note", `The ${context.snapshot} snapshot was not attached: this provider or model does not accept images here.`)
+        for (const r of reasoning) { sawReasoning = true; think(step, "reasoning", r) }
         if (!calls.length) {
           if (!text.trim()) throw new Error("The provider returned no text. Try a different model.")
           return { message: clip(text, 16000), ...state() }
         }
+        think(step, "note", text) // what the model said while asking for tools
         const results: { id: string; content: string; isError?: boolean }[] = []
         for (const call of calls) {
           const started = Date.now()
           const shown = clip(JSON.stringify(call.args ?? {}), 300)
-          const fail = (msg: string) => { trail.push({ tool: String(call.name), args: shown, ok: false, summary: clip(msg, 300), ms: Date.now() - started }); results.push({ id: call.id, content: msg, isError: true }) }
+          const fail = (msg: string) => { trail.push({ step, tool: String(call.name), args: shown, ok: false, summary: clip(msg, 300), ms: Date.now() - started }); results.push({ id: call.id, content: msg, isError: true }) }
           const tool = AI_TOOLS.find((t) => t.name === call.name)
           if (!tool) { fail(`unknown tool ${call.name}`); continue }
           if (call.badArgs) { fail("arguments were not valid JSON"); continue }
@@ -298,7 +505,7 @@ export function registerAiRoutes(app: FastifyInstance, designExists: (name: stri
             if (tool.name === "search_parts") searches.push({ query: String(call.args.query), parts: Array.isArray(out) ? out : [] })
             if (tool.name === "propose_change" && typeof out?.id === "string") proposalId = out.id
             const full = JSON.stringify(out)
-            trail.push({ tool: tool.name, args: shown, ok: true, summary: clip(summarise(tool.name, out), 300), ms: Date.now() - started })
+            trail.push({ step, tool: tool.name, args: shown, ok: true, summary: clip(summarise(tool.name, out), 300), ms: Date.now() - started })
             results.push({ id: call.id, content: full.length > LIMITS.resultChars ? `${full.slice(0, LIMITS.resultChars)}\n…truncated (${full.length} characters). Ask for something narrower.` : full })
           } catch (e: any) {
             if (tool.name === "search_parts") searches.push({ query: String(call.args.query), error: "Part catalogue unavailable; prices, stock and matches could not be verified." })

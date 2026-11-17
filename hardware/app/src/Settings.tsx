@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react"
 import { aiApi, type AiProvider } from "./api"
 import { useToast } from "./toast"
-import { isUsable, pickProvider, savePrefs, useAiPrefs } from "./aiPrefs"
+import { isPremiumModel, isUsable, modelLabel, pickProvider, savePrefs, useAiPrefs } from "./aiPrefs"
 
 type Models = { id: string; label: string }[]
 
@@ -24,10 +24,10 @@ function ProviderCard({ p, onChange }: { p: AiProvider; onChange: () => void }) 
       const r = await aiApi.models(p.id, key.trim() || undefined)
       setModels(r.models)
       setNote({ ok: true, text: `Connected. ${r.models.length} models available.` })
-      if (!model && r.models[0]) setModel(r.models[0].id)
     } catch (e: any) { setNote({ ok: false, text: e.message }) } finally { setBusy("") }
   }
   const save = async () => {
+    if (isPremiumModel(model) && !isPremiumModel(p.model) && !confirm(`${model} is a premium model and costs noticeably more per request. Use it?`)) return
     setBusy("save")
     try {
       const r = await aiApi.configure(p.id, model.trim(), key.trim() || undefined)
@@ -62,7 +62,8 @@ function ProviderCard({ p, onChange }: { p: AiProvider; onChange: () => void }) 
           <span>Model</span>
           {options.length > 0 ? (
             <select className="input" value={model} onChange={(e) => setModel(e.target.value)}>
-              {options.map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}
+              {!model && <option value="">Choose a model</option>}
+              {options.map((m) => <option key={m.id} value={m.id}>{modelLabel(m.id, m.label)}</option>)}
             </select>
           ) : (
             <input className="input" placeholder="Model ID, or test the connection to pick one" value={model} onChange={(e) => setModel(e.target.value)} />

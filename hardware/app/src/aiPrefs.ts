@@ -46,3 +46,7 @@ export function pickProvider(list: AiProvider[], prefs: AiPrefs, now: string): s
   if (prefs.provider && list.some((p) => p.id === prefs.provider)) return prefs.provider
   return list.some((p) => p.id === now) ? now : list[0]?.id ?? now
 }
+
+/** Top-tier model families that cost noticeably more per request. A hint taken from the model id, not a price list. */
+export const isPremiumModel = (id: string) => /(^|[-_/.])(opus|fable)([-_/.]|$)|-pro(-|$)/i.test(id)
+export const modelLabel = (id: string, label: string) => (isPremiumModel(id) ? `${label} (premium)` : label)

@@ -6,6 +6,7 @@ import os from "node:os"
 import path from "node:path"
 import { AI_TOOLS, LIMITS, complete, contextBlock, contextRefs, editEnvText, listModels, parseEnvFile, registerAiRoutes, startChat, useEnvFile, validateContext, validateFiles } from "./ai.js"
 import { TOOLS } from "../shared/tools.js"
+import { tap } from "./watch.js"
 
 // Entered keys are saved to a .env file: every test here uses a temp one, never hardware/.env.
 const ENV_DIR = fs.mkdtempSync(path.join(os.tmpdir(), "joat-ai-test-"))
@@ -344,4 +345,136 @@ test("entered keys are saved to .env, survive a restart of the routes, report th
     for (const p of ["openai", "anthropic", "nous"]) await app.inject({ method: "DELETE", url: `/api/ai/providers/${p}` })
     await app.close()
   }
+})
+
+test("a running AI request can be stopped: the provider call is aborted, the reply says what was done, and progress is published", async () => {
+  const app = Fastify()
+  registerAiRoutes(app, (name) => name === "base-s3")
+  app.get("/api/designs/:name/components", async () => [])
+  const original = globalThis.fetch
+  const events: string[] = []
+  const untap = tap((e) => { if (e.type === "ai") events.push(e.phase === "tool" ? `tool:${e.tool}` : e.phase) })
+  try {
+    assert.equal((await app.inject({ method: "PUT", url: "/api/ai/providers/openai", payload: { model: "test-model", apiKey: "test-secret" } })).statusCode, 200)
+    assert.deepEqual((await app.inject({ method: "POST", url: "/api/designs/base-s3/ai/cancel" })).json(), { ok: true, running: false }) // nothing to stop yet
+    let calls = 0
+    let hangs!: () => void
+    const hanging = new Promise<void>((r) => { hangs = r })
+    globalThis.fetch = (async (_url: any, init: any) => {
+      if (++calls === 1) return Response.json({ output: [{ type: "function_call", call_id: "c1", name: "list_components", arguments: JSON.stringify({ name: "base-s3" }) }] })
+      // the second model call never answers by itself: it only ends when the request is aborted
+      return new Promise((_res, rej) => { init.signal.addEventListener("abort", () => rej(Object.assign(new Error("aborted"), { name: "AbortError" }))); hangs() })
+    }) as typeof fetch
+    const asking = app.inject({ method: "POST", url: "/api/designs/base-s3/ai", payload: { provider: "openai", message: "look around" } })
+    await hanging
+    assert.deepEqual((await app.inject({ method: "POST", url: "/api/designs/base-s3/ai/cancel" })).json(), { ok: true, running: true })
+    const res = await asking
+    assert.equal(res.statusCode, 200) // stopping on purpose is not an error
+    const body = res.json()
+    assert.equal(body.cancelled, true)
+    assert.equal(body.stopped, true)
+    assert.match(body.message, /Stopped after 1 tool step/)
+    assert.equal(body.trail.length, 1)
+    assert.deepEqual(events, ["start", "model", "tool:list_components", "model", "done"])
+    // the design is free again: a second stop finds nothing, and a new request is not refused as "already running"
+    assert.deepEqual((await app.inject({ method: "POST", url: "/api/designs/base-s3/ai/cancel" })).json(), { ok: true, running: false })
+  } finally { globalThis.fetch = original; untap() }
+})
+
+test("the assistant may read other designs but only change the open one", async () => {
+  const app = Fastify()
+  registerAiRoutes(app, (name) => name === "base-s3")
+  app.get("/api/designs/:name", async (req: any) => ({ name: req.params.name, meta: {}, files: { "index.tsx": "// " + req.params.name } }))
+  const original = globalThis.fetch
+  try {
+    assert.equal((await app.inject({ method: "PUT", url: "/api/ai/providers/openai", payload: { model: "test-model", apiKey: "test-secret" } })).statusCode, 200)
+    const script = [["read_design", { name: "relay-8" }], ["add_part", { name: "relay-8", item: "resistor" }]] as const
+    let calls = 0
+    globalThis.fetch = (async () => { const next = script[calls++]; return Response.json(next ? toolCallReply("openai", next[0], next[1]) : textReply("openai", "Reused the relay board's driver stage.")) }) as typeof fetch
+    const r = (await app.inject({ method: "POST", url: "/api/designs/base-s3/ai", payload: { provider: "openai", message: "How does relay-8 drive its coils?" } })).json()
+    assert.deepEqual(r.trail.map((t: any) => [t.tool, t.ok]), [["read_design", true], ["add_part", false]])
+    assert.match(r.trail[0].summary, /relay-8|ok/)
+    assert.match(r.trail[1].summary, /only to the open design "base-s3"/)
+  } finally { globalThis.fetch = original; await app.close() }
+})
+
+test("catalogue searches are budgeted per request", async () => {
+  const app = Fastify()
+  registerAiRoutes(app, (name) => name === "base-s3")
+  let hits = 0
+  app.get("/api/parts/search", async () => { hits++; return [] })
+  const original = globalThis.fetch
+  try {
+    assert.equal((await app.inject({ method: "PUT", url: "/api/ai/providers/openai", payload: { model: "test-model", apiKey: "test-secret" } })).statusCode, 200)
+    let calls = 0
+    globalThis.fetch = (async () => Response.json(++calls <= LIMITS.searches + 2 ? toolCallReply("openai", "search_parts", { query: `q${calls}` }) : textReply("openai", "Options: A or B. Which do you want?"))) as typeof fetch
+    const r = (await app.inject({ method: "POST", url: "/api/designs/base-s3/ai", payload: { provider: "openai", message: "find me something" } })).json()
+    assert.equal(hits, LIMITS.searches)
+    assert.equal(r.trail.filter((t: any) => t.ok).length, LIMITS.searches)
+    const refused = r.trail.filter((t: any) => !t.ok)
+    assert.equal(refused.length, 2)
+    assert.match(refused[0].summary, /search budget used up/)
+    assert.equal(r.message, "Options: A or B. Which do you want?")
+  } finally { globalThis.fetch = original; await app.close() }
+})
+
+test("when the time budget runs out the model is told to answer, and is answered for if it will not", async () => {
+  const app = Fastify()
+  registerAiRoutes(app, (name) => name === "base-s3")
+  app.get("/api/designs/:name/components", async () => [])
+  const original = globalThis.fetch
+  const soft = LIMITS.softMs
+  LIMITS.softMs = -1 // already past the soft deadline after the first round of tools
+  try {
+    assert.equal((await app.inject({ method: "PUT", url: "/api/ai/providers/openai", payload: { model: "test-model", apiKey: "test-secret" } })).statusCode, 200)
+    const ask = () => app.inject({ method: "POST", url: "/api/designs/base-s3/ai", payload: { provider: "openai", message: "add PoE" } })
+
+    // a model that listens: it sees the notice with its tool results and answers
+    let outputs: string[] = []
+    let calls = 0
+    globalThis.fetch = (async (_url: any, init: any) => {
+      for (const item of JSON.parse(String(init?.body)).input) if (item.type === "function_call_output") outputs.push(item.output)
+      return Response.json(++calls === 1 ? toolCallReply("openai", "list_components", { name: "base-s3" }) : textReply("openai", "Plan: PD controller plus isolated flyback. Which power class?"))
+    }) as typeof fetch
+    const listened = (await ask()).json()
+    assert.equal(listened.message, "Plan: PD controller plus isolated flyback. Which power class?")
+    assert.equal(calls, 2)
+    assert.equal(outputs.some((o) => /Budget notice/.test(o)), true)
+
+    // a model that ignores it: further tools are refused, and after two refused rounds the server answers
+    calls = 0; outputs = []
+    globalThis.fetch = (async () => { calls++; return Response.json(toolCallReply("openai", "list_components", { name: "base-s3" })) }) as typeof fetch
+    const ignored = (await ask()).json()
+    assert.equal(ignored.stopped, true)
+    assert.match(ignored.message, /^Stopped: this request used up its time and step budget/)
+    assert.equal(calls, 3) // one real round, then two refused rounds
+    assert.equal(ignored.trail.filter((t: any) => t.ok).length, 1)
+    assert.match(ignored.trail[1].summary, /no more tools will run/)
+  } finally { LIMITS.softMs = soft; globalThis.fetch = original; await app.close() }
+})
+
+test("a request that hits the hard time limit returns what it found instead of an error", async () => {
+  const app = Fastify()
+  registerAiRoutes(app, (name) => name === "base-s3")
+  app.get("/api/designs/:name/components", async () => [])
+  const original = globalThis.fetch
+  const limit = LIMITS.timeoutMs
+  LIMITS.timeoutMs = 150
+  const keepAlive = setTimeout(() => {}, 5000) // AbortSignal.timeout does not keep the event loop alive by itself
+  try {
+    assert.equal((await app.inject({ method: "PUT", url: "/api/ai/providers/openai", payload: { model: "test-model", apiKey: "test-secret" } })).statusCode, 200)
+    let calls = 0
+    globalThis.fetch = (async (_url: any, init: any) => {
+      if (++calls === 1) return Response.json(toolCallReply("openai", "list_components", { name: "base-s3" }))
+      // the second model call is too slow: it only ends when the time limit aborts it
+      return new Promise((_res, rej) => init.signal.addEventListener("abort", () => rej(Object.assign(new Error("aborted"), { name: "AbortError" }))))
+    }) as typeof fetch
+    const res = await app.inject({ method: "POST", url: "/api/designs/base-s3/ai", payload: { provider: "openai", message: "add PoE" } })
+    assert.equal(res.statusCode, 200)
+    const r = res.json()
+    assert.equal(r.stopped, true)
+    assert.equal(r.timedOut, true)
+    assert.match(r.message, /^Stopped: this request used up its time/)
+    assert.equal(r.trail.length, 1) // what it did before the limit is kept
+  } finally { clearTimeout(keepAlive); LIMITS.timeoutMs = limit; globalThis.fetch = original; await app.close() }
 })

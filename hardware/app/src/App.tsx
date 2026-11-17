@@ -64,7 +64,7 @@ export default function App() {
   const pageRef = useRef(route.page)
   pageRef.current = route.page
   useChangeFeed((e) => {
-    if (e.type === "hello" || pageRef.current === "design") return
+    if (e.type === "hello" || e.type === "ai" || pageRef.current === "design") return
     if (reloadTimer.current) clearTimeout(reloadTimer.current)
     reloadTimer.current = setTimeout(() => reload(), 900)
   })

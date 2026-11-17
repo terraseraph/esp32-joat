@@ -10,3 +10,7 @@ export type ChangeEvent =
   | { type: "designs"; at: number }
   /** an order record or package changed */
   | { type: "orders"; at: number }
+  /** the saved build plan of a design changed (the assistant, an agent in chat, or you) */
+  | { type: "plan"; design: string; at: number }
+  /** progress of an in-app AI request on one design: a model call started, a tool finished, or the request ended */
+  | { type: "ai"; design: string; phase: "start" | "model" | "tool" | "done"; step?: number; tool?: string; ok?: boolean; summary?: string; at: number }

@@ -57,12 +57,20 @@ export function createChangeBatcher(emit: (e: ChangeEvent) => void, quietMs = QU
   }
 }
 
+/** Send an event to every connected page (set once the feed is registered; a no-op before that). */
+let out: ((e: ChangeEvent) => void) | null = null
+const taps = new Set<(e: ChangeEvent) => void>()
+export const publish = (e: ChangeEvent) => { out?.(e); for (const t of taps) t(e) }
+/** Listen to everything published (for tests). Returns the stop function. */
+export const tap = (fn: (e: ChangeEvent) => void) => { taps.add(fn); return () => { taps.delete(fn) } }
+
 /** Live change feed: `GET /api/ws` upgrades to a WebSocket that receives ChangeEvent JSON. Nothing is read from clients. */
 export function registerChangeFeed(app: FastifyInstance) {
   const wss = new WebSocketServer({ noServer: true })
   const send = (ws: WebSocket, e: ChangeEvent) => { if (ws.readyState === ws.OPEN) ws.send(JSON.stringify(e)) }
   const broadcast = (e: ChangeEvent) => { for (const ws of wss.clients) send(ws, e) }
   const batcher = createChangeBatcher(broadcast)
+  out = broadcast
 
   app.server.on("upgrade", (req: IncomingMessage, socket: Duplex, head) => {
     const url = (req.url ?? "").split("?")[0]

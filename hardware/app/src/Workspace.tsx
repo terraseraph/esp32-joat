@@ -25,6 +25,7 @@ import Explain, { type Highlight } from "./Explain"
 import Changes from "./Changes"
 import Shortcuts from "./Shortcuts"
 import { useChangeFeed } from "./useChangeFeed"
+import DraftChip from "./DraftChip"
 import * as Menu from "@radix-ui/react-dropdown-menu"
 
 function useSplit(initial: number, min: number, max: number, axis: "x" | "y", invert = false) {
@@ -389,6 +390,17 @@ export default function Workspace({ name, onSaved, initialPanel }: { name: strin
     setExternal(null)
   }, [external])
 
+  /** Take a whole set of files the API wrote (an accepted proposal, a rolled-back run) as the saved and current state. */
+  const applyFiles = useCallback((f: Record<string, string>) => {
+    ownWriteAt.current = Date.now()
+    setSaved(f); setFiles(f); filesRef.current = f
+    setActive((a) => (a in f ? a : f["index.tsx"] !== undefined ? "index.tsx" : Object.keys(f)[0]))
+    setBomVersion((v) => v + 1)
+    setSnapVersion((v) => v + 1)
+    runBuild("quick")
+    onSaved()
+  }, [runBuild, onSaved])
+
   // autosave: debounced after the last change (paused while the disk and this page disagree, so it cannot overwrite the other change)
   useEffect(() => {
     if (!autosave || !dirty || !design || conflictRef.current) return
@@ -524,6 +536,7 @@ export default function Workspace({ name, onSaved, initialPanel }: { name: strin
             </motion.span>
           </AnimatePresence>
         </div>
+        <DraftChip name={name} dirty={dirty} onRolledBack={applyFiles} onKept={onSaved} />
         <div className="grow" />
         <div className="tb-group">
           <button className="icon-btn" onClick={hist.undo} disabled={!hist.canUndo} title="Undo (Ctrl+Z)" aria-label="Undo">
@@ -668,13 +681,7 @@ export default function Workspace({ name, onSaved, initialPanel }: { name: strin
                 ) : panel === "explain" ? (
                   <Explain name={name} version={bomVersion} onHighlight={setHighlight} />
                 ) : panel === "changes" ? (
-                  <Changes name={name} dirty={dirty} selected={selected} selection={aiSelection} onSelection={editSelection} onAccepted={(f) => {
-                    ownWriteAt.current = Date.now(); setSaved(f); setFiles(f); filesRef.current = f
-                    setActive((a) => (a in f ? a : f["index.tsx"] !== undefined ? "index.tsx" : Object.keys(f)[0]))
-                    setBomVersion((v) => v + 1)
-                    runBuild("quick")
-                    onSaved()
-                  }} />
+                  <Changes name={name} dirty={dirty} selected={selected} selection={aiSelection} onSelection={editSelection} onAccepted={applyFiles} />
                 ) : (
                   <Bom name={name} version={bomVersion} dirty={dirty} qty={qty} setQty={setQty} onFilesChanged={onFilesChanged} />
                 )}

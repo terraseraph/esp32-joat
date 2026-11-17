@@ -57,6 +57,14 @@ function release() {
   }, 3000)
 }
 
+/** Subscribe outside React (for a store). Returns the unsubscribe function. */
+export function onFeed(fn: (e: FeedEvent) => void) {
+  listeners.add(fn)
+  if (closeTimer) { clearTimeout(closeTimer); closeTimer = null }
+  connect()
+  return () => { listeners.delete(fn); release() }
+}
+
 /** Call `on` for every change the API reports (files changed on disk, designs added or removed, orders). */
 export function useChangeFeed(on: (e: FeedEvent) => void) {
   const ref = useRef(on)

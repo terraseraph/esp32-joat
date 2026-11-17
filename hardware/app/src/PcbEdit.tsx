@@ -110,7 +110,7 @@ export default function PcbEdit({ model, fitKey, selected, multi, region, netKey
   useEffect(() => {
     const on = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement | null
-      if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.tagName === "SELECT" || t.isContentEditable || t.closest(".cm-editor"))) return
+      if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.tagName === "SELECT" || t.isContentEditable || t.closest?.(".cm-editor"))) return
       if (e.ctrlKey || e.metaKey || e.altKey) return
       if (e.key === "Escape") return onPick({ clear: true })
       if (!selected) return

@@ -33,7 +33,13 @@ Nothing is written to the design until the user presses **Accept** in the *Descr
 - `POST .../proposals/:id/reject`
 
 ## Live change feed
-`GET /api/ws` upgrades to a WebSocket that only sends, JSON text frames of `ChangeEvent` (`hardware/shared/changes.ts`): `{type:"hello"}` on connect; `{type:"design", name, files:[...]}` when files inside one design changed (design-relative paths); `{type:"lib", files}` for a shared block; `{type:"designs"}` when a design folder was added, removed or renamed; `{type:"orders"}`. Bursts of writes are merged into one event per design after 250 ms of quiet; editor temp files are ignored. Same local-only rules as the HTTP API (host and origin must be localhost, else 403). Nothing sent by a client is read. The Vite dev proxy forwards it (`ws: true`).
+`GET /api/ws` upgrades to a WebSocket that only sends, JSON text frames of `ChangeEvent` (`hardware/shared/changes.ts`): `{type:"hello"}` on connect; `{type:"design", name, files:[...]}` when files inside one design changed (design-relative paths); `{type:"lib", files}` for a shared block; `{type:"designs"}` when a design folder was added, removed or renamed; `{type:"orders"}`; `{type:"ai", design, phase:"start"|"model"|"tool"|"done", step?, tool?, ok?, summary?}` while an in-app AI request runs on a design (the Stop button's `POST /api/designs/:name/ai/cancel` aborts it). Bursts of writes are merged into one event per design after 250 ms of quiet; editor temp files are ignored. Same local-only rules as the HTTP API (host and origin must be localhost, else 403). Nothing sent by a client is read. The Vite dev proxy forwards it (`ws: true`).
+
+## Build plan
+A saved, ordered checklist for a job with several parts or blocks, so the assistant works through it one item per request and a reload, a restart or a new chat resumes it. Stored in `hardware/.cache/plans/<design>.json` (not part of the design). The in-app assistant and an agent in chat write it through the same tools (`plan_get`, `plan_set`, `plan_update`); the app's plan strip reads and edits it through these routes:
+- `GET /api/designs/:name/plan` returns `{plan}`, null when there is none. `PUT` replaces it with `{goal, items:[{title, detail?, status?, lcsc?, refs?}]}` (1 to 30 items; ids are assigned as `p1`, `p2`, ...). `DELETE` clears it.
+- `PATCH /api/designs/:name/plan/items/:id` with any of `{status, title, detail, lcsc, refs}`; status is `todo`, `doing`, `done` or `skipped`, and setting one item to `doing` puts any other back to `todo`. `POST /api/designs/:name/plan/items` `{title, detail?, after?}` adds an item.
+- Every change is pushed to open pages as `{type:"plan", design}` on the change feed. A saved plan is also placed at the top of each assistant request as a compact block (`planBlock`), so "carry on" needs no tool call.
 
 ## MCP server
 `hardware/mcp/server.ts` is a dependency-free stdio MCP server (hand-written JSON-RPC, so `@modelcontextprotocol/sdk` is not needed). The repo's `.mcp.json` registers it as `hardware-designer`, so Claude Code sessions in the repo see these tools once the designer is running (`npm run dev` in `hardware/`). Set `HW_API_PORT` (or `HW_API_URL`) in `.mcp.json` if the API is not on 3101.
@@ -53,6 +59,7 @@ Every tool calls the HTTP routes in this document through a transport: `fetch` i
 | Read | `list_designs`, `read_design`, `list_components`, `list_source_components`, `list_nets`, `gpio_map`, `explain_design`, `build_design`, `run_checks`, `get_bom`, `cost_summary`, `list_swaps`, `get_snapshot`, `list_palette`, `search_parts`, `list_requests`, `list_proposals`, `list_snapshots`, `run_status` |
 | Edit (working draft) | `add_part`, `patch_component`, `connect_pins`, `set_pin_net`, `rename_net`, `assign_gpio`, `apply_swap` |
 | Run and review | `create_snapshot`, `restore_snapshot`, `accept_run`, `rollback_run`, `propose_change` |
+| Build plan | `plan_get` (read), `plan_set`, `plan_update` |
 | Orders (local records) | `order_preflight`, `list_orders`, `get_order`, `create_draft_order`, `refresh_order`, `update_order` |
 
 The order tools save and update order records on this machine. None of them contacts a manufacturer, places an order or pays: the user uploads the package and pays on the vendor's site, then `update_order` records the quoted total, order number and tracking they report.

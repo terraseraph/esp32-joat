@@ -50,6 +50,11 @@ The designer API must be running (`npm run dev` in `hardware/`, API on port 3101
 - `run_status {name}` shows the open run and its edits. `rollback_run {name}` restores the snapshot taken before the run.
 - `list_snapshots` / `restore_snapshot {name, id}` for older states. A restore backs up the current files first.
 
+**Work through a multi-part job (a PoE front end, an Ethernet port)**
+- Once the user has chosen a direction, `plan_set {name, goal, items}` (3 to 10 items, one part or block each, in dependency order). `plan_get {name}` shows the saved plan; it persists across chats.
+- Then ONE item per request: `plan_update {name, id, status: "doing"}`, search only for that part, `add_part` and wire it, `build_design` + `run_checks`, `plan_update {status: "done", lcsc, refs}`, report, and stop. Do not start the next item unless asked to carry on.
+- A part you cannot verify the pinout of (a catalogue chip has unlabelled pins) is a reason to stop and say so, or to propose a small lib block with a human-checked pinout via `propose_change`.
+
 **Work the user queued in the app**
 - `list_requests {name, status: "open"}`, do the work, and report against the request. Use `propose_change {name, summary, files, requestId}` when the answer is a whole-file change for review.
 

@@ -32,14 +32,26 @@ export type AiContext = {
 }
 export type AiState = { trail: AiStep[]; searches: { query: string; parts?: PartHit[]; error?: string }[]; proposalId?: string; run: AgentRun | null; edited: boolean; thinking?: AiThinking[]; thinkingSupported?: boolean }
 export type AiReply = AiState & { message: string; stopped?: boolean }
+export type PlanStatus = "todo" | "doing" | "done" | "skipped"
+export type PlanItem = { id: string; title: string; status: PlanStatus; detail: string; lcsc: string; refs: string[] }
+export type Plan = { goal: string; items: PlanItem[]; createdAt: string; updatedAt: string }
+/** The saved build plan of a design (the assistant and an agent in chat write it through the same tools). */
+export const planApi = {
+  get: (n: string) => req<{ plan: Plan | null }>(`/api/designs/${encodeURIComponent(n)}/plan`).then((r) => r.plan),
+  patch: (n: string, id: string, body: Partial<Pick<PlanItem, "status" | "title" | "detail">>) =>
+    req<{ plan: Plan; summary: string }>(`/api/designs/${encodeURIComponent(n)}/plan/items/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify(body) }),
+  clear: (n: string) => req<{ ok: boolean }>(`/api/designs/${encodeURIComponent(n)}/plan`, { method: "DELETE" }),
+}
 export const aiApi = {
   /** A failed request still reports what the assistant did before failing, as `state` on the thrown error. */
-  ask: async (name: string, provider: string, message: string, selected?: string, history?: { role: "user" | "assistant"; content: string }[], context?: AiContext): Promise<AiReply> => {
-    const res = await fetch(`/api/designs/${encodeURIComponent(name)}/ai`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ provider, message, selected, history, context }) })
+  ask: async (name: string, provider: string, message: string, selected?: string, history?: { role: "user" | "assistant"; content: string }[], context?: AiContext, signal?: AbortSignal): Promise<AiReply> => {
+    const res = await fetch(`/api/designs/${encodeURIComponent(name)}/ai`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ provider, message, selected, history, context }), signal })
     const data = await res.json().catch(() => null)
     if (!res.ok) throw Object.assign(new Error(data?.error || `${res.status} ${res.statusText}`), { state: Array.isArray(data?.trail) ? (data as AiState) : undefined })
     return data
   },
+  /** Stop the request running on this design; it reports what was done so far. */
+  cancel: (name: string) => post(`/api/designs/${encodeURIComponent(name)}/ai/cancel`) as Promise<{ ok: boolean; running: boolean }>,
   tools: () => req<{ name: string; kind: "read" | "edit" | "run"; description: string }[]>("/api/ai/tools"),
   run: (name: string) => req<{ run: AgentRun | null }>(`/api/designs/${encodeURIComponent(name)}/run`).then((r) => r.run),
   acceptRun: (name: string) => post(`/api/designs/${encodeURIComponent(name)}/run/accept`) as Promise<{ ok: true; kept: number }>,

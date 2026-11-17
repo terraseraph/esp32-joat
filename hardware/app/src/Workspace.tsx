@@ -55,12 +55,15 @@ const GROUPS: { id: string; label: string; subs: { id: PanelId; label: string }[
   { id: "bom", label: "BOM & cost", subs: [{ id: "bom", label: "BOM" }] },
   { id: "wiring", label: "Wiring", subs: [{ id: "nets", label: "Nets & connect" }, { id: "gpio", label: "GPIO map" }] },
   { id: "history", label: "History", subs: [{ id: "history", label: "Snapshots & diff" }] },
-  { id: "ai", label: "Ask Claude", subs: [{ id: "explain", label: "Explain" }, { id: "changes", label: "Describe a change" }] },
+  { id: "ai", label: "AI assistant", subs: [{ id: "changes", label: "Chat & changes" }, { id: "explain", label: "Explain" }] },
 ]
 
 export type BuildState = { status: "idle" | "building" | "ok" | "error"; durationMs?: number; fatal?: string; mode?: BuildMode; cached?: boolean }
 
-export default function Workspace({ name, onSaved }: { name: string; onSaved: () => void }) {
+const PANEL_IDS: PanelId[] = ["problems", "review", "bom", "nets", "gpio", "history", "explain", "changes"]
+const asPanel = (p: string | null | undefined): PanelId | null => (PANEL_IDS as string[]).includes(p ?? "") ? (p as PanelId) : null
+
+export default function Workspace({ name, onSaved, initialPanel }: { name: string; onSaved: () => void; initialPanel?: string | null }) {
   const toast = useToast()
   const [design, setDesign] = useState<Design | null>(null)
   const [loadErr, setLoadErr] = useState<string | null>(null)
@@ -76,7 +79,13 @@ export default function Workspace({ name, onSaved }: { name: string; onSaved: ()
   const [build, setBuild] = useState<BuildState>({ status: "idle" })
   const [result, setResult] = useState<BuildResult | null>(null)
   const [circuit, setCircuit] = useState<any[] | null>(null) // last good
-  const [panel, setPanel] = useState<PanelId>("problems")
+  const [schematic, setSchematic] = useState<any[] | null>(null)
+  const [previewView, setPreviewView] = useState(() => { try { return localStorage.getItem("previewTab") ?? "pcb" } catch { return "pcb" } })
+  const previewViewRef = useRef(previewView)
+  previewViewRef.current = previewView
+  const [schematicSource, setSchematicSource] = useState<Record<string, string> | null>(null)
+  const [schematicDraft, setSchematicDraft] = useState(false)
+  const [panel, setPanel] = useState<PanelId>(() => asPanel(initialPanel) ?? "problems")
   // remembers the last sub-tab used in each group, so a group tab returns to where you were
   const lastSub = useRef<Record<string, PanelId>>({})
   const openPanel = (t: PanelId) => {
@@ -86,13 +95,15 @@ export default function Workspace({ name, onSaved }: { name: string; onSaved: ()
     if (g) lastSub.current[g.id] = t
   }
   const [panelOpen, setPanelOpen] = useState(true)
+  // a link such as #/design/x?panel=review opens that panel in the drawer
+  useEffect(() => { const p = asPanel(initialPanel); if (p) openPanel(p) }, [initialPanel])
   const [bomVersion, setBomVersion] = useState(0)
   const [dropId, setDropId] = useState<{ id: string; n: number; x?: number; y?: number } | null>(null)
   const knownNames = useMemo(() => (circuit ?? []).filter((e) => e.type === "source_component" && e.name).map((e) => String(e.name)), [circuit])
   const [conn, setConn] = useState<ConnectState>(NO_CONNECT)
   // read by the PCB view pick handler: in Connect mode a pad click picks that pin
   const connectRef = useRef<{ on: boolean; onPort: (portId: string) => void }>({ on: false, onPort: () => {} })
-  const circuitIndex = useMemo(() => (circuit ? indexCircuit(circuit) : null), [circuit])
+  const circuitIndex = useMemo(() => (previewView === "schematic" && schematic ? indexCircuit(schematic) : circuit ? indexCircuit(circuit) : null), [circuit, schematic, previewView])
   const [focus, setFocus] = useState<{ where: NonNullable<CheckIssue["where"]>; nonce: number } | null>(null)
   const [qty, setQty] = useState(10)
   const [exportOpen, setExportOpen] = useState(false)
@@ -109,7 +120,7 @@ export default function Workspace({ name, onSaved }: { name: string; onSaved: ()
   }, [hist.push])
 
   const left = useSplit(Math.round(Math.min(560, innerWidth * 0.38)), 260, 900, "x")
-  const bottom = useSplit(280, 120, 640, "y", true)
+  const bottom = useSplit(Math.round(Math.min(460, Math.max(340, innerWidth * 0.3))), 320, 820, "x", true)
 
   const dirty = useMemo(() => Object.keys(files).some((k) => files[k] !== saved[k]), [files, saved])
 
@@ -191,11 +202,22 @@ export default function Workspace({ name, onSaved }: { name: string; onSaved: ()
 
   const runBuild = useCallback(async (mode: BuildMode = "quick") => {
     const id = ++buildSeq.current
+    const inputs = filesRef.current
     setBuild((b) => ({ ...b, status: "building", fatal: undefined, mode }))
     try {
-      const r = await api.build(name, filesRef.current, mode)
+      const r = await api.build(name, inputs, mode)
       if (id !== buildSeq.current) return
       if (r.cancelled) { setBuild((b) => ({ ...b, status: "idle" })); return }
+      if (mode.startsWith("schematic")) {
+        if (r.circuitJson.length) {
+          setSchematic(r.circuitJson)
+          setSchematicSource(inputs)
+          setSchematicDraft(mode === "schematic-preview")
+        }
+        if (r.errors.length) toast("err", r.errors[0].message)
+        setBuild({ status: r.errors.length ? "error" : "ok", fatal: r.errors[0]?.message, durationMs: r.durationMs, mode })
+        return
+      }
       setResult(r)
       // design-rule errors still produce a board: show it; keep the last board only when nothing was produced
       if (r.circuitJson?.length) setCircuit(r.circuitJson)
@@ -204,7 +226,10 @@ export default function Workspace({ name, onSaved }: { name: string; onSaved: ()
       if (id !== buildSeq.current) return
       setBuild({ status: "error", fatal: e.message })
     }
-  }, [name])
+  }, [name, toast])
+
+  // Keep the previous schematic mounted while newer edits build in the background.
+  useEffect(() => { setSchematic(null); setSchematicSource(null) }, [name])
 
   useEffect(() => {
     api.design(name)
@@ -218,7 +243,7 @@ export default function Workspace({ name, onSaved }: { name: string; onSaved: ()
         api.cachedBuild(name).then((c) => {
           if (c?.circuitJson?.length) setCircuit((cur) => cur ?? c.circuitJson)
         })
-        runBuild("quick")
+        runBuild(previewViewRef.current === "schematic" ? "schematic-preview" : "quick")
       })
       .catch((e) => setLoadErr(e.message))
   }, [name, runBuild, hist.reset])
@@ -228,9 +253,9 @@ export default function Workspace({ name, onSaved }: { name: string; onSaved: ()
   useEffect(() => {
     if (!design) return
     if (first.current) { first.current = false; return }
-    const t = setTimeout(() => runBuild("quick"), 1000)
+    const t = setTimeout(() => runBuild(previewView === "schematic" ? "schematic-preview" : "quick"), 300)
     return () => clearTimeout(t)
-  }, [files, design, runBuild])
+  }, [files, design, runBuild, previewView])
 
   const savedRef = useRef(saved)
   savedRef.current = saved
@@ -383,7 +408,7 @@ export default function Workspace({ name, onSaved }: { name: string; onSaved: ()
             >
               <span className={`dot ${build.status === "building" ? "pulse" : build.status === "ok" ? "good" : build.status === "error" ? "bad" : ""}`} />
               {build.status === "building" && <BuildProgress name={name} mode={build.mode ?? "quick"} onCancel={cancel} />}
-              {build.status === "ok" && `${build.mode === "full" ? "Routed" : "Quick preview"} in ${((build.durationMs ?? 0) / 1000).toFixed(1)}s${build.cached ? " (cached)" : ""}`}
+              {build.status === "ok" && `${build.mode === "full" ? "PCB routed" : build.mode === "schematic" ? "Schematic built" : build.mode === "schematic-preview" ? "Live schematic" : "Quick preview"} in ${((build.durationMs ?? 0) / 1000).toFixed(1)}s${build.cached ? " (cached)" : ""}`}
               {build.status === "error" && (build.fatal ? `Build failed` : `${probErr} error${probErr === 1 ? "" : "s"}`)}
               {build.status === "idle" && "Idle"}
               {build.status === "error" && circuit && !result?.circuitJson?.length && <span className="muted"> · showing last good</span>}
@@ -409,7 +434,7 @@ export default function Workspace({ name, onSaved }: { name: string; onSaved: ()
         <button className={`btn ${codeOpen ? "on" : ""}`} onClick={() => toggleCode(!codeOpen)} aria-pressed={codeOpen} title="Show or hide the source code (E)">{"</>"} Code</button>
         <div className="seg build-seg" role="group" aria-label="Build">
           <button onClick={() => runBuild("quick")} disabled={build.status === "building"} title="Quick build: parts placed, no tracks, seconds (Ctrl+Enter)">Build</button>
-          <button onClick={() => runBuild("full")} disabled={build.status === "building"} title="Full build with autorouted tracks (minutes on big boards)">Route</button>
+          <button onClick={() => runBuild("full")} disabled={build.status === "building"} title="Route PCB tracks; schematic generation runs separately">Route</button>
         </div>
         <button className="btn primary" onClick={doExport} title={hasErrors ? "Last build had errors" : "Download JLCPCB zip"}>
           {hasErrors && <span className="dot bad" />}Export
@@ -424,6 +449,8 @@ export default function Workspace({ name, onSaved }: { name: string; onSaved: ()
             <Menu.Content className="menu" align="end" sideOffset={6}>
               <Menu.Item className="menu-item" onSelect={() => openPanel("history")}>Snapshots & diff</Menu.Item>
               <Menu.Item className="menu-item" onSelect={() => newVariant()}>New variant (next revision)</Menu.Item>
+              <Menu.Item className="menu-item" onSelect={() => { location.hash = `#/board/${encodeURIComponent(name)}` }}>Board overview</Menu.Item>
+              <Menu.Item className="menu-item" onSelect={() => { location.hash = `#/order/${encodeURIComponent(name)}` }}>Order this board…</Menu.Item>
               <Menu.Separator className="menu-sep" />
               <Menu.CheckboxItem className="menu-item" checked={autosave} onCheckedChange={() => toggleAutosave()}>
                 <span className="menu-check">{autosave ? "✓" : ""}</span>Autosave
@@ -451,7 +478,7 @@ export default function Workspace({ name, onSaved }: { name: string; onSaved: ()
           <section className="pane preview-pane"
             onDragOver={(e) => { if (e.dataTransfer.types.includes(PALETTE_MIME)) e.preventDefault() }}
             onDrop={(e) => { const id = e.dataTransfer.getData(PALETTE_MIME); if (id) { e.preventDefault(); setDropId({ id, n: Date.now() }) } }}>
-            {diff ? <DiffView diff={diff.result} label={diff.label} focus={diffFocus} onFocus={setDiffFocus} onClose={() => { setDiff(null); setDiffFocus(null) }} /> : <Preview circuitJson={circuit} building={build.status === "building"} focus={focus} highlight={marks} connect={{ on: conn.on, onPort, highlightIds }}
+            {diff ? <DiffView diff={diff.result} label={diff.label} focus={diffFocus} onFocus={setDiffFocus} onClose={() => { setDiff(null); setDiffFocus(null) }} /> : <Preview circuitJson={circuit} schematicJson={schematic} schematicDraft={schematicDraft} schematicStale={schematicSource !== files} onViewChange={setPreviewView} onBuildSchematic={() => runBuild("schematic")} building={build.status === "building"} focus={focus} highlight={marks} connect={{ on: conn.on, onPort, highlightIds }}
               canvas={model ? { model, fitKey: name, selected, netKey, editable: isEditable, snap, setSnap, onPick, onMove, onRotate, connectMode: conn.on, onDropItem: (id, x, y) => setDropId({ id, n: Date.now(), x, y }) } : undefined}
               overlay={model && selected && model.compByName.get(selected) ? (
                 <Properties comp={model.compByName.get(selected)!} src={srcOf(selected)} model={model} netKey={netKey}
@@ -462,10 +489,17 @@ export default function Workspace({ name, onSaved }: { name: string; onSaved: ()
                   <div className="small muted">{model.members(netKey).length} pins</div>
                   <div className="chips">{model.members(netKey).slice(0, 40).map((m) => <span key={m} className="chip mono">{m}</span>)}</div></aside>
               ) : null} />}
+            {!(panelOpen && panel === "changes") && (
+              <button className="ai-fab" onClick={() => openPanel("changes")} title="Open the AI builder">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M12 3l1.8 4.7L18.5 9.5l-4.7 1.8L12 16l-1.8-4.7L5.5 9.5l4.7-1.8z" /><path d="M19 15l.8 2 2 .8-2 .8-.8 2-.8-2-2-.8 2-.8z" /></svg>
+                Ask the AI builder
+              </button>
+            )}
           </section>
-          <div className="gutter y" onPointerDown={panelOpen ? bottom.onPointerDown : undefined} />
-          <section className="pane bottom" style={{ height: panelOpen ? bottom.size : 38 }}>
-            <div className="tabs small">
+        </div>
+        <div className="gutter x" onPointerDown={panelOpen ? bottom.onPointerDown : undefined} />
+        <section className={`pane drawer ${panelOpen ? "" : "closed"}`} style={{ width: panelOpen ? bottom.size : 40 }} aria-label="Board panels">
+            <div className="tabs small drawer-tabs">
               {GROUPS.map((g) => {
                 const on = g.subs.some((x) => x.id === panel)
                 return (
@@ -483,21 +517,21 @@ export default function Workspace({ name, onSaved }: { name: string; onSaved: ()
                   </button>
                 )
               })}
-              {(() => {
-                const g = GROUPS.find((x) => x.subs.some((y) => y.id === panel))
-                return g && g.subs.length > 1 && panelOpen ? (
-                  <div className="seg subtabs" role="tablist">
-                    {g.subs.map((x) => <button key={x.id} role="tab" aria-selected={panel === x.id} className={panel === x.id ? "on" : ""} onClick={() => openPanel(x.id)}>{x.label}</button>)}
-                  </div>
-                ) : null
-              })()}
               <div className="grow" />
-              <button className="icon-btn" onClick={() => setPanelOpen((o) => !o)} aria-label="Toggle panel" title={panelOpen ? "Collapse" : "Expand"}>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" style={{ transform: panelOpen ? "none" : "rotate(180deg)", transition: "transform .15s" }}>
+              <button className="icon-btn drawer-toggle" onClick={() => setPanelOpen((o) => !o)} aria-label="Toggle panel" aria-expanded={panelOpen} title={panelOpen ? "Collapse (J)" : "Expand (J)"}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" style={{ transform: panelOpen ? "rotate(-90deg)" : "rotate(90deg)", transition: "transform .15s" }}>
                   <path d="m6 9 6 6 6-6" />
                 </svg>
               </button>
             </div>
+            {panelOpen && (() => {
+              const g = GROUPS.find((x) => x.subs.some((y) => y.id === panel))
+              return g && g.subs.length > 1 ? (
+                <div className="seg subtabs drawer-sub" role="tablist">
+                  {g.subs.map((x) => <button key={x.id} role="tab" aria-selected={panel === x.id} className={panel === x.id ? "on" : ""} onClick={() => openPanel(x.id)}>{x.label}</button>)}
+                </div>
+              ) : null
+            })()}
             {panelOpen && (
               <div className="panel-body">
                 {panel === "problems" ? (
@@ -513,7 +547,7 @@ export default function Workspace({ name, onSaved }: { name: string; onSaved: ()
                 ) : panel === "explain" ? (
                   <Explain name={name} version={bomVersion} onHighlight={setHighlight} />
                 ) : panel === "changes" ? (
-                  <Changes name={name} dirty={dirty} onAccepted={(f) => {
+                  <Changes name={name} dirty={dirty} selected={selected} onAccepted={(f) => {
                     setSaved(f); setFiles(f); filesRef.current = f
                     setActive((a) => (a in f ? a : f["index.tsx"] !== undefined ? "index.tsx" : Object.keys(f)[0]))
                     setBomVersion((v) => v + 1)
@@ -526,7 +560,6 @@ export default function Workspace({ name, onSaved }: { name: string; onSaved: ()
               </div>
             )}
           </section>
-        </div>
       </div>
       {exportOpen && <ExportPanel name={name} qty={qty} dirty={dirty} onClose={() => setExportOpen(false)} />}
     </div>

@@ -3,6 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "test": "node --import tsx --test api/*.test.ts shared/*.test.ts",
     "dev": "concurrently -k -n api,app -c blue,magenta \"npm:dev:api\" \"npm:dev:app\"",
     "dev:api": "tsx watch --clear-screen=false api/server.ts",
     "mcp": "tsx mcp/server.ts",

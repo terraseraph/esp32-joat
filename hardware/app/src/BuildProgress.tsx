@@ -18,10 +18,11 @@ export default function BuildProgress({ name, mode, onCancel }: { name: string; 
   const pct = st?.progress != null ? Math.round(st.progress * 100) : null
   return (
     <span className="build-progress">
-      {mode === "full" ? "Routing" : "Building"}
+      {mode === "full" ? "Routing PCB" : mode.startsWith("schematic") ? "Updating schematic" : "Building"}
       {st?.phase && <span className="muted small bp-phase"> · {st.phase.replace(/([a-z])([A-Z])/g, "$1 $2")}</span>}
+      {st?.detail && <span className="muted small" title={st.detail}> · {st.detail}</span>}
       <span className="bp-bar"><span className={pct == null ? "indet" : ""} style={pct == null ? undefined : { width: `${pct}%` }} /></span>
-      <span className="muted small">{elapsed}s</span>
+      <span className="muted small" title={st?.phaseElapsedMs != null ? `${Math.round(st.phaseElapsedMs / 1000)}s in this phase` : undefined}>{elapsed}s{st?.timeoutMs ? ` / ${Math.round(st.timeoutMs / 1000)}s limit` : ""}</span>
       <button className="btn small" onClick={onCancel}>Cancel</button>
     </span>
   )

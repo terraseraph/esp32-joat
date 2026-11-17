@@ -213,6 +213,11 @@ export function insertIntoSource(source: string, item: PaletteItem, input: Recor
   }
   // default position: board centre, staggered so successive inserts do not stack exactly
   const k = (source.match(/\bpcb[XY]=/g)?.length ?? 0) / 2
+  // Give newly inserted symbols their own schematic position rather than stacking at (0, 0).
+  if (item.props.some((p) => p.name === "schX")) {
+    if (values.schX === undefined || values.schX === "") values.schX = 6 + (Math.floor(k) % 5) * 4
+    if (values.schY === undefined || values.schY === "") values.schY = -Math.floor(k / 5) * 3
+  }
   if (item.posProps) {
     const { x, y } = item.posProps
     if (values[x] === undefined || values[x] === "") values[x] = ((Math.floor(k) % 5) - 2) * 4

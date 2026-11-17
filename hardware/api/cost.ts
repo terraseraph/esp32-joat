@@ -3,6 +3,7 @@ import path from "node:path"
 import { computeBom, groupComponents, SETUP_FEE_PER_TYPE } from "./bom.js"
 import { ROOT, readDesignFiles } from "./build.js"
 import { getJson, lookupParts, unitPriceAt, type Part } from "./parts.js"
+import { getRotationBetweenPcbPin1Locations } from "circuit-json"
 
 const round = (n: number, d = 2) => Math.round(n * 10 ** d) / 10 ** d
 const BASE = "https://jlcsearch.tscircuit.com"
@@ -323,4 +324,187 @@ export function preflight(circuitJson: any[], build: { errors: any[]; warnings: 
   if (build.warnings.length) checks.push({ level: "warn", text: `${build.warnings.length} build warning(s)` })
   const cpl = cplPreview(circuitJson)
   return { layers: info.layers, widthMm: info.width, heightMm: info.height, partCount: cpl.length, bomLines: groups.length, missingLcsc, errors: build.errors.length, warnings: build.warnings.length, checks, board: { center: info.center, width: info.width, height: info.height, outline: info.outline }, cpl }
+}
+
+// ---------------------------------------------------------------- JLCPCB pick-and-place with rotation correction
+// JLCPCB places each part in the orientation of its own library footprint, which can differ from the
+// footprint drawn here. tscircuit records where pin 1 sits on both (`pin1_location` for the authored
+// footprint, `supplier_pin1_location_map.jlcpcb` read from the JLC/EasyEDA footprint), so the offset is
+// the rotation between the two. This is the same rule as circuit-json-to-pnp-csv; it is repeated here so
+// every row carries what was applied and whether it could be verified.
+
+export type CplRow = {
+  ref: string
+  x: number
+  y: number
+  layer: "top" | "bottom"
+  /** rotation of the part on this board */
+  pcbRotation: number
+  /** rotation written to cpl.csv */
+  rotation: number
+  /** degrees added to pcbRotation */
+  adjustment: number
+  status: "verified" | "override" | "unverified"
+  /** why an unverified row has no correction */
+  reason?: string
+}
+
+const norm = (deg: number) => round(((deg % 360) + 360) % 360, 2)
+
+/** `overrides` maps a ref to the exact rotation to write (for parts fixed by hand after a JLC placement review). */
+export function jlcCplRows(circuitJson: any[], overrides: Record<string, number> = {}): CplRow[] {
+  const names = new Map<string, string>()
+  for (const e of circuitJson) if (e.type === "source_component") names.set(e.source_component_id, e.name)
+  return circuitJson
+    .filter((e) => e.type === "pcb_component" && names.get(e.source_component_id) && !e.do_not_place)
+    .map((e): CplRow => {
+      const ref = names.get(e.source_component_id)!
+      const pcbRotation = norm(e.rotation ?? 0)
+      const base = { ref, x: round(e.center.x, 4), y: round(e.center.y, 4), layer: (e.layer === "bottom" ? "bottom" : "top") as "top" | "bottom", pcbRotation }
+      if (Number.isFinite(overrides[ref])) return { ...base, rotation: norm(overrides[ref]), adjustment: norm(overrides[ref] - pcbRotation), status: "override" }
+      const mine = e.pin1_location
+      const theirs = e.supplier_pin1_location_map?.jlcpcb
+      const reason = !mine ? "pin 1 position of this footprint is unknown" : !theirs ? "no JLCPCB footprint to compare against" : null
+      const adj = reason ? null : getRotationBetweenPcbPin1Locations(theirs, mine)
+      if (adj === null) return { ...base, rotation: pcbRotation, adjustment: 0, status: "unverified", reason: reason ?? "pin 1 frames cannot be matched by rotation" }
+      return { ...base, rotation: norm(pcbRotation + adj), adjustment: adj, status: "verified" }
+    })
+    .sort((a, b) => a.ref.localeCompare(b.ref, undefined, { numeric: true }))
+}
+
+export function jlcCplCsv(rows: CplRow[]): string {
+  const lines = ["Designator,Mid X,Mid Y,Layer,Rotation"]
+  for (const r of rows) lines.push([r.ref, `${r.x}mm`, `${r.y}mm`, r.layer === "bottom" ? "Bottom" : "Top", r.rotation].join(","))
+  return lines.join("\r\n") + "\r\n"
+}
+
+// ---------------------------------------------------------------- stock at the order quantity
+
+export type StockLine = {
+  lcsc: string
+  refs: string[]
+  needed: number
+  stock: number | null
+  /** short: stock below need. tight: under twice the need. unknown: catalogue gave no stock figure. */
+  state: "ok" | "tight" | "short" | "unknown"
+  alternates: { lcsc: string; mfr: string; description: string; stock: number | null; unitPrice: number; basic: boolean; preferred: boolean }[]
+  /** why no alternates are offered */
+  note?: string
+}
+
+type BomRowLike = { refs: string[]; lcsc: string | null; qtyPerBoard: number; stock: number | null; missing: boolean }
+
+/** Stock per BOM line against boards x parts per board. JLCPCB's own attrition allowance is not included. */
+export function stockCheck(rows: BomRowLike[], qty: number): StockLine[] {
+  return rows
+    .filter((r) => r.lcsc && !r.missing)
+    .map((r) => {
+      const needed = r.qtyPerBoard * qty
+      const state = r.stock === null ? "unknown" : r.stock < needed ? "short" : r.stock < needed * 2 ? "tight" : "ok"
+      return { lcsc: r.lcsc!, refs: r.refs, needed, stock: r.stock, state, alternates: [] }
+    })
+}
+
+/**
+ * Second pass over lines that are short or have no stock figure. jlcsearch's general lookup often returns no
+ * stock, but its resistor, capacitor and LED lists do, so those lines get a figure from there, and short ones
+ * get up to three in-stock parts with matching specs. Other part types keep "unknown" with a note.
+ */
+export async function suggestAlternates(circuitJson: any[], lines: StockLine[]): Promise<StockLine[]> {
+  const todo = lines.filter((l) => l.state === "short" || l.state === "unknown")
+  if (!todo.length) return lines
+  const scByName = new Map<string, any>()
+  for (const e of circuitJson) if (e.type === "source_component" && e.name) scByName.set(e.name, e)
+  const parts = await lookupParts(todo.map((l) => l.lcsc))
+  for (const line of todo) {
+    const sc = scByName.get(line.refs[0])
+    const kind = String(sc?.ftype ?? "").replace(/^simple_/, "")
+    const endpoint = ENDPOINT[kind]
+    const part = parts.get(line.lcsc)
+    if (!endpoint || !part?.package) {
+      line.note = line.state === "unknown"
+        ? "The catalogue has no stock figure for this part; check it on JLCPCB's parts page."
+        : `No automatic match for ${kind || "this part type"}; search the JLC tab for a part with the same footprint and pinout.`
+      continue
+    }
+    try {
+      const id = Number(line.lcsc.slice(1))
+      const find = new URLSearchParams({ package: part.package, limit: "100" })
+      if (kind === "resistor" && typeof sc?.resistance === "number") find.set("resistance", String(sc.resistance))
+      if (kind === "capacitor" && typeof sc?.capacitance === "number") find.set("capacitance", String(sc.capacitance))
+      const all: any[] = (await cached(`${BASE}/${endpoint}/list.json?${find}`))[endpoint] ?? []
+      const orig = all.find((x) => x.lcsc === id)
+      if (line.state === "unknown") {
+        if (typeof orig?.stock !== "number") { line.note = "The catalogue has no stock figure for this part; check it on JLCPCB's parts page."; continue }
+        line.stock = orig.stock
+        line.state = orig.stock < line.needed ? "short" : orig.stock < line.needed * 2 ? "tight" : "ok"
+        if (line.state !== "short") continue
+      }
+      if (!orig) { line.note = "The part's specs could not be read from jlcsearch, so no safe match is offered."; continue }
+      const cands = all
+        .filter((c) => c.lcsc !== id && c.in_stock === true && typeof c.stock === "number" && c.stock >= line.needed && compatible(kind, orig, c))
+        .sort((a, b) => Number(!!b.is_basic) - Number(!!a.is_basic) || Number(!!b.is_preferred) - Number(!!a.is_preferred) || (a.price1 ?? 9) - (b.price1 ?? 9))
+        .slice(0, 3)
+      line.alternates = cands.map((c) => ({ lcsc: `C${c.lcsc}`, mfr: c.mfr ?? "", description: c.description ?? "", stock: c.stock ?? null, unitPrice: c.price1 ?? 0, basic: !!c.is_basic, preferred: !!c.is_preferred }))
+      if (!cands.length) line.note = `No in-stock part with the same package and specs has ${line.needed} available.`
+    } catch (e: any) {
+      line.note = `Alternate lookup failed: ${e.message}`
+    }
+  }
+  return lines
+}
+
+// ---------------------------------------------------------------- quote
+
+export type Quote = {
+  /** always "local-estimate": this is the list-price model above, not a vendor quote */
+  source: "local-estimate"
+  label: string
+  currency: "USD"
+  estimatedAt: string
+  qty: number
+  parts: number
+  extendedFees: number
+  fab: number
+  assembly: number
+  subtotal: number
+  /** null amount = not entered yet */
+  shipping: { method: string; amount: number | null }
+  tax: { ratePct: number | null; amount: number | null }
+  /** subtotal + shipping + tax, counting unknown amounts as 0 */
+  total: number
+  /** false while shipping or tax is still unknown */
+  complete: boolean
+  unpricedParts: number
+  note: string
+}
+
+type CostLike = { qty: number; partsCostPerBoard: number; extendedFeesPerBoard: number; missingCount: number; fab: { fabTotal: number; assemblyTotal: number } }
+export type QuoteExtras = { assembly?: boolean; shipping?: { method?: string; amount?: number | null }; tax?: { ratePct?: number | null; amount?: number | null } }
+
+/** Local estimate plus user-entered shipping and tax. Tax is `ratePct` of subtotal + shipping unless `amount` is given. */
+export function makeQuote(cost: CostLike, extra: QuoteExtras = {}): Quote {
+  const assemble = extra.assembly !== false
+  const parts = assemble ? round(cost.partsCostPerBoard * cost.qty) : 0
+  const extendedFees = assemble ? round(cost.extendedFeesPerBoard * cost.qty) : 0
+  const assembly = assemble ? cost.fab.assemblyTotal : 0
+  const subtotal = round(parts + extendedFees + cost.fab.fabTotal + assembly)
+  const money = (v: unknown) => (typeof v === "number" && Number.isFinite(v) && v >= 0 ? round(v) : null)
+  const shipAmount = money(extra.shipping?.amount)
+  const ratePct = money(extra.tax?.ratePct)
+  const taxAmount = money(extra.tax?.amount) ?? (ratePct !== null && shipAmount !== null ? round(((subtotal + shipAmount) * ratePct) / 100) : null)
+  return {
+    source: "local-estimate",
+    label: "Local estimate, not a vendor quote",
+    currency: "USD",
+    estimatedAt: new Date().toISOString(),
+    qty: cost.qty,
+    parts, extendedFees, fab: cost.fab.fabTotal, assembly, subtotal,
+    shipping: { method: String(extra.shipping?.method ?? "").slice(0, 80), amount: shipAmount },
+    tax: { ratePct, amount: taxAmount },
+    total: round(subtotal + (shipAmount ?? 0) + (taxAmount ?? 0)),
+    complete: shipAmount !== null && taxAmount !== null,
+    unpricedParts: assemble ? cost.missingCount : 0,
+    note: "Parts are jlcsearch prices; fab and assembly are a rough JLCPCB list-price model. Shipping and tax are whatever you entered; the vendor's checkout is the real figure.",
+  }
 }

@@ -14,9 +14,33 @@ export type NewDesignOptions = {
 }
 export type Design = { name: string; meta: Meta; files: Record<string, string> }
 export type Issue = { type: string; message: string; stack?: string }
-export type BuildMode = "quick" | "full"
+export type BuildMode = "quick" | "full" | "schematic" | "schematic-preview"
+export type AiProvider = { id: string; label: string; configured: boolean; model: string; source?: "entered" | "env" | null }
+/** One tool call the assistant made (the same tools the MCP server exposes, see hardware/shared/tools.ts). */
+export type AiStep = { tool: string; args: string; ok: boolean; summary: string; ms: number }
+/** The open working-draft run: the snapshot taken before the first edit and the edits since. */
+export type AgentRun = { id: string; label: string; startedAt: string; snapshotId: string; edits: { at: string; tool: string; summary: string }[] }
+export type AiState = { trail: AiStep[]; searches: { query: string; parts?: PartHit[]; error?: string }[]; proposalId?: string; run: AgentRun | null; edited: boolean }
+export type AiReply = AiState & { message: string; stopped?: boolean }
+export const aiApi = {
+  /** A failed request still reports what the assistant did before failing, as `state` on the thrown error. */
+  ask: async (name: string, provider: string, message: string, selected?: string, history?: { role: "user" | "assistant"; content: string }[]): Promise<AiReply> => {
+    const res = await fetch(`/api/designs/${encodeURIComponent(name)}/ai`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ provider, message, selected, history }) })
+    const data = await res.json().catch(() => null)
+    if (!res.ok) throw Object.assign(new Error(data?.error || `${res.status} ${res.statusText}`), { state: Array.isArray(data?.trail) ? (data as AiState) : undefined })
+    return data
+  },
+  tools: () => req<{ name: string; kind: "read" | "edit" | "run"; description: string }[]>("/api/ai/tools"),
+  run: (name: string) => req<{ run: AgentRun | null }>(`/api/designs/${encodeURIComponent(name)}/run`).then((r) => r.run),
+  acceptRun: (name: string) => post(`/api/designs/${encodeURIComponent(name)}/run/accept`) as Promise<{ ok: true; kept: number }>,
+  rollbackRun: (name: string) => post(`/api/designs/${encodeURIComponent(name)}/run/rollback`) as Promise<{ ok: true; undone: number; files: Record<string, string> }>,
+  models: (provider: string, apiKey?: string) => post(`/api/ai/providers/${encodeURIComponent(provider)}/models`, { apiKey }) as Promise<{ models: { id: string; label: string }[] }>,
+  providers: () => req<AiProvider[]>("/api/ai/providers"),
+  configure: (provider: string, model: string, apiKey?: string) => req(`/api/ai/providers/${encodeURIComponent(provider)}`, { method: "PUT", body: JSON.stringify({ model, apiKey }) }),
+  disconnect: (provider: string) => req(`/api/ai/providers/${encodeURIComponent(provider)}`, { method: "DELETE" }),
+}
 export type BuildResult = { ok: boolean; circuitJson: any[]; errors: Issue[]; warnings: Issue[]; durationMs: number; mode?: BuildMode; cached?: boolean; cancelled?: boolean; checks?: ChecksResult | null }
-export type BuildStatus = { state: "idle" | "running"; id?: number; mode?: BuildMode; phase?: string; progress?: number; elapsedMs?: number }
+export type BuildStatus = { state: "idle" | "running"; id?: number; mode?: BuildMode; phase?: string; progress?: number; elapsedMs?: number; phaseElapsedMs?: number; timeoutMs?: number; detail?: string }
 export type BomRow = {
   refs: string[]; lcsc: string; mfr: string; package: string; description: string
   qtyPerBoard: number; unitPrice: number; lineCostPerBoard: number; stock: number
@@ -178,4 +202,49 @@ export const iterApi = {
   restore: (n: string, id: string) => post(`/api/designs/${enc(n)}/snapshots/${enc(id)}/restore`) as Promise<{ ok: boolean; files: Record<string, string>; backup: SnapshotInfo }>,
   variant: (n: string, name?: string) => post(`/api/designs/${enc(n)}/variant`, { name }) as Promise<{ name: string; revision: string }>,
   diff: (n: string, a: string, b: string, files?: Record<string, string>) => post(`/api/designs/${enc(n)}/diff`, { a, b, files }) as Promise<DiffResult>,
+}
+
+// ---- orders: package, pre-flight gate, estimate and a record of what was ordered (api/order.ts) ----
+export type OrderStatus = "draft" | "quoted" | "submitted" | "in_fab" | "shipped" | "delivered" | "cancelled"
+export type OrderOptions = { assembly: "none" | "top" | "both"; thicknessMm: number; copperOz: number; finish: string; colour: string; handFit: string[]; rotationOverrides: Record<string, number> }
+export type OrderGate = { id: string; level: "pass" | "warn" | "block"; text: string; refs?: string[] }
+export type StockLine = {
+  lcsc: string; refs: string[]; needed: number; stock: number | null; state: "ok" | "tight" | "short" | "unknown"; note?: string
+  alternates: { lcsc: string; mfr: string; description: string; stock: number | null; unitPrice: number; basic: boolean; preferred: boolean }[]
+}
+export type OrderQuote = {
+  source: "local-estimate"; label: string; currency: string; qty: number; parts: number; extendedFees: number; fab: number; assembly: number; subtotal: number
+  shipping: { method: string; amount: number | null }; tax: { ratePct: number | null; amount: number | null }; total: number; complete: boolean; unpricedParts: number; note: string
+}
+export type OrderSummary = { id: string; design: string; revision: string; createdAt: string; updatedAt: string; status: OrderStatus; qty: number; total: number; estimate: boolean; preflightOk: boolean; orderNumber: string; tracking: string }
+export type Order = {
+  id: string; design: string; revision: string; createdAt: string; updatedAt: string; status: OrderStatus; qty: number; options: OrderOptions
+  board: { layers: number; widthMm: number; heightMm: number }
+  git: { commit: string | null; dirty: boolean | null }
+  package: { file: string; bytes: number; sha256: string; files: { name: string; bytes: number; sha256: string }[]; builtAt: string; cpl: { total: number; verified: number; override: number; unverified: string[] } }
+  preflight: { ok: boolean; checkedAt: string; gates: OrderGate[]; stock: StockLine[] }
+  quote: OrderQuote
+  vendor: { name: string; orderNumber: string; orderUrl: string; quotedTotal: number | null; currency: string }
+  tracking: { carrier: string; number: string; url: string }
+  note: string
+  history: { at: string; status: OrderStatus; note: string }[]
+  /** the design changed after the package was built */
+  stale: boolean
+  packageOnDisk: boolean
+}
+export type OrderInput = { qty: number; options?: Partial<OrderOptions>; shipping?: { method?: string; amount?: number | null }; tax?: { ratePct?: number | null }; note?: string }
+export type OrderPatch = {
+  status?: OrderStatus; note?: string; force?: boolean; shipping?: { method?: string; amount?: number | null }; tax?: { ratePct?: number | null }
+  vendor?: Partial<Order["vendor"]>; tracking?: Partial<Order["tracking"]>
+}
+export const orderApi = {
+  all: () => req<OrderSummary[]>("/api/orders"),
+  list: (n: string) => req<OrderSummary[]>(`/api/designs/${enc(n)}/orders`),
+  get: (n: string, id: string) => req<Order>(`/api/designs/${enc(n)}/orders/${enc(id)}`),
+  /** runs a full build first, so it can take a minute on a large board */
+  create: (n: string, input: OrderInput) => post(`/api/designs/${enc(n)}/orders`, input) as Promise<Order>,
+  refresh: (n: string, id: string, input?: Partial<OrderInput>) => post(`/api/designs/${enc(n)}/orders/${enc(id)}/refresh`, input) as Promise<Order>,
+  update: (n: string, id: string, patch: OrderPatch) => req<Order>(`/api/designs/${enc(n)}/orders/${enc(id)}`, { method: "PATCH", body: JSON.stringify(patch) }),
+  remove: (n: string, id: string) => req<{ ok: boolean }>(`/api/designs/${enc(n)}/orders/${enc(id)}`, { method: "DELETE" }),
+  packageUrl: (n: string, id: string, file?: string) => `/api/designs/${enc(n)}/orders/${enc(id)}/package${file ? `?file=${enc(file)}` : ""}`,
 }

@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Joat Hardware · redesign mockups</title>
+<style>
+:root{--bg:#0e1013;--panel:#15181d;--line:#2a303a;--text:#e7eaee;--muted:#a0a9b6;--accent:#2dd4bf}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:15px/1.55 system-ui,"Segoe UI",sans-serif}
+main{max-width:1040px;margin:0 auto;padding:48px 20px 64px}
+h1{font-size:28px;margin:0 0 6px;letter-spacing:-.02em}.lead{color:var(--muted);margin:0 0 28px;max-width:70ch}
+.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+.card{display:flex;flex-direction:column;gap:10px;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:20px;color:inherit;text-decoration:none}
+.card:hover,.card:focus-visible{border-color:var(--accent)}
+.tag{font:700 12px ui-monospace,Consolas,monospace;color:var(--accent);letter-spacing:.06em}
+h2{margin:0;font-size:20px}p{margin:0;color:var(--muted)}.go{margin-top:auto;color:var(--text);font-weight:600}
+.deep{margin-top:28px;color:var(--muted);font-size:13px}code{font-family:ui-monospace,Consolas,monospace;color:var(--text)}
+@media(max-width:900px){.grid{grid-template-columns:1fr}}
+</style></head><body><main>
+<h1>Joat Hardware: redesign directions</h1>
+<p class="lead">Three static mockups of the same product: a hardware manager that takes a board from idea to delivered boards. Each contains the designs home, the design workspace (schematic, PCB, 3D, code, checks, BOM, cost, numbered review doubts), the AI builder with its tool-call trail and accept/reject proposals, Settings for AI providers, the six-step order pipeline with an Orders list, and the parts library. Content is illustrative (prices, stock and some LCSC numbers are invented).</p>
+<div class="grid">
+<a class="card" href="a-bench.html"><span class="tag">A · BENCH</span><h2>Dense IDE workbench</h2><p>Keeps the current tool's DNA and pushes it further: explorer, tabbed canvas, a bottom panel that shows the doubts list by default, and the AI builder docked on the right like an IDE assistant. Fastest for people who live in the editor; ordering is a separate full-page wizard with a vertical stepper and a running total.</p><span class="go">Open A &rarr;</span></a>
+<a class="card" href="b-pipeline.html"><span class="tag">B · PIPELINE</span><h2>Stage-centric pipeline</h2><p>Every board is a position on one pipeline: design, pre-flight, BOM, quote, shipping, review, tracking. The home is a board-by-stage matrix, a chevron stage bar stays on top of every board screen, and the workbench shows a "gate" of what blocks the next stage. Makes the manufacturing path and its blockers impossible to miss.</p><span class="go">Open B &rarr;</span></a>
+<a class="card" href="c-overview.html"><span class="tag">C · OVERVIEW</span><h2>Calm dashboard-first</h2><p>Each board opens on an overview with a plain-language readiness checklist, cost, parts, doubts and activity; the workspace is a focused canvas with a doubts/checks/BOM drawer and a collapsible AI dock. Roomier and least intimidating, best for people who design occasionally, at the cost of density for power users.</p><span class="go">Open C &rarr;</span></a>
+</div>
+<p class="deep">Deep links jump to a screen after load, for example <code>a-bench.html#screen:design</code>, <code>b-pipeline.html#screen:pipeline,stage:quote</code>, <code>c-overview.html#screen:order,ostep:review</code>. Resize to ~900 px to see the narrow layouts. See <code>NOTES.md</code> for trade-offs and which components change.</p>
+</main></body></html>

@@ -35,4 +35,35 @@ Nothing is written to the design until the user presses **Accept** in the *Descr
 ## MCP server
 `hardware/mcp/server.ts` is a dependency-free stdio MCP server (hand-written JSON-RPC, so `@modelcontextprotocol/sdk` is not needed). The repo's `.mcp.json` registers it as `hardware-designer`, so Claude Code sessions in the repo see these tools once the designer is running (`npm run dev` in `hardware/`). Set `HW_API_PORT` (or `HW_API_URL`) in `.mcp.json` if the API is not on 3101.
 
-Tools: `list_designs`, `read_design`, `build_design`, `list_components`, `list_nets`, `explain_design`, `get_bom`, `get_snapshot` (returns an image), `list_requests`, `propose_change`, `list_proposals`. There is deliberately no tool that writes files directly; `propose_change` is the only write path.
+The server holds no tools of its own. It lists and runs the shared registry below.
+
+## Agent tool registry (`hardware/shared/tools.ts`)
+One list of tools (name, description, JSON schema, run function) used by both agents:
+
+- the MCP server lists all of them, so an agent in chat can call them;
+- the in-app assistant (`api/ai.ts`) passes the same objects to the provider as native tools, minus `get_snapshot` (image results) and the three decisions that belong to the user (`accept_run`, `rollback_run`, `restore_snapshot`). `GET /api/ai/tools` returns its list.
+
+Every tool calls the HTTP routes in this document through a transport: `fetch` in the MCP server, `app.inject` inside the API. Arguments are checked against the schema first (required, top-level types, enums, unknown names). Results are kept small: no tool returns the full source or the circuit JSON except `read_design`.
+
+| Kind | Tools |
+|---|---|
+| Read | `list_designs`, `read_design`, `list_components`, `list_source_components`, `list_nets`, `gpio_map`, `explain_design`, `build_design`, `run_checks`, `get_bom`, `cost_summary`, `list_swaps`, `get_snapshot`, `list_palette`, `search_parts`, `list_requests`, `list_proposals`, `list_snapshots`, `run_status` |
+| Edit (working draft) | `add_part`, `patch_component`, `connect_pins`, `set_pin_net`, `rename_net`, `assign_gpio`, `apply_swap` |
+| Run and review | `create_snapshot`, `restore_snapshot`, `accept_run`, `rollback_run`, `propose_change` |
+| Orders (local records) | `order_preflight`, `list_orders`, `get_order`, `create_draft_order`, `refresh_order`, `update_order` |
+
+The order tools save and update order records on this machine. None of them contacts a manufacturer, places an order or pays: the user uploads the package and pays on the vendor's site, then `update_order` records the quoted total, order number and tracking they report.
+
+To add a tool, add one entry to `TOOLS`; both agents get it. `shared/tools.test.ts` checks the schemas.
+
+### Working-draft runs
+Edit tools write to the design's files directly, so the next build and check see the change. The first edit opens a **run**, which takes an automatic snapshot of the design first. Every later edit by any agent joins the open run until the user decides it:
+
+- `GET /api/designs/:name/run` → `{run: {id, label, startedAt, snapshotId, edits:[{at, tool, summary}]} | null}`
+- `POST .../run/begin` `{label?}` → the open run, or a new one (snapshot taken)
+- `POST .../run/log` `{tool, summary}` records one edit
+- `POST .../run/accept` keeps the edits and closes the run
+- `POST .../run/rollback` restores the run's snapshot (the current files are snapshotted first, so a rollback can be undone) and closes the run
+- `POST .../pin-net` `{ref, pin, net|null}` sets or removes one pin's net (used by `set_pin_net`)
+
+The open run is stored in `hardware/.cache/runs/<name>.json` (gitignored). Edits made by hand in the app are not part of a run. `propose_change` is separate: it writes nothing until **Accept**, and is for changes the edit tools cannot express (and the only way to change a shared `lib/` block).

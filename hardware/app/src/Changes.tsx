@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useState } from "react"
 import { api, type DesignRequest, type Proposal } from "./api"
 import { useToast } from "./toast"
+import AiAssistant from "./AiAssistant"
 
 /** "Describe a change": the user files a request; Claude answers through the API with a proposal the user accepts or rejects. */
-export default function Changes({ name, dirty, onAccepted }: { name: string; dirty: boolean; onAccepted: (files: Record<string, string>) => void }) {
+export default function Changes({ name, dirty, selected, onAccepted }: { name: string; dirty: boolean; selected: string | null; onAccepted: (files: Record<string, string>) => void }) {
   const toast = useToast()
   const [text, setText] = useState("")
   const [reqs, setReqs] = useState<DesignRequest[]>([])
@@ -38,10 +39,12 @@ export default function Changes({ name, dirty, onAccepted }: { name: string; dir
 
   return (
     <div className="changes">
-      <div>
+      <AiAssistant key={name} name={name} dirty={dirty} selected={selected} onProposal={load} onFiles={onAccepted} />
+      <details>
+        <summary>Requests for an external assistant (MCP)</summary>
         <textarea value={text} onChange={(e) => setText(e.target.value)} placeholder="Describe a change, e.g. add a TVS diode on the 5 V input" onKeyDown={(e) => { if ((e.ctrlKey || e.metaKey) && e.key === "Enter") send() }} />
         <div className="row end"><span className="muted small">Saved as a pending request; Claude replies with a proposal you review below.</span><div className="grow" /><button className="btn primary" onClick={send} disabled={!text.trim()}>Send request</button></div>
-      </div>
+      </details>
       {reqs.map((r) => (
         <div className="card row between" key={r.id}>
           <span><span className="chip">pending</span>{r.text}</span>

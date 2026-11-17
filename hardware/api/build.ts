@@ -1,4 +1,3 @@
-import { CircuitRunner } from "@tscircuit/eval/eval"
 import { createHash } from "node:crypto"
 import fs from "node:fs"
 import { fork, type ChildProcess } from "node:child_process"
@@ -68,11 +67,12 @@ function buildFsMap(name: string, overrides?: Record<string, string>) {
 
 const hashOf = (fsMap: Record<string, string>) => {
   const h = createHash("sha256")
+  h.update("build-v3:separate-pcb-and-schematic\0")
   for (const k of Object.keys(fsMap).sort()) h.update(k).update("\0").update(fsMap[k]).update("\0")
   return h.digest("hex")
 }
 
-export type BuildMode = "quick" | "full"
+export type BuildMode = "quick" | "full" | "schematic" | "schematic-preview"
 export type BuildStatus = {
   state: "idle" | "running"
   id?: number
@@ -81,6 +81,9 @@ export type BuildStatus = {
   progress?: number
   startedAt?: number
   elapsedMs?: number
+  phaseElapsedMs?: number
+  timeoutMs?: number
+  detail?: string
 }
 export type BuildOutcome = BuildResult & { mode: BuildMode; cached?: boolean; cancelled?: boolean }
 
@@ -89,9 +92,22 @@ const WORKER = path.join(path.dirname(fileURLToPath(import.meta.url)), "build-wo
 
 const mem = new Map<string, { hash: string; mode: BuildMode; result: BuildResult }>() // last good per design
 const queues = new Map<string, Promise<unknown>>()
-type Job = { id: number; mode: BuildMode; phase: string; progress?: number; startedAt: number; child?: ChildProcess; cancelled: boolean; supersedable: boolean; editor?: boolean }
+type Job = { id: number; mode: BuildMode; phase: string; phaseStartedAt?: number; detail?: string; timeoutMs?: number; progress?: number; startedAt: number; child?: ChildProcess; cancelled: boolean; supersedable: boolean; editor?: boolean }
 const running = new Map<string, Job>()
 const children = new Set<ChildProcess>()
+const warm = new Map<string, { child: ChildProcess; timer: ReturnType<typeof setTimeout> }>()
+function keepWarm(name: string, child: ChildProcess) {
+  // Bound retained memory; only idle workers live in this map.
+  while (warm.size >= 2) {
+    const [key, entry] = warm.entries().next().value!
+    clearTimeout(entry.timer); warm.delete(key); entry.child.kill()
+  }
+  const timer = setTimeout(() => { if (warm.get(name)?.child === child) warm.delete(name); child.kill() }, 60_000)
+  timer.unref()
+  warm.set(name, { child, timer })
+  child.unref()
+  child.channel?.unref()
+}
 const killChildren = () => { for (const c of children) c.kill() }
 process.on("exit", killChildren)
 for (const sig of ["SIGINT", "SIGTERM", "SIGBREAK"] as const) process.on(sig, () => { killChildren(); process.exit(0) })
@@ -123,37 +139,62 @@ function writeDiskBuild(name: string, entry: { hash: string; mode: BuildMode; re
 export function buildStatus(name: string): BuildStatus {
   const j = running.get(name)
   if (!j) return { state: "idle" }
-  return { state: "running", id: j.id, mode: j.mode, phase: j.phase, progress: j.progress, startedAt: j.startedAt, elapsedMs: Date.now() - j.startedAt }
+  return { state: "running", id: j.id, mode: j.mode, phase: j.phase, progress: j.progress, startedAt: j.startedAt, elapsedMs: Date.now() - j.startedAt, phaseElapsedMs: Date.now() - (j.phaseStartedAt ?? j.startedAt), timeoutMs: j.timeoutMs, detail: j.detail }
 }
 
-/** Kill the running build for a design. Returns whether one was running. */
+/** Cancel running and queued builds for a design. */
 export function cancelBuild(name: string): boolean {
-  const j = running.get(name)
-  if (!j) return false
-  j.cancelled = true
-  j.child?.kill()
+  const jobs = pending.get(name)
+  if (!jobs?.size) return false
+  for (const j of jobs) { j.cancelled = true; j.child?.kill() }
   return true
 }
 
 function runInWorker(name: string, fsMap: Record<string, string>, job: Job, quick: boolean): Promise<BuildResult | null> {
   return new Promise((resolve) => {
-    const child = fork(WORKER, [], { execArgv: ["--import", "tsx"], stdio: ["ignore", "ignore", "inherit", "ipc"] })
+    const idle = warm.get(name)
+    if (idle) { clearTimeout(idle.timer); warm.delete(name) }
+    const reused = idle?.child.connected && !idle.child.killed
+    const child = reused ? idle!.child : fork(WORKER, [], { execArgv: ["--import", "tsx"], stdio: ["ignore", "ignore", "inherit", "ipc"] })
+    child.ref(); child.channel?.ref()
     job.child = child
     children.add(child)
-    child.on("exit", () => children.delete(child))
-    let done = false
-    const finish = (r: BuildResult | null) => { if (!done) { done = true; resolve(r) } }
-    child.on("message", (m: any) => {
-      if (m.type === "phase") { job.phase = m.phase; job.progress = undefined }
-      else if (m.type === "progress") job.progress = m.progress
-      else if (m.type === "done") finish(m.result)
+    if (!reused) child.on("exit", () => {
+      children.delete(child)
+      const entry = warm.get(name)
+      if (entry?.child === child) { clearTimeout(entry.timer); warm.delete(name) }
     })
-    child.on("exit", (code) => {
+    let done = false
+    const configured = Number(process.env[quick ? "HW_QUICK_TIMEOUT_MS" : "HW_ROUTE_TIMEOUT_MS"])
+    job.timeoutMs = Number.isFinite(configured) && configured > 0 ? configured : quick ? 60_000 : 180_000
+    const timeout = setTimeout(() => {
+      finish({ ok: false, circuitJson: [], warnings: [], durationMs: Date.now() - job.startedAt, errors: [{ type: "build_timeout", message: `Build stopped after ${Math.round(job.timeoutMs! / 1000)}s during ${job.phase}${job.detail ? ` (${job.detail})` : ""}. Last preview is preserved. Check placement, connections and footprints before retrying. The time limit can be changed with ${quick ? "HW_QUICK_TIMEOUT_MS" : "HW_ROUTE_TIMEOUT_MS"}.` }] })
+      child.kill()
+    }, job.timeoutMs)
+    const finish = (r: BuildResult | null, retain = false) => {
+      if (done) return
+      done = true; clearTimeout(timeout)
+      child.off("message", onMessage); child.off("exit", onExit); child.off("error", onError)
+      if (retain && !job.cancelled && child.connected && !child.killed) keepWarm(name, child)
+      resolve(r)
+    }
+    const onMessage = (m: any) => {
+      if (m.type === "phase") {
+        if (job.phase !== m.phase) { job.phaseStartedAt = Date.now(); job.progress = undefined }
+        job.phase = m.phase
+        job.detail = m.detail
+      }
+      else if (m.type === "progress" && Number.isFinite(m.progress)) job.progress = Math.max(0, Math.min(1, m.progress))
+      else if (m.type === "done") finish(m.result, true)
+    }
+    const onExit = (code: number | null) => {
       if (job.cancelled) return finish(null)
       finish({ ok: false, circuitJson: [], warnings: [], durationMs: Date.now() - job.startedAt, errors: [{ type: "execution_error", message: `build process exited (code ${code})` }] })
-    })
+    }
+    const onError = (e: Error) => { finish({ ok: false, circuitJson: [], warnings: [], durationMs: Date.now() - job.startedAt, errors: [{ type: "execution_error", message: e.message }] }); child.kill() }
+    child.on("message", onMessage); child.on("exit", onExit); child.on("error", onError)
     if (job.cancelled) child.kill()
-    else child.send({ name, fsMap, quick })
+    else child.send({ name, fsMap, mode: job.mode })
   })
 }
 
@@ -167,7 +208,7 @@ function runInWorker(name: string, fsMap: Record<string, string>, job: Job, quic
 const pending = new Map<string, Set<Job>>()
 export function buildDesign(name: string, overrides?: Record<string, string>, mode: BuildMode = "full", opts: { background?: boolean } = {}): Promise<BuildOutcome> {
   const editor = !!overrides && !opts.background
-  const job: Job = { id: ++jobSeq, mode, phase: "queued", startedAt: Date.now(), cancelled: false, supersedable: editor && mode === "quick" }
+  const job: Job = { id: ++jobSeq, mode, phase: "queued", startedAt: Date.now(), cancelled: false, supersedable: editor && mode !== "full" }
   const set = pending.get(name) ?? new Set<Job>()
   pending.set(name, set)
   if (editor) {
@@ -189,7 +230,7 @@ export function buildDesign(name: string, overrides?: Record<string, string>, mo
       const fsMap = buildFsMap(name, overrides)
       const hash = hashOf(fsMap)
       const hit = mem.get(name) ?? readDiskBuild(name)
-      if (hit && hit.hash === hash && (hit.mode === "full" || mode === "quick")) return { ...hit.result, mode: hit.mode, cached: true }
+      if (!mode.startsWith("schematic") && hit && hit.hash === hash && (hit.mode === mode || (hit.mode === "full" && mode === "quick"))) return { ...hit.result, mode: hit.mode, cached: true }
       job.startedAt = Date.now()
       job.phase = "starting"
       running.set(name, job)
@@ -202,7 +243,7 @@ export function buildDesign(name: string, overrides?: Record<string, string>, mo
         result.errors = result.errors.filter((e) => !unrouted(e))
         result.ok = result.errors.length === 0
       }
-      if (result.circuitJson.length && !opts.background) {
+      if (result.circuitJson.length && !opts.background && !mode.startsWith("schematic")) {
         const entry = { hash, mode, result }
         mem.set(name, entry)
         writeDiskBuild(name, entry)

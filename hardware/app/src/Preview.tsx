@@ -17,6 +17,7 @@ class ViewerBoundary extends Component<{ resetKey: unknown; children: ReactNode 
 import { AnimatePresence, motion } from "motion/react"
 import { SchematicViewer, PcbViewer, CadViewer } from "@tscircuit/runframe/preview"
 import PcbEdit, { type PcbPick } from "./PcbEdit"
+import { buildModel } from "./pcbModel"
 import type { Model } from "./pcbModel"
 
 // The WebGPU PCB renderer throws on element types it cannot draw; they still show in Problems.
@@ -61,12 +62,15 @@ export type PreviewConnect = { on: boolean; onPort: (schematicPortId: string) =>
 /** A spot to show: from clicking a Problems entry. */
 export type PreviewFocus = { where: Where; nonce: number }
 
-export default function Preview({ circuitJson, building, canvas, overlay, connect, focus, highlight }: { circuitJson: any[] | null; building: boolean; canvas?: Canvas; overlay?: ReactNode; connect?: PreviewConnect; focus?: PreviewFocus | null; highlight?: { x: number; y: number; w: number; h: number }[] | null }) {
+export default function Preview({ circuitJson, schematicJson, schematicDraft, schematicStale, onViewChange, onBuildSchematic, building, canvas, overlay, connect, focus, highlight }: { circuitJson: any[] | null; schematicJson?: any[] | null; schematicDraft?: boolean; schematicStale?: boolean; onViewChange?: (view: Tab) => void; onBuildSchematic?: () => void; building: boolean; canvas?: Canvas; overlay?: ReactNode; connect?: PreviewConnect; focus?: PreviewFocus | null; highlight?: { x: number; y: number; w: number; h: number }[] | null }) {
   const [tab, setTab] = useState<Tab>(() => {
     try { return (localStorage.getItem("previewTab") as Tab) || "pcb" } catch { return "pcb" }
   })
   const { ref, w, h } = useSize()
   const pcbJson = useMemo(() => (circuitJson ? pcbSafe(circuitJson) : null), [circuitJson])
+  const schJson = schematicJson ?? (circuitJson?.some((e) => e.type === "schematic_component") ? circuitJson : null)
+  const schModel = useMemo(() => schJson ? buildModel(schJson) : null, [schJson])
+  useEffect(() => { onViewChange?.(tab) }, [tab, onViewChange])
   // a Problems click switches to the view the issue lives in; the interactive PCB view pans/zooms to it
   const handled = useRef(0)
   useEffect(() => {
@@ -96,11 +100,14 @@ export default function Preview({ circuitJson, building, canvas, overlay, connec
           </button>
         ))}
         <div className="grow" />
-        {connect?.on && <span className="small pad-r connect-banner">Connect mode: click pin A, then pin B (PCB pads, or schematic pins after a Route build)</span>}
+        {tab === "schematic" && onBuildSchematic && <button className="btn small" disabled={building} onClick={onBuildSchematic}>Layout wires</button>}
+        {tab === "schematic" && schematicDraft && <span className="muted small pad-r">Live schematic · direct wires</span>}
+        {connect?.on && <span className="small pad-r connect-banner">Connect mode: click pin A, then pin B (PCB pads, or built schematic pins)</span>}
         {building && <span className="muted small pad-r">updating…</span>}
+        {tab === "schematic" && schematicStale && schJson && <span className="muted small pad-r">Previous schematic · updates in background</span>}
       </div>
       <div className="viewport" ref={ref}>
-        {!circuitJson ? (
+        {!circuitJson && !(tab === "schematic" && schJson) ? (
           <div className="empty">{building ? "Building first preview…" : "No successful build yet"}</div>
         ) : (
           <AnimatePresence mode="popLayout" initial={false}>
@@ -113,19 +120,23 @@ export default function Preview({ circuitJson, building, canvas, overlay, connec
               exit={{ opacity: 0, transition: { duration: 0.08 } }}
               transition={{ duration: 0.15 }}
             >
-              <ViewerBoundary resetKey={circuitJson}>
-                {w > 0 && h > 0 && tab === "schematic" && (
+              <ViewerBoundary resetKey={tab === "schematic" ? schJson : circuitJson}>
+                {tab === "schematic" && !schJson && <div className="empty">Build the schematic to generate its wiring. PCB routing runs separately.</div>}
+                {w > 0 && h > 0 && tab === "schematic" && schJson && (
                   <div style={{ width: w, height: h }} onClickCapture={(e) => {
                     if (connect?.on) return
                     const t = (e.target as Element).closest?.("[data-schematic-trace-id]")
-                    const tr = t && circuitJson.find((x) => x.type === "schematic_trace" && x.schematic_trace_id === t.getAttribute("data-schematic-trace-id"))
+                    const tr = t && schJson.find((x) => x.type === "schematic_trace" && x.schematic_trace_id === t.getAttribute("data-schematic-trace-id"))
                     if (tr?.subcircuit_connectivity_map_key) canvas?.onPick({ key: tr.subcircuit_connectivity_map_key })
                   }}>
-                    <SchematicViewer circuitJson={circuitJson as any} containerStyle={{ width: w, height: h }}
+                    <SchematicViewer circuitJson={schJson as any} containerStyle={{ width: w, height: h }}
                       {...(connect?.on ? { showSchematicPorts: true, onSchematicPortClicked: ({ schematicPortId }: { schematicPortId: string }) => connect.onPort(schematicPortId) } : {})}
-                      css={canvas?.netKey ? `${canvas.model.schTraceIds(canvas.netKey).map((id) => `[data-schematic-trace-id="${id}"]`).join(",")}{stroke:#ffb400 !important;stroke-width:3px !important}` : undefined}
-                      highlightedSchematicComponentIds={connect?.highlightIds?.length ? connect.highlightIds : canvas?.selected ? [...canvas.model.compBySchId].filter(([, c]) => c.name === canvas.selected).map(([id]) => id) : undefined}
-                      onSchematicComponentClicked={canvas && !connect?.on ? ({ schematicComponentId }) => canvas.onPick({ comp: canvas.model.compBySchId.get(schematicComponentId)?.name ?? null }) : undefined} />
+                      css={canvas?.netKey && schModel ? `${schModel.schTraceIds(canvas.netKey).map((id) => `[data-schematic-trace-id="${id}"]`).join(",")}{stroke:#ffb400 !important;stroke-width:3px !important}` : undefined}
+                      highlightedSchematicComponentIds={connect?.highlightIds?.length ? connect.highlightIds : canvas?.selected ? schJson.filter((e) => e.type === "schematic_component" && schJson.some((s) => s.type === "source_component" && s.source_component_id === e.source_component_id && s.name === canvas.selected)).map((e) => e.schematic_component_id) : undefined}
+                      onSchematicComponentClicked={canvas && !connect?.on ? ({ schematicComponentId }) => {
+                        const comp = schJson.find((e) => e.schematic_component_id === schematicComponentId && e.type === "schematic_component")
+                        canvas.onPick({ comp: schJson.find((e) => e.type === "source_component" && e.source_component_id === comp?.source_component_id)?.name ?? null })
+                      } : undefined} />
                   </div>
                 )}
                 {w > 0 && h > 0 && tab === "pcb" && (canvas ? <PcbEdit {...canvas} stale={building} focus={focus?.where.view === "pcb" ? { ...focus.where, nonce: focus.nonce } : null} marks={highlight ?? null} /> : <PcbViewer circuitJson={pcbJson as any} height={h} />)}

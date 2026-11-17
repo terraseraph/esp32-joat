@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react"
 import { api, type Cost, type Preflight } from "./api"
+import OrdersPanel from "./OrdersPanel"
 import "./cost.css"
+import "./orders.css"
 
 const usd = (n: number) => `$${n.toFixed(2)}`
 
@@ -9,6 +11,7 @@ export default function ExportPanel({ name, qty, dirty, onClose }: { name: strin
   const [pf, setPf] = useState<Preflight | null>(null)
   const [cost, setCost] = useState<Cost | null>(null)
   const [err, setErr] = useState<string | null>(null)
+  const [tab, setTab] = useState<"export" | "orders">("export")
 
   useEffect(() => {
     api.preflight(name).then(setPf).catch((e) => setErr(e.message))
@@ -28,9 +31,30 @@ export default function ExportPanel({ name, qty, dirty, onClose }: { name: strin
     a.click()
   }
 
+  const tabs = (
+    <div className="export-tabs" role="tablist">
+      <button role="tab" aria-selected={tab === "export"} onClick={() => setTab("export")}>Export</button>
+      <button role="tab" aria-selected={tab === "orders"} onClick={() => setTab("orders")}>Orders</button>
+    </div>
+  )
+  if (tab === "orders")
+    return (
+      <div className="modal-back" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
+        <div className="export-modal with-orders" role="dialog" aria-label="Orders">
+          {tabs}
+          <OrdersPanel name={name} qty={qty} dirty={dirty} />
+          <div className="modal-actions">
+            <div style={{ flex: 1 }} />
+            <button className="btn" onClick={onClose}>Close</button>
+          </div>
+        </div>
+      </div>
+    )
+
   return (
     <div className="modal-back" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
       <div className="export-modal" role="dialog" aria-label="Export for JLCPCB">
+        {tabs}
         <h3>Export for JLCPCB</h3>
         {dirty && <div className="small" style={{ color: "var(--warn)" }}>You have unsaved edits; the export uses the saved files.</div>}
         {err && <div className="empty err small">{err}</div>}
@@ -108,7 +132,7 @@ function CplPreview({ pf }: { pf: Preflight }) {
       </div>
       <div className="cpl-legend">
         <span><span style={{ color: "var(--bad)" }}>●</span> pin 1 pad</span>
-        <span>line = CPL rotation (0° points right)</span>
+        <span>line = rotation on the board (0° points right); cpl.csv adds JLCPCB's footprint offset</span>
         <span style={{ color: "var(--accent)" }}>■ top</span>
         <span style={{ color: "#8b5cf6" }}>■ bottom</span>
         <span className="mono">{hov ? `${hov.ref}  ${hov.x}, ${hov.y} mm  ${hov.rotation}°  ${hov.layer}` : "hover a part for its CPL row"}</span>

@@ -1,106 +1,125 @@
-import { useCallback, useEffect, useState } from "react"
+import { useState } from "react"
 import { motion } from "motion/react"
 import * as AlertDialog from "@radix-ui/react-alert-dialog"
 import { api, iterApi, type DesignSummary, type GitStatus } from "./api"
 import { useToast } from "./toast"
 import NewDesignWizard from "./NewDesignWizard"
+import { ago, link, needs, STAGES, type Board } from "./boards"
+import { StageStrip, StatusChip } from "./ui"
 
-export const ago = (ms?: number) => {
-  if (!ms) return ""
-  const s = Math.max(0, (Date.now() - ms) / 1000)
-  if (s < 60) return "just now"
-  if (s < 3600) return `${Math.floor(s / 60)} min ago`
-  if (s < 86400) return `${Math.floor(s / 3600)} h ago`
-  if (s < 86400 * 30) return `${Math.floor(s / 86400)} d ago`
-  return new Date(ms).toLocaleDateString()
-}
+export { ago }
 
-function Thumb({ d }: { d: DesignSummary }) {
+export function Thumb({ d, large }: { d: DesignSummary; large?: boolean }) {
   const [bad, setBad] = useState(!d.hasThumb)
   if (bad)
     return (
-      <div className="thumb ph" aria-hidden>
+      <div className={`thumb ph ${large ? "lg" : ""}`} aria-hidden>
         <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><rect x="3" y="5" width="18" height="14" rx="2" /><circle cx="7" cy="9" r="1" /><circle cx="17" cy="15" r="1" /><path d="M7 9h5l2 6h3" /></svg>
       </div>
     )
-  return <div className="thumb"><img src={api.thumbUrl(d.name, d.modified)} alt="" onError={() => setBad(true)} loading="lazy" /></div>
+  return <div className={`thumb ${large ? "lg" : ""}`}><img src={api.thumbUrl(d.name, d.modified)} alt="" onError={() => setBad(true)} loading="lazy" /></div>
 }
 
-export default function DesignList({ git }: { git: GitStatus | null }) {
-  const [list, setList] = useState<DesignSummary[] | null>(null)
-  const [err, setErr] = useState<string | null>(null)
+/** The primary action on a card: the next thing that moves this board forward. */
+function primary(b: Board): { label: string; href: string } {
+  switch (b.status) {
+    case "failing": return { label: `Fix ${b.errors} error${b.errors === 1 ? "" : "s"}`, href: link.design(b.name, "problems") }
+    case "review": return { label: `Review ${b.open} item${b.open === 1 ? "" : "s"}`, href: link.design(b.name, "review") }
+    case "ready": return { label: b.active ? "Continue order" : "Order boards", href: link.order(b.name) }
+    case "ordered": return { label: "Track order", href: link.order(b.name) }
+    case "delivered": return { label: "View order", href: link.order(b.name) }
+    default: return { label: "Open workspace", href: link.design(b.name) }
+  }
+}
+
+export default function DesignList({ boards, err, reload, git }: { boards: Board[] | null; err: string | null; reload: () => void; git: GitStatus | null }) {
   const [wizard, setWizard] = useState(false)
   const [del, setDel] = useState<string | null>(null)
   const toast = useToast()
 
-  const load = useCallback(() => { api.designs().then(setList).catch((e) => setErr(e.message)) }, [])
-  useEffect(load, [load])
-
   const dup = async (n: string) => {
-    try {
-      const r = await api.duplicate(n)
-      toast("ok", `Duplicated as ${r.name}`)
-      load()
-    } catch (e: any) { toast("err", e.message) }
+    try { const r = await api.duplicate(n); toast("ok", `Duplicated as ${r.name}`); reload() } catch (e: any) { toast("err", e.message) }
   }
   const trash = async () => {
     if (!del) return
-    try {
-      const r = await api.trash(del)
-      toast("ok", `Moved to ${r.trashedTo}`)
-      load()
-    } catch (e: any) { toast("err", e.message) }
+    try { const r = await api.trash(del); toast("ok", `Moved to ${r.trashedTo}`); reload() } catch (e: any) { toast("err", e.message) }
     setDel(null)
   }
-
-  const sorted = list ? [...list].sort((a, b) => (b.modified ?? 0) - (a.modified ?? 0)) : null
-
-  const variant = async (e: React.MouseEvent, from: string) => {
-    e.preventDefault()
-    e.stopPropagation()
+  const variant = async (n: string) => {
     try {
-      const v = await iterApi.variant(from)
+      const v = await iterApi.variant(n)
       toast("ok", `Created ${v.name} (rev ${v.revision})`)
-      location.hash = `#/design/${encodeURIComponent(v.name)}`
-    } catch (err: any) { toast("err", err.message) }
+      location.hash = link.design(v.name)
+    } catch (e: any) { toast("err", e.message) }
   }
 
+  const list = boards ?? []
+  const todo = needs(list)
+  const inFab = list.filter((b) => b.status === "ordered").length
+  const summary = boards ? `${list.length} board${list.length === 1 ? "" : "s"} · ${todo.filter((n) => n.tone !== "info").length} need${todo.filter((n) => n.tone !== "info").length === 1 ? "s" : ""} you · ${inFab} on order` : ""
+
   return (
-    <div className="list-page">
-      <div className="list-head">
-        <h1>Designs</h1>
-        <button className="btn primary" onClick={() => setWizard(true)}>+ New design</button>
+    <div className="page-wrap">
+      <div className="page-head">
+        <div>
+          <h1>Projects</h1>
+          <p className="muted">{summary || " "}</p>
+        </div>
+        <button className="btn primary" onClick={() => setWizard(true)}>+ New board</button>
       </div>
-      <NewDesignWizard open={wizard} onOpenChange={setWizard} existing={list?.map((d) => d.name) ?? []} />
+      <NewDesignWizard open={wizard} onOpenChange={setWizard} existing={list.map((b) => b.name)} />
       {err && <div className="empty err">Could not reach the API: {err}</div>}
-      {!list && !err && <div className="empty">Loading…</div>}
-      {list && list.length === 0 && <div className="empty">No designs yet. Create one to get started.</div>}
+      {!boards && !err && <div className="empty">Loading…</div>}
+      {boards && boards.length === 0 && <div className="empty">No boards yet. Create one to get started.</div>}
+
+      {todo.length > 0 && (
+        <section className="needs" aria-label="Needs you">
+          <h2>Needs you <span className="chip">{todo.length}</span></h2>
+          <ul>
+            {todo.map((n) => (
+              <li key={n.id}>
+                <span className={`dot ${n.tone === "bad" ? "bad" : n.tone === "warn" ? "warn" : ""}`} aria-hidden />
+                <span className="need-text"><b className="mono">{n.board}</b> {n.text}</span>
+                <a className="btn small-btn" href={n.href}>{n.action}</a>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
       <div className="cards">
-        {sorted?.map((d, i) => {
+        {list.map((b, i) => {
+          const d = b.d
           const dirty = git?.files.some((f) => f.path.replace(/\\/g, "/").includes(`designs/${d.name}/`))
+          const act = primary(b)
           return (
-            <motion.div
+            <motion.article
               key={d.name}
-              className="card-wrap"
+              className="pcard"
               initial={{ opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.2, delay: Math.min(i, 8) * 0.03, ease: "easeOut" }}
-              whileHover={{ y: -2 }}
             >
-              <a href={`#/design/${encodeURIComponent(d.name)}`} className="card">
+              <a className="pcard-main" href={link.board(d.name)} aria-label={`${d.meta?.name || d.name}: overview`}>
                 <Thumb d={d} />
-                <div className="card-top">
+                <div className="pcard-top">
                   <h3>{d.meta?.name || d.name}</h3>
-                  {d.meta?.revision && <span className="chip">rev {d.meta.revision}</span>}
+                  <StatusChip status={b.status} />
                 </div>
-                <p>{d.meta?.description || <span className="muted">No description</span>}</p>
-                <div className="card-foot mono">
-                  <span>{d.name}{d.modified ? ` · ${ago(d.modified)}` : ""}</span>
-                  {dirty && <span className="dirty-tag">uncommitted</span>}
-                </div>
+                <p className="pcard-desc">{d.meta?.description || <span className="muted">No description</span>}</p>
+                <dl className="facts">
+                  <div><dt>Rev</dt><dd className="mono">{d.meta?.revision ?? "-"}</dd></div>
+                  <div><dt>Checks</dt><dd className="mono">{b.errors === null ? "not built" : `${b.errors} err · ${b.warnings} warn`}</dd></div>
+                  <div><dt>Review</dt><dd className="mono">{b.total === 0 ? "none" : `${b.open} open / ${b.total}`}</dd></div>
+                  <div><dt>Edited</dt><dd className="mono">{ago(d.modified) || "-"}{dirty && <span className="dirty-tag"> · uncommitted</span>}</dd></div>
+                </dl>
+                <StageStrip board={b} />
+                <div className="strip-label small muted">{b.stage >= STAGES.length ? "All stages done" : `Next: ${STAGES[b.stage]}`}</div>
               </a>
-              <div className="card-actions">
-                <button className="icon-btn" title="New variant (copy to the next revision)" aria-label={`New variant of ${d.name}`} onClick={(e) => variant(e, d.name)}>
+              <div className="pcard-foot">
+                <a className={`btn ${b.status === "ready" ? "primary" : ""}`} href={act.href}>{act.label}</a>
+                <span className="grow" />
+                <button className="icon-btn" title="New variant (copy to the next revision)" aria-label={`New variant of ${d.name}`} onClick={() => variant(d.name)}>
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="6" cy="6" r="2.5" /><circle cx="6" cy="18" r="2.5" /><circle cx="18" cy="8" r="2.5" /><path d="M6 8.5v7M18 10.5c0 4-6 3-11.2 5.6" /></svg>
                 </button>
                 <button className="icon-btn" title="Duplicate" aria-label={`Duplicate ${d.name}`} onClick={() => dup(d.name)}>
@@ -110,10 +129,11 @@ export default function DesignList({ git }: { git: GitStatus | null }) {
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14" /></svg>
                 </button>
               </div>
-            </motion.div>
+            </motion.article>
           )
         })}
       </div>
+
       <AlertDialog.Root open={!!del} onOpenChange={(o) => !o && setDel(null)}>
         <AlertDialog.Portal>
           <AlertDialog.Overlay className="modal-overlay" />

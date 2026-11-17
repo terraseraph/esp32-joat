@@ -3,19 +3,22 @@ import JSZip from "jszip"
 import { convertCircuitJsonToGerberFiles } from "circuit-json-to-gerber"
 import fs from "node:fs"
 import path from "node:path"
-import { bomCsv, computeBom, cplCsv } from "./bom.js"
+import { bomCsv, computeBom } from "./bom.js"
 import { buildDesign, buildStatus, cancelBuild, readDiskBuild, NAME_RE, readDesignFiles, readMeta, ROOT, safeDesignPath } from "./build.js"
 import { countNameRefs, EditError, listComponents, patchComponent, type PropValue } from "./source-edit.js"
 import { registerConnectRoutes } from "./connect-routes.js"
 import { registerIterateRoutes } from "./iterate.js"
 import { patchBoardJson, runChecks } from "./checks.js"
-import { applySwap, costSummary, preflight, swapSuggestions } from "./cost.js"
+import { applySwap, costSummary, jlcCplCsv, jlcCplRows, preflight, swapSuggestions } from "./cost.js"
 import { registerInspectRoutes } from "./inspect-routes.js"
 import { registerProposalRoutes } from "./proposals.js"
 import { duplicateDesign, lastModified, saveThumb, slug, thumbPath, trashDesign } from "./designs.js"
 import { renderTemplate, SIZE_PRESETS, TEMPLATES, type NewDesignOptions } from "./templates/index.js"
 import { gitCommit, gitPush, gitStatus } from "./git.js"
 import { registerPalette } from "./palette.js"
+import { registerAiRoutes } from "./ai.js"
+import { registerOrderRoutes } from "./order.js"
+import { registerAgentRoutes } from "./agent-routes.js"
 
 const app = Fastify({ logger: { level: "warn" }, bodyLimit: 20 * 1024 * 1024 })
 
@@ -115,21 +118,21 @@ app.put<{ Params: { name: string }; Body: { files?: Record<string, string> } }>(
   return { ok: true, written: targets.length }
 })
 
-app.post<{ Params: { name: string }; Body: { files?: Record<string, string>; mode?: "quick" | "full" } }>("/api/designs/:name/build", async (req, reply) => {
+app.post<{ Params: { name: string }; Body: { files?: Record<string, string>; mode?: "quick" | "full" | "schematic" | "schematic-preview" } }>("/api/designs/:name/build", async (req, reply) => {
   const { name } = req.params
   const files = req.body?.files
   if (!NAME_RE.test(name)) return reply.code(400).send({ error: "invalid design name" })
   if (!designExists(name) && !files?.["index.tsx"]) return notFound(reply)
   if (files) for (const rel of Object.keys(files)) if (!safeDesignPath(name, rel)) return reply.code(400).send({ error: `invalid file: ${rel}` })
-  const mode = req.body?.mode === "quick" ? "quick" : "full"
+  const mode = req.body?.mode === "quick" ? "quick" : req.body?.mode === "schematic" ? "schematic" : req.body?.mode === "schematic-preview" ? "schematic-preview" : "full"
   const { ok, circuitJson, errors, warnings, durationMs, cached, cancelled } = await buildDesign(name, files, mode)
   // design-rule checks run on every build; board.json (possibly an unsaved override) supplies the rules
   let rulesSrc = readMeta(name)?.rules
   if (files?.["board.json"]) try { rulesSrc = JSON.parse(files["board.json"]).rules } catch {}
-  const checks = circuitJson.length && !cancelled ? await runChecks(circuitJson, rulesSrc, { quick: mode === "quick" }).catch(() => null) : null
+  const checks = circuitJson.length && !cancelled && !mode.startsWith("schematic") ? await runChecks(circuitJson, rulesSrc, { quick: mode === "quick" }).catch(() => null) : null
   // thumbnails only reflect saved designs: skip builds of unsaved edits or non-existent folders
   const onDisk = designExists(name) ? readDesignFiles(name) : null
-  if (circuitJson.length && !cancelled && onDisk && (!files || Object.entries(files).every(([k, v]) => onDisk[k] === v))) void saveThumb(name, circuitJson)
+  if (!mode.startsWith("schematic") && circuitJson.length && !cancelled && onDisk && (!files || Object.entries(files).every(([k, v]) => onDisk[k] === v))) void saveThumb(name, circuitJson)
   return { ok, circuitJson, errors, warnings, durationMs, mode, cached, cancelled, checks }
 })
 
@@ -232,7 +235,7 @@ app.get<{ Params: { name: string } }>("/api/designs/:name/export", async (req, r
     zip.file(GERBER_EXT[base] ? `${base}.${GERBER_EXT[base]}` : file, content)
   }
   zip.file("bom.csv", await bomCsv(build.circuitJson))
-  zip.file("cpl.csv", cplCsv(build.circuitJson))
+  zip.file("cpl.csv", jlcCplCsv(jlcCplRows(build.circuitJson))) // rotations corrected to JLCPCB's footprints, as in order packages
   const buf = await zip.generateAsync({ type: "nodebuffer", compression: "DEFLATE" })
   const rev = String(readMeta(name)?.revision ?? "0").replace(/[^A-Za-z0-9._-]/g, "")
   reply
@@ -301,6 +304,9 @@ app.patch<{ Params: { name: string; component: string }; Body: { props?: Record<
 registerConnectRoutes(app, { designExists, notFound })
 registerInspectRoutes(app, designExists)
 registerProposalRoutes(app, designExists)
+registerAiRoutes(app, designExists)
+registerOrderRoutes(app, designExists)
+registerAgentRoutes(app, designExists)
 
 app.get("/api/git/status", async () => gitStatus())
 

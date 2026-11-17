@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react"
+import PartIcon from "./PartIcon"
 import { api, type PaletteItem, type PartHit, type PropSpec } from "./api"
 import { useToast } from "./toast"
 
@@ -275,10 +276,11 @@ export default function Palette({ name, getSource, knownNames, onInsert, dropId 
           {!palette && !err && <div className="muted small pad-s">Loading…</div>}
           {mode === "parts" ? <PartFirst all={all} open={open} /> : palette && (
             <div className="pal-list">
-              {([["Primitives", filt(palette.primitives)], ["Shared blocks (lib/)", filt(palette.lib)]] as const).map(([title, xs]) =>
+              {([["Single parts", "One component each, added to this board only.", filt(palette.primitives)], ["Circuit blocks", "Ready-made sub-circuits kept in lib/ and shared by every board that uses them.", filt(palette.lib)]] as const).map(([title, sub, xs]) =>
                 xs.length ? (
                   <div key={title} className="pal-section">
                     <div className="pal-title">{title}</div>
+                    <div className="pal-sub">{sub}</div>
                     {xs.map((i) => (
                       <button
                         key={i.id}
@@ -288,8 +290,11 @@ export default function Palette({ name, getSource, knownNames, onInsert, dropId 
                         onClick={() => open(i)}
                         title={i.description}
                       >
-                        <span className="pal-name">{i.label}</span>
-                        <span className="pal-desc">{i.description || i.tag}</span>
+                        <PartIcon id={i.id} />
+                        <span className="pal-text">
+                          <span className="pal-name">{i.label}</span>
+                          <span className="pal-desc">{i.description || i.tag}</span>
+                        </span>
                       </button>
                     ))}
                   </div>

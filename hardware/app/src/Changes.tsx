@@ -2,9 +2,10 @@ import { useCallback, useEffect, useState } from "react"
 import { api, type DesignRequest, type Proposal } from "./api"
 import { useToast } from "./toast"
 import AiAssistant from "./AiAssistant"
+import type { AiSelection } from "./selection"
 
 /** "Describe a change": the user files a request; Claude answers through the API with a proposal the user accepts or rejects. */
-export default function Changes({ name, dirty, selected, onAccepted }: { name: string; dirty: boolean; selected: string | null; onAccepted: (files: Record<string, string>) => void }) {
+export default function Changes({ name, dirty, selected, selection, onSelection, onAccepted }: { name: string; dirty: boolean; selected: string | null; selection?: AiSelection; onSelection?: (n: { parts?: string[]; net?: null; region?: null }) => void; onAccepted: (files: Record<string, string>) => void }) {
   const toast = useToast()
   const [text, setText] = useState("")
   const [reqs, setReqs] = useState<DesignRequest[]>([])
@@ -39,7 +40,7 @@ export default function Changes({ name, dirty, selected, onAccepted }: { name: s
 
   return (
     <div className="changes">
-      <AiAssistant key={name} name={name} dirty={dirty} selected={selected} onProposal={load} onFiles={onAccepted} />
+      <AiAssistant key={name} name={name} dirty={dirty} selected={selected} selection={selection} onSelection={onSelection} onProposal={load} onFiles={onAccepted} />
       <details>
         <summary>Requests for an external assistant (MCP)</summary>
         <textarea value={text} onChange={(e) => setText(e.target.value)} placeholder="Describe a change, e.g. add a TVS diode on the 5 V input" onKeyDown={(e) => { if ((e.ctrlKey || e.metaKey) && e.key === "Enter") send() }} />

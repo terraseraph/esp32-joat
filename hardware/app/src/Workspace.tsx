@@ -3,7 +3,8 @@ import { AnimatePresence, motion } from "motion/react"
 import { api, iterApi, type BuildMode, type BuildResult, type BuildStatus, type CheckIssue, type Design, type Meta, type PropValue, type SrcComponent } from "./api"
 import { buildModel } from "./pcbModel"
 import Properties from "./Properties"
-import type { PcbPick } from "./PcbEdit"
+import type { PcbPick, Region } from "./PcbEdit"
+import type { AiSelection } from "./selection"
 import { useToast } from "./toast"
 import Editor from "./Editor"
 import Preview from "./Preview"
@@ -131,6 +132,11 @@ export default function Workspace({ name, onSaved, initialPanel }: { name: strin
   const setSnap = (s: number) => { setSnapState(s); try { localStorage.setItem("hw.snap", String(s)) } catch {} }
   const [selected, setSelected] = useState<string | null>(null)
   const [netKey, setNetKey] = useState<string | null>(null)
+  // shift-click / box selection: every picked part, and the box that picked them
+  const [multi, setMulti] = useState<string[]>([])
+  const [region, setRegion] = useState<Region | null>(null)
+  const selectedRef = useRef<string | null>(null)
+  selectedRef.current = selected
   const [srcComps, setSrcComps] = useState<SrcComponent[]>([])
   const model = useMemo(() => (circuit ? buildModel(circuit) : null), [circuit])
   const editChain = useRef<Promise<unknown>>(Promise.resolve())
@@ -193,12 +199,38 @@ export default function Workspace({ name, onSaved, initialPanel }: { name: strin
   }, [srcComps, model, applyProps]) // eslint-disable-line react-hooks/exhaustive-deps
   const onPick = useCallback((p: PcbPick) => {
     if (connectRef.current.on && p.port) { connectRef.current.onPort(p.port); return }
-    if (p.clear) { setSelected(null); setNetKey(null); return }
-    if (p.comp !== undefined) setSelected(p.comp)
+    if (p.clear) { setSelected(null); setNetKey(null); setMulti([]); setRegion(null); return }
+    if (p.toggle) {
+      const c = p.toggle
+      setMulti((m) => {
+        const base = m.length ? m : selectedRef.current ? [selectedRef.current] : []
+        const next = base.includes(c) ? base.filter((x) => x !== c) : [...base, c]
+        setSelected(next.includes(c) ? c : next[next.length - 1] ?? null)
+        return next
+      })
+      setRegion(null)
+      return
+    }
+    if (p.region) {
+      const { comps, ...box } = p.region
+      setRegion(box); setMulti(comps); setSelected(comps.length === 1 ? comps[0] : null); setNetKey(null)
+      return
+    }
+    if (p.comp !== undefined) { setSelected(p.comp); setMulti([]); setRegion(null) }
     if (p.key !== undefined) setNetKey(p.key)
     else if (p.comp) setNetKey(null)
   }, [])
-  useEffect(() => { setSelected(null); setNetKey(null) }, [name])
+  useEffect(() => { setSelected(null); setNetKey(null); setMulti([]); setRegion(null) }, [name])
+  const aiSelection = useMemo<AiSelection>(() => ({
+    parts: multi.length ? multi : selected ? [selected] : [],
+    net: model && netKey ? { name: model.netName(netKey) ?? netKey, pins: model.members(netKey) } : null,
+    region,
+  }), [multi, selected, netKey, region, model])
+  const editSelection = useCallback((n: { parts?: string[]; net?: null; region?: null }) => {
+    if (n.parts) { setMulti(n.parts.length > 1 ? n.parts : []); setSelected(n.parts[n.parts.length - 1] ?? null) }
+    if (n.net === null) setNetKey(null)
+    if (n.region === null) setRegion(null)
+  }, [])
 
   const runBuild = useCallback(async (mode: BuildMode = "quick") => {
     const id = ++buildSeq.current
@@ -479,7 +511,7 @@ export default function Workspace({ name, onSaved, initialPanel }: { name: strin
             onDragOver={(e) => { if (e.dataTransfer.types.includes(PALETTE_MIME)) e.preventDefault() }}
             onDrop={(e) => { const id = e.dataTransfer.getData(PALETTE_MIME); if (id) { e.preventDefault(); setDropId({ id, n: Date.now() }) } }}>
             {diff ? <DiffView diff={diff.result} label={diff.label} focus={diffFocus} onFocus={setDiffFocus} onClose={() => { setDiff(null); setDiffFocus(null) }} /> : <Preview circuitJson={circuit} schematicJson={schematic} schematicDraft={schematicDraft} schematicStale={schematicSource !== files} onViewChange={setPreviewView} onBuildSchematic={() => runBuild("schematic")} building={build.status === "building"} focus={focus} highlight={marks} connect={{ on: conn.on, onPort, highlightIds }}
-              canvas={model ? { model, fitKey: name, selected, netKey, editable: isEditable, snap, setSnap, onPick, onMove, onRotate, connectMode: conn.on, onDropItem: (id, x, y) => setDropId({ id, n: Date.now(), x, y }) } : undefined}
+              canvas={model ? { model, fitKey: name, selected, multi, region, netKey, editable: isEditable, snap, setSnap, onPick, onMove, onRotate, connectMode: conn.on, onDropItem: (id, x, y) => setDropId({ id, n: Date.now(), x, y }) } : undefined}
               overlay={model && selected && model.compByName.get(selected) ? (
                 <Properties comp={model.compByName.get(selected)!} src={srcOf(selected)} model={model} netKey={netKey}
                   onChange={(p) => applyProps(selected, p)} onClose={() => { setSelected(null); setNetKey(null) }}
@@ -547,7 +579,7 @@ export default function Workspace({ name, onSaved, initialPanel }: { name: strin
                 ) : panel === "explain" ? (
                   <Explain name={name} version={bomVersion} onHighlight={setHighlight} />
                 ) : panel === "changes" ? (
-                  <Changes name={name} dirty={dirty} selected={selected} onAccepted={(f) => {
+                  <Changes name={name} dirty={dirty} selected={selected} selection={aiSelection} onSelection={editSelection} onAccepted={(f) => {
                     setSaved(f); setFiles(f); filesRef.current = f
                     setActive((a) => (a in f ? a : f["index.tsx"] !== undefined ? "index.tsx" : Object.keys(f)[0]))
                     setBomVersion((v) => v + 1)

@@ -1,11 +1,16 @@
 import { useCallback, useEffect, useState } from "react"
 import { aiApi, type AiProvider } from "./api"
 import { useToast } from "./toast"
+import { isUsable, pickProvider, savePrefs, useAiPrefs } from "./aiPrefs"
 
 type Models = { id: string; label: string }[]
 
 function ProviderCard({ p, onChange }: { p: AiProvider; onChange: () => void }) {
   const toast = useToast()
+  const prefs = useAiPrefs()
+  const ready = p.configured && !!p.model
+  const enabled = ready && !prefs.disabled.includes(p.id)
+  const toggle = (on: boolean) => savePrefs({ disabled: on ? prefs.disabled.filter((x) => x !== p.id) : [...new Set([...prefs.disabled, p.id])] })
   const [key, setKey] = useState("")
   const [model, setModel] = useState(p.model)
   const [models, setModels] = useState<Models>([])
@@ -25,9 +30,10 @@ function ProviderCard({ p, onChange }: { p: AiProvider; onChange: () => void }) 
   const save = async () => {
     setBusy("save")
     try {
-      await aiApi.configure(p.id, model.trim(), key.trim() || undefined)
+      const r = await aiApi.configure(p.id, model.trim(), key.trim() || undefined)
       setKey("")
-      toast("ok", `${p.label} saved`)
+      if (r?.saved === false) toast("err", `${p.label} works for now but could not be saved to disk (${r.saveError ?? "write failed"}). It will be lost when the API restarts.`)
+      else toast("ok", `${p.label} saved on this machine`)
       onChange()
     } catch (e: any) { toast("err", e.message) } finally { setBusy("") }
   }
@@ -41,8 +47,12 @@ function ProviderCard({ p, onChange }: { p: AiProvider; onChange: () => void }) 
     <section className="panel-card provider">
       <div className="row between">
         <h2>{p.label}</h2>
-        <span className={`status-chip ${p.configured ? "s-ready" : "s-draft"}`}><i aria-hidden>{p.configured ? "✓" : "◌"}</i>{p.configured ? `Connected${p.source === "env" ? " (from environment)" : ""}` : "Not connected"}</span>
+        <span className={`status-chip ${enabled ? "s-ready" : "s-draft"}`}><i aria-hidden>{enabled ? "✓" : p.configured ? "–" : "◌"}</i>{!p.configured ? "Not connected" : !ready ? "Needs a model" : enabled ? `In use${p.source === "env" ? " (from environment)" : p.source === "session" ? " (this session only)" : ""}` : "Switched off"}</span>
       </div>
+      <label className={`switch-row ${ready ? "" : "off"}`}>
+        <input type="checkbox" role="switch" checked={enabled} disabled={!ready} onChange={(e) => toggle(e.target.checked)} />
+        <span><b>Use in the AI builder</b><small className="muted">{ready ? (enabled ? "Offered in the builder's provider list." : "Hidden from the builder until switched on.") : "Add a key and choose a model first; a provider without both cannot be used."}</small></span>
+      </label>
       <div className="form-grid">
         <label className="field">
           <span>API key</span>
@@ -64,7 +74,7 @@ function ProviderCard({ p, onChange }: { p: AiProvider; onChange: () => void }) 
         <button className="btn" onClick={test} disabled={!!busy || (!key.trim() && !p.configured)}>{busy === "test" ? "Testing…" : "Test connection"}</button>
         <button className="btn primary" onClick={save} disabled={!!busy || !model.trim() || (!key.trim() && !p.configured)}>{busy === "save" ? "Saving…" : "Save"}</button>
         <span className="grow" />
-        {p.configured && p.source !== "env" && <button className="btn ghost" onClick={disconnect} disabled={!!busy}>Disconnect</button>}
+        {p.configured && p.source !== "env" && <button className="btn ghost" onClick={disconnect} disabled={!!busy}>Forget key</button>}
       </div>
     </section>
   )
@@ -75,12 +85,15 @@ export default function Settings({ theme, toggleTheme }: { theme: "light" | "dar
   const [err, setErr] = useState("")
   const load = useCallback(() => { aiApi.providers().then(setProviders).catch((e) => setErr(e.message)) }, [])
   useEffect(load, [load])
+  const prefs = useAiPrefs()
+  const using = providers ? providers.find((p) => p.id === pickProvider(providers, prefs, prefs.provider ?? "") && isUsable(p, prefs)) : undefined
   return (
     <div className="page-wrap narrow">
       <div className="page-head"><div><h1>Settings</h1><p className="muted">The same providers power the AI builder in every board.</p></div></div>
 
       <h2 className="section-title">AI providers</h2>
-      <p className="muted small">An entered key is kept in the local API's memory only and is cleared when it restarts. To keep one, put it in <span className="mono">hardware/.env</span> (for example <span className="mono">ANTHROPIC_API_KEY</span>); that file is git-ignored.</p>
+      <p className="muted small">Keys you enter are saved on this machine in <span className="mono">hardware/.env</span>, which is git-ignored, so they survive restarts. “Forget key” removes one. A key set in your system environment is used as is and can only be removed there.</p>
+      {providers && <p className="small" role="status">{using ? <>The AI builder will use <b>{using.label}</b> ({using.model}).</> : <span className="t-bad-text">No provider is ready, so the AI builder is off. Add a key and model to one below.</span>}</p>}
       {err && <div className="empty err">{err}</div>}
       {!providers && !err && <div className="empty">Loading…</div>}
       {providers?.map((p) => <ProviderCard key={p.id} p={p} onChange={load} />)}

@@ -16,7 +16,8 @@ class ViewerBoundary extends Component<{ resetKey: unknown; children: ReactNode 
 }
 import { AnimatePresence, motion } from "motion/react"
 import { SchematicViewer, PcbViewer, CadViewer } from "@tscircuit/runframe/preview"
-import PcbEdit, { type PcbPick } from "./PcbEdit"
+import { ViewIcon } from "./ui"
+import PcbEdit, { type PcbPick, type Region } from "./PcbEdit"
 import { buildModel } from "./pcbModel"
 import type { Model } from "./pcbModel"
 
@@ -26,7 +27,7 @@ const pcbSafe = (cj: any[]) => (cj.some((e) => PCB_UNDRAWABLE.has(e?.type)) ? cj
 
 /** Selection/editing bridge from Workspace: the interactive PCB view and schematic highlighting use it. */
 export type Canvas = {
-  model: Model; fitKey: string; selected: string | null; netKey: string | null
+  model: Model; fitKey: string; selected: string | null; multi?: string[]; region?: Region | null; netKey: string | null
   editable: (name: string) => boolean; snap: number; setSnap: (s: number) => void
   onPick: (p: PcbPick) => void; onMove: (n: string, dx: number, dy: number) => void; onRotate: (n: string, d: number) => void
   /** Connect mode: pads get large click targets and parts cannot be dragged */
@@ -94,9 +95,9 @@ export default function Preview({ circuitJson, schematicJson, schematicDraft, sc
     <div className="preview">
       <div className="tabs">
         {TABS.map((t, i) => (
-          <button key={t.id} className={`tab ${tab === t.id ? "on" : ""}`} onClick={() => pick(t.id)} title={({ schematic: "Schematic (1)", pcb: "PCB (2)", "3d": "3D (3)" } as Record<string, string>)[t.id] ?? t.label}>
+          <button key={t.id} data-view={t.id} className={`tab view-tab ${tab === t.id ? "on" : ""}`} onClick={() => pick(t.id)} title={({ schematic: "Schematic (1)", pcb: "PCB (2)", "3d": "3D (3)" } as Record<string, string>)[t.id] ?? t.label}>
             {tab === t.id && <motion.span layoutId="prevtab" className="tab-bg" transition={{ type: "spring", visualDuration: 0.2, bounce: 0 }} />}
-            <span className="tab-label">{t.label}</span>
+            <span className="tab-label"><ViewIcon id={t.id} />{t.label}</span>
           </button>
         ))}
         <div className="grow" />

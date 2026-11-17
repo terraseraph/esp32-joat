@@ -15,17 +15,27 @@ export type NewDesignOptions = {
 export type Design = { name: string; meta: Meta; files: Record<string, string> }
 export type Issue = { type: string; message: string; stack?: string }
 export type BuildMode = "quick" | "full" | "schematic" | "schematic-preview"
-export type AiProvider = { id: string; label: string; configured: boolean; model: string; source?: "entered" | "env" | null }
+export type AiProvider = { id: string; label: string; configured: boolean; model: string; source?: "saved" | "env" | "session" | "entered" | null }
 /** One tool call the assistant made (the same tools the MCP server exposes, see hardware/shared/tools.ts). */
-export type AiStep = { tool: string; args: string; ok: boolean; summary: string; ms: number }
+/** `step` is the model call that made this tool call (join it to AiThinking.step). */
+export type AiStep = { step?: number; tool: string; args: string; ok: boolean; summary: string; ms: number }
 /** The open working-draft run: the snapshot taken before the first edit and the edits since. */
 export type AgentRun = { id: string; label: string; startedAt: string; snapshotId: string; edits: { at: string; tool: string; summary: string }[] }
-export type AiState = { trail: AiStep[]; searches: { query: string; parts?: PartHit[]; error?: string }[]; proposalId?: string; run: AgentRun | null; edited: boolean }
+/** One piece of the model's reasoning ("reasoning") or its running commentary on a step that also used tools ("note"). */
+export type AiThinking = { step: number; kind: "reasoning" | "note"; text: string }
+/** What the user had selected, sent along with the request. */
+export type AiContext = {
+  parts?: string[]
+  net?: { name: string; pins: string[] }
+  region?: { view: "pcb" | "schematic"; x: number; y: number; w: number; h: number; parts: string[] }
+  snapshot?: "pcb" | "schematic"
+}
+export type AiState = { trail: AiStep[]; searches: { query: string; parts?: PartHit[]; error?: string }[]; proposalId?: string; run: AgentRun | null; edited: boolean; thinking?: AiThinking[]; thinkingSupported?: boolean }
 export type AiReply = AiState & { message: string; stopped?: boolean }
 export const aiApi = {
   /** A failed request still reports what the assistant did before failing, as `state` on the thrown error. */
-  ask: async (name: string, provider: string, message: string, selected?: string, history?: { role: "user" | "assistant"; content: string }[]): Promise<AiReply> => {
-    const res = await fetch(`/api/designs/${encodeURIComponent(name)}/ai`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ provider, message, selected, history }) })
+  ask: async (name: string, provider: string, message: string, selected?: string, history?: { role: "user" | "assistant"; content: string }[], context?: AiContext): Promise<AiReply> => {
+    const res = await fetch(`/api/designs/${encodeURIComponent(name)}/ai`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ provider, message, selected, history, context }) })
     const data = await res.json().catch(() => null)
     if (!res.ok) throw Object.assign(new Error(data?.error || `${res.status} ${res.statusText}`), { state: Array.isArray(data?.trail) ? (data as AiState) : undefined })
     return data
@@ -36,7 +46,8 @@ export const aiApi = {
   rollbackRun: (name: string) => post(`/api/designs/${encodeURIComponent(name)}/run/rollback`) as Promise<{ ok: true; undone: number; files: Record<string, string> }>,
   models: (provider: string, apiKey?: string) => post(`/api/ai/providers/${encodeURIComponent(provider)}/models`, { apiKey }) as Promise<{ models: { id: string; label: string }[] }>,
   providers: () => req<AiProvider[]>("/api/ai/providers"),
-  configure: (provider: string, model: string, apiKey?: string) => req(`/api/ai/providers/${encodeURIComponent(provider)}`, { method: "PUT", body: JSON.stringify({ model, apiKey }) }),
+  /** saved: false means the key could not be written to hardware/.env and only lasts until the API restarts. */
+  configure: (provider: string, model: string, apiKey?: string) => req<{ ok: boolean; saved?: boolean; saveError?: string }>(`/api/ai/providers/${encodeURIComponent(provider)}`, { method: "PUT", body: JSON.stringify({ model, apiKey }) }),
   disconnect: (provider: string) => req(`/api/ai/providers/${encodeURIComponent(provider)}`, { method: "DELETE" }),
 }
 export type BuildResult = { ok: boolean; circuitJson: any[]; errors: Issue[]; warnings: Issue[]; durationMs: number; mode?: BuildMode; cached?: boolean; cancelled?: boolean; checks?: ChecksResult | null }

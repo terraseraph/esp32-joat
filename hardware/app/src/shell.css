@@ -229,3 +229,89 @@ a { color: var(--accent-text); }
 .cnt.warn { background: var(--warn-text); color: var(--on-solid); }
 .nav-item.on { box-shadow: inset 2px 0 0 var(--accent-solid); }
 .nav-badge, .cnt.bad { color: var(--on-bad); }
+
+/* provider on/off switch */
+.switch-row { display: flex; align-items: flex-start; gap: 12px; cursor: pointer; }
+.switch-row.off { cursor: default; }
+.switch-row span { display: flex; flex-direction: column; gap: 2px; }
+.switch-row small { font-size: var(--fs-sm); }
+.switch-row input[role="switch"] { appearance: none; flex: none; width: 36px; height: 20px; margin: 1px 0 0; border-radius: 99px; background: var(--border); border: 1px solid var(--muted); position: relative; cursor: pointer; transition: background .15s; }
+.switch-row input[role="switch"]::after { content: ""; position: absolute; top: 2px; left: 2px; width: 14px; height: 14px; border-radius: 50%; background: var(--text); transition: transform .15s; }
+.switch-row input[role="switch"]:checked { background: var(--accent-solid); border-color: var(--accent-solid); }
+.switch-row input[role="switch"]:checked::after { transform: translateX(16px); background: var(--on-solid); }
+.switch-row input[role="switch"]:disabled { opacity: .45; cursor: default; }
+.switch-row input[role="switch"]:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* AI panel: attached selection and thinking */
+.ai-selbar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.sel-chip { display: inline-flex; align-items: center; gap: 4px; height: 24px; padding: 0 4px 0 9px; border-radius: 99px; background: var(--panel2); border: 1px solid var(--accent-text); color: var(--text); font-size: var(--fs-sm); }
+.sel-chip button { width: 18px; height: 18px; display: grid; place-items: center; border: 0; border-radius: 50%; background: transparent; color: var(--muted); font: inherit; line-height: 1; cursor: pointer; }
+.sel-chip button:hover:not(:disabled) { background: var(--hover); color: var(--text); }
+.sel-chip button:focus-visible { outline: 2px solid var(--accent); }
+.sel-snap { display: inline-flex; align-items: center; gap: 6px; margin-left: auto; color: var(--muted); }
+.sel-snap select { height: 24px; border: 1px solid var(--border); border-radius: var(--r-md); background: var(--panel); color: var(--text); font: inherit; }
+.ai-thinking { margin-top: 8px; padding: 8px 10px; border-left: 2px solid var(--border); background: var(--panel); border-radius: 0 var(--r-md) var(--r-md) 0; }
+.ai-thinking summary { cursor: pointer; color: var(--muted); font-size: var(--fs-sm); }
+.think-item { margin-top: 8px; display: flex; flex-direction: column; gap: 2px; }
+.think-text { white-space: pre-wrap; overflow-wrap: anywhere; font-size: var(--fs-sm); color: var(--muted); max-height: 260px; overflow: auto; }
+.ai-no-thinking { margin: 6px 0 0; }
+
+.pcbedit { user-select: none; -webkit-user-select: none; }
+
+/* ---- category colours (light: deeper, dark: brighter, so icons keep 3:1 on their tiles) ---- */
+:root {
+  --cat-passive: #1d4ed8; --cat-power: #b45309; --cat-digital: #0f766e; --cat-connector: #6d28d9; --cat-switching: #c2410c; --cat-sense: #be123c; --cat-neutral: #5d6572; --cat-pcb: #15803d;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { --cat-passive: #60a5fa; --cat-power: #fbbf24; --cat-digital: #2dd4bf; --cat-connector: #a78bfa; --cat-switching: #fb923c; --cat-sense: #fb7185; --cat-neutral: #9aa3b1; --cat-pcb: #4ade80; }
+}
+:root[data-theme="dark"] { --cat-passive: #60a5fa; --cat-power: #fbbf24; --cat-digital: #2dd4bf; --cat-connector: #a78bfa; --cat-switching: #fb923c; --cat-sense: #fb7185; --cat-neutral: #9aa3b1; --cat-pcb: #4ade80; }
+
+/* ---- parts palette ---- */
+.part-icon { flex: none; display: grid; place-items: center; border-radius: 9px; color: var(--pc); background: color-mix(in srgb, var(--pc) 13%, var(--panel2)); border: 1px solid color-mix(in srgb, var(--pc) 32%, var(--border)); }
+.cat-passive { --pc: var(--cat-passive); } .cat-power { --pc: var(--cat-power); } .cat-digital { --pc: var(--cat-digital); }
+.cat-connector { --pc: var(--cat-connector); } .cat-switching { --pc: var(--cat-switching); } .cat-sense { --pc: var(--cat-sense); } .cat-neutral { --pc: var(--cat-neutral); }
+.pal-item { flex-direction: row; align-items: center; gap: 10px; }
+.pal-text { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.pal-sub { font-size: var(--fs-xs); color: var(--muted); padding: 0 2px 6px; line-height: 1.35; }
+.pal-section + .pal-section { border-top: 1px solid var(--border); margin-top: 4px; padding-top: 6px; }
+
+/* ---- Schematic / PCB / viewer / 3D switch ---- */
+.view-tab { --vc: var(--cat-passive); }
+.view-tab[data-view="pcb"], .view-tab[data-view="pcbview"] { --vc: var(--cat-pcb); }
+.view-tab[data-view="3d"] { --vc: var(--cat-power); }
+.view-tab .tab-label { gap: 7px; }
+.view-tab .tab-label svg { color: var(--vc); opacity: .75; }
+.view-tab:hover .tab-label svg, .view-tab.on .tab-label svg { opacity: 1; }
+.view-tab.on .tab-bg { background: color-mix(in srgb, var(--vc) 15%, var(--panel2)); border-color: color-mix(in srgb, var(--vc) 45%, var(--border)); }
+.view-tab.on { box-shadow: inset 0 -2px 0 var(--vc); border-radius: var(--r-md) var(--r-md) 0 0; }
+
+/* ---- AI builder panel: a header, a thread, and a composer pinned to the bottom ---- */
+.drawer .panel-body { display: flex; flex-direction: column; }
+.drawer .changes { flex: 1; padding: 0; gap: 0; min-height: 0; }
+.ai-assistant { display: flex; flex-direction: column; flex: 1; gap: 0; min-height: 0; }
+.ai-head { display: flex; align-items: center; gap: 6px; padding: 8px 10px; background: var(--panel); border-bottom: 1px solid var(--border); position: sticky; top: 0; z-index: 3; }
+.ai-title { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+.ai-title svg { color: var(--accent-text); }
+.ai-provider { flex: 1; min-width: 0; height: 28px; padding: 0 6px; border: 1px solid var(--border); border-radius: var(--r-md); background: var(--panel2); color: var(--text); font: inherit; font-size: var(--fs-sm); text-overflow: ellipsis; }
+.ai-head .icon-btn { width: 28px; height: 28px; flex: none; }
+.ai-head .icon-btn.on { color: var(--accent-text); background: var(--hover); }
+.ai-info { margin: 0; padding: 10px 12px; background: var(--panel2); border-bottom: 1px solid var(--border); }
+.ai-assistant .ai-settings { margin: 10px 10px 0; }
+.ai-assistant .ai-run { margin: 10px 10px 0; }
+.ai-thread { flex: 1; display: flex; flex-direction: column; gap: 10px; padding: 12px 10px 8px; min-height: 80px; }
+.ai-empty { margin: auto; display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 20px 12px; text-align: center; }
+.ai-thread .ai-turn.user { align-self: flex-end; max-width: 94%; background: color-mix(in srgb, var(--accent) 12%, var(--panel2)); border-color: color-mix(in srgb, var(--accent) 30%, var(--border)); border-left-width: 1px; }
+.ai-composer { position: sticky; bottom: 0; z-index: 3; display: flex; flex-direction: column; gap: 8px; padding: 8px 10px 10px; background: var(--panel); border-top: 1px solid var(--border); }
+.ai-prompts { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip-btn { height: 26px; padding: 0 11px; border-radius: 99px; border: 1px solid var(--border); background: var(--panel2); color: var(--text); font: inherit; font-size: var(--fs-sm); cursor: pointer; }
+.chip-btn:hover:not(:disabled) { border-color: var(--accent); background: var(--hover); }
+.chip-btn:disabled { opacity: .5; cursor: default; }
+.chip-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.ai-box { display: flex; flex-direction: column; gap: 6px; padding: 8px 10px; border: 1px solid var(--border); border-radius: var(--r-lg); background: var(--panel2); }
+.ai-box:focus-within { border-color: var(--accent); }
+.ai-assistant .ai-box textarea { width: 100%; min-height: 56px; margin: 0; padding: 0; border: 0; background: transparent; color: var(--text); font: inherit; resize: none; outline: 0; }
+.ai-box-foot { display: flex; align-items: center; gap: 8px; }
+.send-btn { gap: 6px; }
+.ai-error { margin: 0; }
+.ai-selbar .sel-snap { margin-left: auto; }

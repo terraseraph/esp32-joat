@@ -2,7 +2,9 @@ import { useEffect, useRef, useState } from "react"
 import { PALETTE_MIME } from "./Palette"
 import type { Comp, Model, Pad } from "./pcbModel"
 
-export type PcbPick = { comp?: string | null; key?: string | null; clear?: boolean; port?: string }
+export type Region = { x: number; y: number; w: number; h: number }
+/** toggle: shift-click adds or removes a part from the multi-selection; region: shift-drag box with the parts inside it. */
+export type PcbPick = { comp?: string | null; key?: string | null; clear?: boolean; port?: string; toggle?: string; region?: Region & { comps: string[] } }
 type Pending = { dx: number; dy: number; rot: number }
 
 const SNAPS = [0, 0.1, 0.25, 0.5, 1]
@@ -13,10 +15,14 @@ const BOT = "#4b7fd6"
  * Interactive PCB view drawn straight from circuit JSON (the stock tscircuit PcbViewer cannot report clicks or
  * drag parts). Click a part to select it, drag to move, R rotates, click a pad or trace to highlight its net.
  */
-export default function PcbEdit({ model, fitKey, selected, netKey, editable, snap, setSnap, onPick, onMove, onRotate, stale, focus, marks, connectMode, onDropItem }: {
+export default function PcbEdit({ model, fitKey, selected, multi, region, netKey, editable, snap, setSnap, onPick, onMove, onRotate, stale, focus, marks, connectMode, onDropItem }: {
   model: Model
   fitKey: string
   selected: string | null
+  /** every part in the current multi-selection (shift-click or box); includes `selected` when there is one */
+  multi?: string[]
+  /** the box last drawn, kept outlined while it is part of the selection */
+  region?: Region | null
   netKey: string | null
   editable: (name: string) => boolean
   snap: number
@@ -38,7 +44,8 @@ export default function PcbEdit({ model, fitKey, selected, netKey, editable, sna
   const [view, setView] = useState({ cx: 0, cy: 0, s: 8 })
   const [pending, setPending] = useState<Record<string, Pending>>({})
   const [hover, setHover] = useState<string | null>(null)
-  const drag = useRef<null | { kind: "comp" | "net" | "pan"; comp?: string; key?: string; port?: string; sx: number; sy: number; vx: number; vy: number; moved: boolean; ox?: number; oy?: number }>(null)
+  const drag = useRef<null | { kind: "comp" | "net" | "pan" | "box" | "toggle"; comp?: string; key?: string; port?: string; sx: number; sy: number; vx: number; vy: number; moved: boolean; ox?: number; oy?: number }>(null)
+  const [boxSel, setBoxSel] = useState<{ x0: number; y0: number; x1: number; y1: number } | null>(null)
   const fitted = useRef("")
   const userView = useRef(false) // set once the user pans or zooms; until then the view keeps fitting the board
   const viewRef = useRef(view)
@@ -128,14 +135,18 @@ export default function PcbEdit({ model, fitKey, selected, netKey, editable, sna
     const port = (tgt.closest("[data-port]") as HTMLElement | null)?.dataset.port || undefined
     const w = toWorld(e.clientX, e.clientY)
     const base = { sx: e.clientX, sy: e.clientY, vx: viewRef.current.cx, vy: viewRef.current.cy, moved: false }
-    if (e.button === 0 && compEl && !connectMode) {
+    if (e.button === 0 && e.shiftKey && !connectMode) {
+      // shift-click toggles a part in the selection; shift-drag on the board draws a selection box
+      if (compEl) drag.current = { ...base, kind: "toggle", comp: compEl.dataset.comp }
+      else { drag.current = { ...base, kind: "box", ox: w.x, oy: w.y }; setBoxSel({ x0: w.x, y0: w.y, x1: w.x, y1: w.y }) }
+    } else if (e.button === 0 && compEl && !connectMode) {
       const c = model.compByName.get(compEl.dataset.comp!)
       drag.current = { ...base, kind: "comp", comp: compEl.dataset.comp, key: netEl?.dataset.net || undefined, port, ox: w.x, oy: w.y }
       void c
     } else if (e.button === 0 && netEl) drag.current = { ...base, kind: "net", key: netEl.dataset.net, port }
     else if (e.button === 0 && connectMode && port) drag.current = { ...base, kind: "net", key: undefined, port }
     else drag.current = { ...base, kind: "pan" }
-    ;(e.currentTarget as Element).setPointerCapture(e.pointerId)
+    try { (e.currentTarget as Element).setPointerCapture(e.pointerId) } catch { /* no active pointer (synthetic event): drag still works without capture */ }
   }
   const onPointerMove = (e: React.PointerEvent) => {
     const d = drag.current
@@ -143,7 +154,12 @@ export default function PcbEdit({ model, fitKey, selected, netKey, editable, sna
     const dist = Math.hypot(e.clientX - d.sx, e.clientY - d.sy)
     if (!d.moved && dist > 3) d.moved = true
     if (!d.moved) return
-    if (d.kind === "pan" || d.kind === "net") {
+    if (d.kind === "box") {
+      const w = toWorld(e.clientX, e.clientY)
+      setBoxSel({ x0: d.ox!, y0: d.oy!, x1: w.x, y1: w.y })
+    } else if (d.kind === "toggle") {
+      return
+    } else if (d.kind === "pan" || d.kind === "net") {
       const s = viewRef.current.s
       userView.current = true
       setView((v) => ({ ...v, cx: d.vx - (e.clientX - d.sx) / s, cy: d.vy + (e.clientY - d.sy) / s }))
@@ -160,6 +176,16 @@ export default function PcbEdit({ model, fitKey, selected, netKey, editable, sna
     drag.current = null
     if (!d) return
     try { (e.currentTarget as Element).releasePointerCapture(e.pointerId) } catch {}
+    if (d.kind === "toggle") { if (d.comp) onPick({ toggle: d.comp }); return }
+    if (d.kind === "box") {
+      const b = boxSel
+      setBoxSel(null)
+      if (!b || !d.moved) return
+      const r = { x: Math.min(b.x0, b.x1), y: Math.min(b.y0, b.y1), w: Math.abs(b.x1 - b.x0), h: Math.abs(b.y1 - b.y0) }
+      const comps = model.comps.filter((c) => c.cx >= r.x && c.cx <= r.x + r.w && c.cy >= r.y && c.cy <= r.y + r.h).map((c) => c.name)
+      onPick({ region: { ...r, comps } })
+      return
+    }
     if (d.kind === "comp" && d.comp) {
       if (d.moved) {
         const p = pending[d.comp]
@@ -200,12 +226,13 @@ export default function PcbEdit({ model, fitKey, selected, netKey, editable, sna
     const pe = rot(c)
     const t = pe ? `translate(${pe.dx} ${pe.dy}) rotate(${pe.rot} ${c.x} ${c.y})` : undefined
     const sel = selected === c.name
+    const inMulti = !sel && !!multi?.includes(c.name)
     const dim = netKey && !model.pads.some((p) => p.comp === c.id && p.key === netKey)
     return (
       <g key={c.id} data-comp={c.name} transform={t} opacity={c.layer === "bottom" ? 0.55 : 1} style={{ cursor: editable(c.name) ? "grab" : "pointer" }}
         onPointerEnter={() => setHover(c.name)} onPointerLeave={() => setHover((h) => (h === c.name ? null : h))}>
-        <rect x={c.cx - c.w / 2} y={c.cy - c.h / 2} width={c.w} height={c.h} fill={sel ? "rgba(76,201,240,.16)" : hover === c.name ? "rgba(255,255,255,.12)" : "rgba(255,255,255,.02)"}
-          stroke={sel ? "#4cc9f0" : hover === c.name ? "#ffffff99" : "none"} strokeWidth={sel ? 2 : 1} vectorEffect="non-scaling-stroke" strokeDasharray={editable(c.name) ? undefined : "4 3"} />
+        <rect x={c.cx - c.w / 2} y={c.cy - c.h / 2} width={c.w} height={c.h} fill={sel ? "rgba(76,201,240,.16)" : inMulti ? "rgba(76,201,240,.10)" : hover === c.name ? "rgba(255,255,255,.12)" : "rgba(255,255,255,.02)"}
+          stroke={sel ? "#4cc9f0" : inMulti ? "#4cc9f0aa" : hover === c.name ? "#ffffff99" : "none"} strokeWidth={sel ? 2 : inMulti ? 1.5 : 1} vectorEffect="non-scaling-stroke" strokeDasharray={editable(c.name) ? undefined : "4 3"} />
         <g opacity={dim ? 0.5 : 1}>
           {model.outlines.filter((o) => o.comp === c.id).map((o, i) => (
             <polyline key={i} points={o.pts.map((q) => `${q.x},${q.y}`).join(" ")} fill="none" stroke="#e9e9e9" strokeWidth={0.12} opacity={0.8} pointerEvents="none" />
@@ -254,6 +281,10 @@ export default function PcbEdit({ model, fitKey, selected, netKey, editable, sna
           </g>
           {model.comps.map(compGroup)}
           {marks?.map((m, i) => <rect key={`m${i}`} x={m.x - m.w / 2 - 0.6} y={m.y - m.h / 2 - 0.6} width={m.w + 1.2} height={m.h + 1.2} fill="rgba(255,180,0,.12)" stroke="#ffb400" strokeWidth={2} vectorEffect="non-scaling-stroke" pointerEvents="none" />)}
+          {(boxSel || region) && (() => {
+            const r = boxSel ? { x: Math.min(boxSel.x0, boxSel.x1), y: Math.min(boxSel.y0, boxSel.y1), w: Math.abs(boxSel.x1 - boxSel.x0), h: Math.abs(boxSel.y1 - boxSel.y0) } : region!
+            return <rect x={r.x} y={r.y} width={r.w} height={r.h} fill="rgba(76,201,240,.08)" stroke="#4cc9f0" strokeWidth={1.5} vectorEffect="non-scaling-stroke" strokeDasharray="5 3" pointerEvents="none" />
+          })()}
           {mark && <rect x={mark.x - mark.w / 2} y={mark.y - mark.h / 2} width={mark.w} height={mark.h} fill="none" stroke="#ff4d6d" strokeWidth={2.5} vectorEffect="non-scaling-stroke" strokeDasharray="6 4" pointerEvents="none" />}
         </g>
       </svg>
@@ -265,7 +296,7 @@ export default function PcbEdit({ model, fitKey, selected, netKey, editable, sna
         </label>
         <button className="btn" onClick={() => { userView.current = false; fit() }}>Fit</button>
       </div>
-      <div className="pcbedit-hint small muted">{connectMode ? "Connect mode: click a pad for pin A, then another for pin B · drag to pan" : "Click part to select · drag to move · arrows nudge · R rotates · click pad/trace for net · Esc clears"}</div>
+      <div className="pcbedit-hint small muted">{connectMode ? "Connect mode: click a pad for pin A, then another for pin B · drag to pan" : "Click part to select · shift-click adds · shift-drag boxes a region · drag to move · arrows nudge · R rotates · click pad/trace for net · Esc clears"}</div>
     </div>
   )
 }

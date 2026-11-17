@@ -1,6 +1,6 @@
 {
-  "name": "test-base-esp",
-  "description": "",
+  "name": "ESP32-S3 USB-C dev board",
+  "description": "Minimal ESP32-S3 board: USB-C power and flashing (native USB-Serial/JTAG), 3.3 V buck, RESET and BOOT buttons, and a UART0 header for an external serial adapter.",
   "revision": "A",
-  "notes": ""
+  "notes": "DRAFT, NOT REVIEWED. 56x50 mm, 2 layers. Open doubts to resolve before fabrication: (1) Autorouted on 2 layers and every net completes (about 10 s), but placement and routing are first-pass: the decoupling caps, the EN/BOOT network and the buttons are close to the module but not tuned, and the autorouter's result varies between runs. No ground pour has been added. (2) USB-C is a 5 V-only sink (5.1k CC resistors) with no fuse or reverse protection, and the TLV62569 input is rated 6 V maximum, so a hot-plug spike from a charger matters. (3) Flashing works over the USB-C (native USB-Serial/JTAG) on a blank chip; hold BOOT and tap RESET to force download mode. UART0 on J_UART is the fallback and carries the boot log. (4) The antenna end of the module is on the bottom edge. The antenna keep-out check still reports 3 traces: they are the ground escapes from the module's two corner pads, whose centres sit on the keep-out boundary (y -17.04 mm); no track enters the antenna area. Keep any pour out from under the antenna. (5) J_UART pin order (3V3, TXD0, RXD0, GND) uses module-side names, so TXD0 goes to the adapter's RX; not checked against a specific adapter. (6) The USB-C receptacle sits about 0.5 mm inside the top edge; confirm the overhang against the connector drawing. (7) IO35-IO37 stay unconnected because the N16R8 module uses them for octal PSRAM."
 }
